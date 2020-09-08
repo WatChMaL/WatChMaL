@@ -1,0 +1,4 @@
+torch>=1.1
+numpy
+hydra-core>=1.0.0
+tqdm

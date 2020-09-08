@@ -1,0 +1,7 @@
+_target_: watchmal.model.classifier.ClassifierLightingModule
+network_conf:
+  num_latent_dims: 128
+  num_classes: 3
+
+defaults:
+  - feature_extractor: resnet18
