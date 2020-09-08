@@ -3,4 +3,6 @@ train:
   weight_decay: 0.0001
 
 defaults:
+  - engine: classifier
   - network: classifier
+  - network/feature_extractor: resnet18

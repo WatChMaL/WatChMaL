@@ -14,11 +14,10 @@ def main(config):
     data = instantiate(config.dataset)
     trainer_logger = instantiate(config.logger) if "logger" in config else True
 
-    # build model. print it's structure and # trainable params.
-    model = instantiate(config.arch)
-    logger.info(model)
+    engine = instantiate(config.engine, network_config=config.network, train_config=config.train)
+    logger.info(engine)
     trainer = Trainer(logger=trainer_logger)
-    trainer.fit(model, data)
+    trainer.fit(engine, data)
 
 
 if __name__ == '__main__':
