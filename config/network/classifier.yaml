@@ -1,4 +1,3 @@
 # @package _group_
 _target_: watchmal.model.classifier.ClassifierNetwork
-network_config:
-  num_classes: 3
+num_classes: 3

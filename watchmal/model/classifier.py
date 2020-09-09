@@ -4,7 +4,7 @@ from hydra.utils import instantiate
 
 class ClassifierNetwork(nn.Module):
 
-    def __init__(self, feature_extractor, network_config):
+    def __init__(self, feature_extractor, num_classes):
         super().__init__()
 
         # Classifier fully connected layers
@@ -12,7 +12,7 @@ class ClassifierNetwork(nn.Module):
         self.cl_fc1 = nn.Linear(feature_extractor.num_encoder_outputs, int(feature_extractor.num_encoder_outputs / 2))
         self.cl_fc2 = nn.Linear(int(feature_extractor.num_encoder_outputs / 2), int(feature_extractor.num_encoder_outputs / 4))
         self.cl_fc3 = nn.Linear(int(feature_extractor.num_encoder_outputs / 4), int(feature_extractor.num_encoder_outputs / 8))
-        self.cl_fc4 = nn.Linear(int(feature_extractor.num_encoder_outputs / 8), network_config.num_classes)
+        self.cl_fc4 = nn.Linear(int(feature_extractor.num_encoder_outputs / 8), num_classes)
         self.relu = nn.ReLU(inplace=True)
 
     def forward(self, x):

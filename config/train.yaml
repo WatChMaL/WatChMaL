@@ -6,3 +6,5 @@ defaults:
   - engine: classifier
   - network: classifier
   - network/feature_extractor: resnet18
+  - data: cnn_mpmt_postveto_nomichel
+  - data/dataset: cnn_mpmt

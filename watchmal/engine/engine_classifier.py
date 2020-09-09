@@ -1,4 +1,3 @@
-import torch.nn as nn
 import torch.nn.functional as F
 import torch
 import pytorch_lightning as pl
@@ -21,11 +20,9 @@ class ClassifierEngine(pl.LightningModule):
     def forward(self, x):
         return self.network(x)
 
-    def loss(self, output, target):
-        return nn.CrossEntropyLoss(output, target)
-
     def training_step(self, batch, batch_idx):
-        x, labels = batch
+        x = batch["data"]
+        labels = batch["labels"]
         pred_labels = self(x)
         loss = F.cross_entropy(pred_labels, labels)
         result = pl.TrainResult(loss)
@@ -33,7 +30,8 @@ class ClassifierEngine(pl.LightningModule):
         return result
 
     def validation_step(self, batch, batch_idx):
-        x, labels = batch
+        x = batch["data"].float()
+        labels = batch["labels"].long()
         pred_labels = self(x)
         loss = F.cross_entropy(pred_labels, labels)
         result = pl.EvalResult(checkpoint_on=loss)
