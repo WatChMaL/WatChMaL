@@ -1,11 +1,10 @@
-import pytorch_lightning as pl
-from torch.utils.data import random_split, DataLoader
+from torch.utils.data import DataLoader
 from torch.utils.data.sampler import SubsetRandomSampler
 from hydra.utils import instantiate
 import numpy as np
 
 
-class DataModule(pl.LightningDataModule):
+class DataModule():
 
     def __init__(self, dataset, train_batch_size, val_batch_size, split_path, num_workers):
         super().__init__()
