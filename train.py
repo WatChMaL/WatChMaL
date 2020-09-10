@@ -16,7 +16,7 @@ def main(config):
     data = DataModule(**config.data)
     trainer_logger = instantiate(config.logger) if "logger" in config else True
 
-    engine = instantiate(config.engine, network_config=config.network, train_config=config.train)
+    engine = instantiate(config.engine, model_config=config.model, train_config=config.train)
     logger.info(engine)
     trainer = Trainer(gpus=config.train.gpus, logger=trainer_logger)
     trainer.fit(engine, data)

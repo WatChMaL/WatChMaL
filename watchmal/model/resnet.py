@@ -109,7 +109,7 @@ class Bottleneck(nn.Module):
 
 class ResNet(nn.Module):
 
-    def __init__(self, block, layers, num_input_channels, num_encoder_outputs, zero_init_residual=False):
+    def __init__(self, block, layers, num_input_channels, num_output_channels, zero_init_residual=False):
 
         super(ResNet, self).__init__()
 
@@ -141,12 +141,12 @@ class ResNet(nn.Module):
         for m in self.modules():
             if isinstance(m, Bottleneck):
                 self.fc1 = nn.Linear(self.unroll_size, int(self.unroll_size / 2))
-                self.fc2 = nn.Linear(int(self.unroll_size / 2), num_encoder_outputs)
+                self.fc2 = nn.Linear(int(self.unroll_size / 2), num_output_channels)
                 self.bool_deep = True
                 break
 
         if not self.bool_deep:
-            self.fc1 = nn.Linear(self.unroll_size, num_encoder_outputs)
+            self.fc1 = nn.Linear(self.unroll_size, num_output_channels)
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):

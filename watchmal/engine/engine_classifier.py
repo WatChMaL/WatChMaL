@@ -6,10 +6,10 @@ from hydra.utils import instantiate
 
 class ClassifierEngine(pl.LightningModule):
 
-    def __init__(self, network_config, train_config):
+    def __init__(self, model_config, train_config):
         super().__init__()
 
-        self.network = instantiate(network_config)
+        self.network = instantiate(model_config)
         self.network = self.network.float()
         self.learning_rate = train_config.learning_rate
         self.weight_decay = train_config.weight_decay
