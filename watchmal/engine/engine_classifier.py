@@ -218,7 +218,7 @@ class ClassifierEngine:
         self.val_log.close()
         self.train_log.close()
     
-    def validate(self):
+    def validate(self, subset):
         """
         Test the trained model on the validation set.
         
@@ -250,4 +250,78 @@ class ClassifierEngine:
             return None
         
         print(message)
-        return -1
+
+        num_dump_events = self.config.num_dump_events
+
+        # Setup the CSV file for logging the output, path to save the actual and reconstructed events, dataloader iterator
+        if subset == "train":
+            self.log        = CSVData(self.dirpath+"train_validation_log.csv")
+            np_event_path   = self.dirpath + "/train_valid_iteration_"
+            data_iter       = self.train_loader
+            dump_iterations = max(1, ceil(num_dump_events/self.config.batch_size_train))
+        elif subset == "validation":
+            self.log        = CSVData(self.dirpath+"valid_validation_log.csv")
+            np_event_path   = self.dirpath + "/val_valid_iteration_"
+            data_iter       = self.val_loader
+            dump_iterations = max(1, ceil(num_dump_events/self.config.batch_size_val))
+        else:
+            self.log        = CSVData(self.dirpath+"test_validation_log.csv")
+            np_event_path   = self.dirpath + "/test_validation_iteration_"
+            data_iter       = self.test_loader
+            dump_iterations = max(1, ceil(num_dump_events/self.config.batch_size_test))
+        
+        print("Dump iterations = {0}".format(dump_iterations))
+        save_arr_dict = {"events":[], "labels":[], "energies":[], "angles":[], "eventids":[], "rootfiles":[], "predicted_labels":[], "softmax":[]}
+
+        # set model in eval mode
+        self.model.eval()
+ 
+        avg_loss = 0
+        avg_acc = 0
+        count = 0
+        for iteration, data in enumerate(data_iter):
+            
+            stdout.write("Iteration : " + str(iteration) + "\n")
+
+            # Extract the event data from the input data tuple
+            self.data      = data[0].float()
+            self.labels    = data[1].long()
+            self.energies  = data[2].float()
+            self.eventids  = data[5].float()
+            self.rootfiles = data[6]
+            self.angles    = data[3].float()
+
+            res = self.forward(False)
+
+            # get relevant attributes of result for logging
+            keys   = ["iteration", "loss", "accuracy"]
+            values = [iteration, res["loss"], res["accuracy"]]
+
+            # log/report
+            self.log.record(keys, values)
+            self.log.write()
+
+            avg_acc += res['accuracy']
+            avg_loss += res['loss']
+            count += 1
+
+            if iteration < dump_iterations:
+                save_arr_dict["labels"].append(self.labels.cpu().numpy())
+                save_arr_dict["energies"].append(self.energies.cpu().numpy())
+                save_arr_dict["eventids"].append(self.eventids.cpu().numpy())
+                save_arr_dict["rootfiles"].append(self.rootfiles)
+                save_arr_dict["angles"].append(self.angles.cpu().numpy())
+
+                save_arr_dict["accuracy"].append(res["accuracy"])
+                save_arr_dict["loss"].append(res["loss"])
+            
+            elif iteration == dump_iterations:
+                    break
+        
+        print("Saving the npz dump array :")
+        savez(np_event_path + "dump.npz", **save_arr_dict)
+
+        avg_acc /= count
+        avg_loss /= count
+        
+        stdout.write("Overall acc : {}, Overall loss : {}\n".format(avg_acc, avg_loss))
