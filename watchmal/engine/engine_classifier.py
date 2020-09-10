@@ -10,6 +10,7 @@ class ClassifierEngine(pl.LightningModule):
         super().__init__()
 
         self.network = instantiate(network_config)
+        self.network = self.network.float()
         self.learning_rate = train_config.learning_rate
         self.weight_decay = train_config.weight_decay
 
@@ -21,8 +22,8 @@ class ClassifierEngine(pl.LightningModule):
         return self.network(x)
 
     def training_step(self, batch, batch_idx):
-        x = batch["data"]
-        labels = batch["labels"]
+        x = batch["data"].float()
+        labels = batch["labels"].long()
         pred_labels = self(x)
         loss = F.cross_entropy(pred_labels, labels)
         result = pl.TrainResult(loss)
@@ -37,9 +38,6 @@ class ClassifierEngine(pl.LightningModule):
         result = pl.EvalResult(checkpoint_on=loss)
         result.log('val_loss', loss)
         return result
-
-    def validation_epoch_end(self, outputs):
-        return
 
     def test_step(self, batch, batch_idx):
         result = self.validation_step(batch, batch_idx)

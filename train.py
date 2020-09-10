@@ -18,7 +18,7 @@ def main(config):
 
     engine = instantiate(config.engine, network_config=config.network, train_config=config.train)
     logger.info(engine)
-    trainer = Trainer(logger=trainer_logger)
+    trainer = Trainer(gpus=config.train.gpus, logger=trainer_logger)
     trainer.fit(engine, data)
 
 
