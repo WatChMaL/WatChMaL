@@ -1,15 +1,23 @@
+# torch imports
 import torch
 from torch import optim
 import torch.nn as nn
 import torch.nn.functional as F
 
+# hydra imports
 from hydra.utils import instantiate
 
-import numpy as np
+# generic imports
 from math import floor, ceil
+import numpy as np
+from numpy import savez
+import os
 from time import strftime, localtime, time
+import sys
 
+# WatChMaL imports
 from watchmal.dataset.data_module import DataModule
+from watchmal.plot_utils.plot_utils import CSVData
 
 class ClassifierEngine:
     def __init__(self, model_config, train_config, data):
@@ -29,6 +37,7 @@ class ClassifierEngine:
             print("Sticking to CPU")
             self.device=torch.device("cpu")
         
+        # send model to device
         self.model.to(self.device)
         
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.train_config.learning_rate, weight_decay=self.train_config.weight_decay)
@@ -48,6 +57,19 @@ class ClassifierEngine:
         self.rootfiles = None
         self.angles = None
         self.index = None
+
+        # create the directory for saving the log and dump files
+        self.dirpath=self.train_config.dump_path + strftime("%Y%m%d") + "/" + strftime("%H%M%S") + "/"
+
+        try:
+            stat(self.dirpath)
+        except:
+            print("Creating a directory for run dump at : {}".format(self.dirpath))
+            mkdir(self.dirpath)
+        
+        # logging attributes
+        self.train_log = CSVData(self.dirpath + "log_train.csv")
+        self.val_log = CSVData(self.dirpath + "log_val.csv")
     
     def forward(self, train=True):
         """
@@ -100,8 +122,9 @@ class ClassifierEngine:
         epoch = 0.
         iteration = 0
 
-        # parameter to update when saving the best model
-        best_loss = 1000000.
+        # keep track of the validation accuracy
+        best_val_acc = 0.0
+        best_val_loss = 1.0e6
 
         # initialize the iterator over the validation subset
         val_iter = iter(self.val_loader)
@@ -143,6 +166,7 @@ class ClassifierEngine:
                 # record the metrics for the mini-batch in the log
                 self.train_log.record(keys, values)
                 self.train_log.write()
+                self.train_log.flush()
 
                  # print the metrics at given intervals
                 if iteration % report_interval == 0:
@@ -182,19 +206,22 @@ class ClassifierEngine:
                         
                         curr_loss += res["loss"]
                     
+                    # return model to training mode
+                    self.model.train()
+
+                    # record the validation stats to the csv
                     val_values[val_keys.index("loss")] /= num_val_batches
                     val_values[val_keys.index("accuracy")] /= num_val_batches
 
-                    # record the validation stats to the csv
                     self.val_log.record(val_keys, val_values)
 
                     # average the loss over the validation batch
                     curr_loss = curr_loss / num_val_batches
 
                     # save if this is the best model so far
-                    if curr_loss < best_loss:
+                    if curr_loss < best_val_loss:
                         self.save_state(mode="best")
-                        curr_loss = best_loss
+                        curr_loss = best_val_loss
                     
                     if iteration in dump_iterations:
                         save_arr_keys = ["events", "labels", "energies", "angles", "predicted_labels", "softmax"]
@@ -233,11 +260,6 @@ class ClassifierEngine:
         Returns : None
         """
 
-        """Overrides the validate method in Engine.py.
-        
-        Args:
-        subset          -- One of 'train', 'validation', 'test' to select the subset to perform validation on
-        """
         # Print start message
         if subset == "train":
             message = "Validating model on the train set"
@@ -323,5 +345,5 @@ class ClassifierEngine:
 
         avg_acc /= count
         avg_loss /= count
-        
+
         stdout.write("Overall acc : {}, Overall loss : {}\n".format(avg_acc, avg_loss))

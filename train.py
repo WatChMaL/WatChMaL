@@ -13,13 +13,17 @@ logger = logging.getLogger('train')
 @hydra.main(config_path='config/', config_name='train')
 def main(config):
     logger.info(f"Training with the following config:\n{OmegaConf.to_yaml(config)}")
-    data = DataModule(**config.data)
-    trainer_logger = instantiate(config.logger) if "logger" in config else True
 
-    engine = instantiate(config.engine, network_config=config.network, train_config=config.train)
-    logger.info(engine)
-    trainer = Trainer(gpus=config.train.gpus, logger=trainer_logger)
-    trainer.fit(engine, data)
+    data = DataModule(**config.data)
+    engine = instantiate(config.engine, model_config=config.network, train_config=config.train, data=data)
+
+    engine.train()
+    
+    #trainer_logger = instantiate(config.logger) if "logger" in config else True
+
+    #logger.info(engine)
+    #trainer = Trainer(gpus=config.train.gpus, logger=trainer_logger)
+    #trainer.fit(engine, data)
 
 
 if __name__ == '__main__':
