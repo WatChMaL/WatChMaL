@@ -6,7 +6,8 @@ train:
 
 defaults:
   - engine: classifier
-  - network: classifier
-  - network/feature_extractor: resnet18
+  - model: classifier
+  - model/feature_extractor: resnet18
+  - model/classification_network: resnet_fc
   - data: cnn_mpmt_postveto_nomichel
   - data/dataset: cnn_mpmt
