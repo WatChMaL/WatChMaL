@@ -52,13 +52,13 @@ class ClassifierEngine:
         self.test_loader = data.test_dataloader()
 
         # define the placeholder attributes
-        self.data     = None
-        self.labels   = None
-        self.energies = None
-        self.eventids = None
+        self.data      = None
+        self.labels    = None
+        self.energies  = None
+        self.eventids  = None
         self.rootfiles = None
-        self.angles = None
-        self.index = None
+        self.angles    = None
+        self.index     = None
 
         # create the directory for saving the log and dump files
         self.dirpath = self.train_config.dump_path + strftime("%Y%m%d") + "/" #+ strftime("%H%M%S") + "/"
@@ -88,9 +88,9 @@ class ClassifierEngine:
             # training
             self.loss = self.criterion(model_out,self.labels)
             
-            softmax    = self.softmax(model_out)
+            softmax          = self.softmax(model_out)
             predicted_labels = torch.argmax(model_out,dim=-1)
-            accuracy   = (predicted_labels == self.labels).sum().item() / float(predicted_labels.nelement())        
+            accuracy         = (predicted_labels == self.labels).sum().item() / float(predicted_labels.nelement())        
             predicted_labels = predicted_labels
         
         return {'loss'             : self.loss.detach().cpu().item(),
@@ -257,7 +257,8 @@ class ClassifierEngine:
         self.val_log.close()
         self.train_log.close()
     
-    def validate(self, subset):
+    
+    def validate(self):
         """
         Test the trained model on the validation set.
         
@@ -272,37 +273,12 @@ class ClassifierEngine:
         Returns : None
         """
 
-        # Print start message
-        if subset == "train":
-            message = "Validating model on the train set"
-        elif subset == "validation":
-            message = "Validating model on the validation set"
-        elif subset == "test":
-            message = "Validating model on the test set"
-        else:
-            print("validate() : arg subset has to be one of train, validation, test")
-            return None
-        
-        print(message)
-
         num_dump_events = self.config.num_dump_events
 
         # Setup the CSV file for logging the output, path to save the actual and reconstructed events, dataloader iterator
-        if subset == "train":
-            self.log        = CSVData(self.dirpath+"train_validation_log.csv")
-            np_event_path   = self.dirpath + "/train_valid_iteration_"
-            data_iter       = self.train_loader
-            dump_iterations = max(1, ceil(num_dump_events/self.config.batch_size_train))
-        elif subset == "validation":
-            self.log        = CSVData(self.dirpath+"valid_validation_log.csv")
-            np_event_path   = self.dirpath + "/val_valid_iteration_"
-            data_iter       = self.val_loader
-            dump_iterations = max(1, ceil(num_dump_events/self.config.batch_size_val))
-        else:
-            self.log        = CSVData(self.dirpath+"test_validation_log.csv")
-            np_event_path   = self.dirpath + "/test_validation_iteration_"
-            data_iter       = self.test_loader
-            dump_iterations = max(1, ceil(num_dump_events/self.config.batch_size_test))
+        self.log        = CSVData(self.dirpath+"valid_validation_log.csv")
+        np_event_path   = self.dirpath + "/val_valid_iteration_"
+        dump_iterations = max(1, ceil(num_dump_events/self.config.batch_size_val))
         
         print("Dump iterations = {0}".format(dump_iterations))
         save_arr_dict = {"events":[], "labels":[], "energies":[], "angles":[], "eventids":[], "rootfiles":[], "predicted_labels":[], "softmax":[]}
@@ -313,17 +289,20 @@ class ClassifierEngine:
         avg_loss = 0
         avg_acc = 0
         count = 0
-        for iteration, data in enumerate(data_iter):
+        for iteration, data in enumerate(self.val_loader):
             
             stdout.write("Iteration : " + str(iteration) + "\n")
 
             # Extract the event data from the input data tuple
-            self.data      = data[0].float()
-            self.labels    = data[1].long()
+            self.data      = data['data'].float()
+            self.labels    = data['labels'].long()
+
+            """
             self.energies  = data[2].float()
             self.eventids  = data[5].float()
             self.rootfiles = data[6]
             self.angles    = data[3].float()
+            """
 
             res = self.forward(False)
 
