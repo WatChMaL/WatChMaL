@@ -17,7 +17,7 @@ import sys
 
 # WatChMaL imports
 from watchmal.dataset.data_module import DataModule
-from watchmal.plot_utils.plot_utils import CSVData
+from watchmal.utils.logging_utils import CSVData
 
 class ClassifierEngine:
     def __init__(self, model_config, train_config, data):
@@ -198,10 +198,11 @@ class ClassifierEngine:
                             val_iter = iter(self.val_loader)
 
                         # extract the event data from the input data tuple
-                        self.data     = val_data[0].float()
-                        self.labels   = val_data[1].long()
-                        self.energies = val_data[2].float()
-                        self.angles   = val_data[3].float()
+                        self.data     = val_data['data'].float()
+                        self.labels   = val_data['labels'].long()
+
+                        self.energies = self.data[2]
+                        self.angles   = self.data[3]
 
                         res = self.forward(False)
 
@@ -226,8 +227,11 @@ class ClassifierEngine:
                     curr_loss = curr_loss / num_val_batches
 
                     # save if this is the best model so far
+                    # TODO: either make iteration an attribute, or rework logic
+                    self.iteration = iteration
+                    
                     if curr_loss < best_val_loss:
-                        self.save_state(mode="best")
+                        self.save_state(best=True)
                         curr_loss = best_val_loss
                     
                     if iteration in dump_iterations:
@@ -241,7 +245,7 @@ class ClassifierEngine:
                     self.val_log.write()
 
                     # Save the latest model
-                    self.save_state(mode="latest")
+                    self.save_state(best=False)
                 
                 
                 if epoch >= epochs:
@@ -356,7 +360,7 @@ class ClassifierEngine:
 
         stdout.write("Overall acc : {}, Overall loss : {}\n".format(avg_acc, avg_loss))
     
-    def save_state(self,best=False):
+    def save_state(self, best=False):
         filename = "{}{}{}{}".format(self.dirpath,
                                      str(self.model._get_name()),
                                      ("BEST" if best else ""),
