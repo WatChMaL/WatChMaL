@@ -1,0 +1,8 @@
+# @package _group_
+_target_: watchmal.dataset.cnn_mpmt.cnn_mpmt_dataset.CNNmPMTDataset
+h5file: /home/prouse/work/WatChMaL/data/IWCDmPMT_4pi_full_tank_pointnet.h5
+mpmt_positions_file: /home/prouse/work/WatChMaL/data/IWCD_mPMT_image_positions.npz
+transforms:
+  - horizontal_flip
+  - vertical_flip
+collapse_arrays: False
