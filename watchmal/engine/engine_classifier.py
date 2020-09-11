@@ -25,11 +25,13 @@ class ClassifierEngine:
         self.train_config = train_config
 
         # configure device
-        if (train_config.device == 'gpu'):
+        if (self.train_config.device == 'gpu'):
             print("Requesting a GPU")
             if torch.cuda.is_available():
-                self.device = torch.device("cuda")
+                # TODO: replace specified gpu with "gpus" from config
+                self.device = torch.device("cuda:7")
                 print("CUDA is available")
+                print("Current gpu: ", torch.cuda.current_device())
             else:
                 self.device=torch.device("cpu")
                 print("CUDA is not available")
@@ -59,13 +61,13 @@ class ClassifierEngine:
         self.index = None
 
         # create the directory for saving the log and dump files
-        self.dirpath = self.train_config.dump_path + strftime("%Y%m%d") + "/" + strftime("%H%M%S") + "/"
+        self.dirpath = self.train_config.dump_path + strftime("%Y%m%d") + "/" #+ strftime("%H%M%S") + "/"
 
         try:
-            stat(self.dirpath)
+            os.stat(self.dirpath)
         except:
             print("Creating a directory for run dump at : {}".format(self.dirpath))
-            mkdir(self.dirpath)
+            os.makedirs(self.dirpath, exist_ok=True)
         
         # logging attributes
         self.train_log = CSVData(self.dirpath + "log_train.csv")
@@ -79,16 +81,16 @@ class ClassifierEngine:
         with torch.set_grad_enabled(train):
             # move the data and the labels to the GPU (if using CPU this has no effect)
             self.data = self.data.to(self.device)
-            self.label = self.label.to(self.device)
+            self.labels = self.labels.to(self.device)
 
             model_out = self.model(self.data)
             
             # training
-            self.loss = self.criterion(model_out,self.label)
+            self.loss = self.criterion(model_out,self.labels)
             
             softmax    = self.softmax(model_out)
             predicted_labels = torch.argmax(model_out,dim=-1)
-            accuracy   = (predicted_labels == self.label).sum().item() / float(predicted_labels.nelement())        
+            accuracy   = (predicted_labels == self.labels).sum().item() / float(predicted_labels.nelement())        
             predicted_labels = predicted_labels
         
         return {'loss'             : self.loss.detach().cpu().item(),
@@ -105,6 +107,8 @@ class ClassifierEngine:
     # ========================================================================
 
     def train(self):
+        print("Training")
+
         # initialize training params
         epochs          = self.train_config.epochs
         report_interval = self.train_config.report_interval
@@ -130,6 +134,7 @@ class ClassifierEngine:
         val_iter = iter(self.val_loader)
 
         # global training loop for multiple epochs
+        
         while (floor(epoch) < epochs):
 
             print('Epoch',floor(epoch),
@@ -139,15 +144,17 @@ class ClassifierEngine:
             start_time = time()
 
             # local training loop for batches in a single epoch
-            for batch_data in self.train_loader:
-                #print('in loop')
+            for i, batch_data in enumerate(self.train_loader):
 
                 # Using only the charge data
-                self.data     = batch_data[0].float()
-                self.labels   = batch_data[1].long()
+                self.data     = batch_data['data'].float()
+                self.labels   = batch_data['labels'].long()
+                
+                """
                 self.energies = batch_data[2]
                 self.angles   = batch_data[3]
                 self.index    = batch_data[4]
+                """
 
                 # Call forward: make a prediction & measure the average error using data = self.data
                 res = self.forward(True)
@@ -235,6 +242,7 @@ class ClassifierEngine:
 
                     # Save the latest model
                     self.save_state(mode="latest")
+                
                 
                 if epoch >= epochs:
                     break
@@ -378,3 +386,21 @@ class ClassifierEngine:
             # load iteration count
             self.iteration = checkpoint['global_step']
         print('Restoration complete.')
+    
+    def set_dump_iterations(self, train_loader):
+        """Determine the intervals during training at which to dump the events and metrics.
+        
+        Args:
+        train_loader       -- Total number of validations performed throughout training
+        """
+
+        # Determine the validation interval to use depending on the 
+        # total number of iterations in the current session
+        valid_interval=max(1, floor(ceil(self.train_config.epochs * len(train_loader)) / self.train_config.num_vals))
+
+        # Save the dump at the earliest validation, middle of the training
+        # and last validation near the end of training
+        dump_iterations=[valid_interval, valid_interval*floor(self.train_config.num_vals/2),
+                         valid_interval*self.train_config.num_vals]
+
+        return dump_iterations

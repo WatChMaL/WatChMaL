@@ -15,7 +15,8 @@ def main(config):
     logger.info(f"Training with the following config:\n{OmegaConf.to_yaml(config)}")
 
     data = DataModule(**config.data)
-    engine = instantiate(config.engine, model_config=config.network, train_config=config.train, data=data)
+
+    engine = instantiate(config.engine, model_config=config.model, train_config=config.train, data=data)
 
     engine.train()
 
