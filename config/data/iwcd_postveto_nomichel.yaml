@@ -1,0 +1,7 @@
+# @package _group_
+train_batch_size: 512
+val_batch_size: 512
+num_workers: 4
+split_path: /home/prouse/work/WatChMaL/data/IWCD_fulltank_300_post_veto_nomichel_pe_idxs.npz
+dataset:
+  h5file: /home/prouse/work/WatChMaL/data/IWCDmPMT_4pi_full_tank_pointnet.h5

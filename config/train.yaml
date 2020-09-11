@@ -9,5 +9,5 @@ defaults:
   - model: classifier
   - model/feature_extractor: resnet18
   - model/classification_network: resnet_fc
-  - data: cnn_mpmt_postveto_nomichel
-  - data/dataset: cnn_mpmt
+  - data: iwcd_postveto_nomichel
+  - data/dataset: iwcd_cnn
