@@ -59,7 +59,7 @@ class ClassifierEngine:
         self.index = None
 
         # create the directory for saving the log and dump files
-        self.dirpath=self.train_config.dump_path + strftime("%Y%m%d") + "/" + strftime("%H%M%S") + "/"
+        self.dirpath = self.train_config.dump_path + strftime("%Y%m%d") + "/" + strftime("%H%M%S") + "/"
 
         try:
             stat(self.dirpath)
@@ -347,3 +347,34 @@ class ClassifierEngine:
         avg_loss /= count
 
         stdout.write("Overall acc : {}, Overall loss : {}\n".format(avg_acc, avg_loss))
+    
+    def save_state(self,best=False):
+        filename = "{}{}{}{}".format(self.dirpath,
+                                     str(self.model._get_name()),
+                                     ("BEST" if best else ""),
+                                     ".pth")
+        # Save parameters
+        # 0+1) iteration counter + optimizer state => in case we want to "continue training" later
+        # 2) network weight
+        torch.save({
+            'global_step': self.iteration,
+            'optimizer': self.optimizer.state_dict(),
+            'state_dict': self.model.state_dict()
+        }, filename)
+        print('Saved checkpoint as:', filename)
+        return filename
+    
+    def restore_state(self, weight_file):
+        # Open a file in read-binary mode
+        with open(weight_file, 'rb') as f:
+            print('Restoring state from', weight_file)
+            # torch interprets the file, then we can access using string keys
+            checkpoint = torch.load(f)
+            # load network weights
+            self.model.load_state_dict(checkpoint['state_dict'], strict=False)
+            # if optim is provided, load the state of the optim
+            if self.optimizer is not None:
+                self.optimizer.load_state_dict(checkpoint['optimizer'])
+            # load iteration count
+            self.iteration = checkpoint['global_step']
+        print('Restoration complete.')

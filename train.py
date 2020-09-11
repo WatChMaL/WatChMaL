@@ -2,7 +2,7 @@ import logging
 import hydra
 from omegaconf import OmegaConf
 
-from pytorch_lightning import Trainer
+#from pytorch_lightning import Trainer
 from hydra.utils import instantiate
 
 from watchmal.dataset.data_module import DataModule
@@ -18,7 +18,7 @@ def main(config):
     engine = instantiate(config.engine, model_config=config.network, train_config=config.train, data=data)
 
     engine.train()
-    
+
     #trainer_logger = instantiate(config.logger) if "logger" in config else True
 
     #logger.info(engine)
