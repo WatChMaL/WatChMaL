@@ -100,10 +100,13 @@ ENV/
 # mypy
 .mypy_cache/
 
-# input data, saved log, checkpoints
+# input data, saved log, checkpoints, testing
 input/
 saved/
 datasets/
+testing/
+test.py
+test_load.py
 
 # editor, os cache directory
 .vscode/

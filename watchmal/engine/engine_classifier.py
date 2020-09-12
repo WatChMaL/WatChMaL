@@ -257,8 +257,7 @@ class ClassifierEngine:
         self.val_log.close()
         self.train_log.close()
     
-    
-    def validate(self):
+    def validate(self, plt_worst=0, plt_best=0):
         """
         Test the trained model on the validation set.
         
@@ -272,6 +271,61 @@ class ClassifierEngine:
             
         Returns : None
         """
+       
+        
+        # Variables to output at the end
+        val_loss = 0.0
+        val_acc = 0.0
+        val_iterations = 0
+        
+        # Iterate over the validation set to calculate val_loss and val_acc
+        with torch.no_grad():
+            
+            # Set the model to evaluation mode
+            self.model.eval()
+            
+            # Variables for the confusion matrix
+            loss, accuracy, labels, predictions, softmaxes= [],[],[],[],[]
+            
+            # Extract the event data and label from the DataLoader iterator
+            for it, val_data in enumerate(self.val_loader):
+                
+                sys.stdout.write("val_iterations : " + str(val_iterations) + "\n")
+                
+                self.data = val_data['data'].float()
+                self.labels = val_data['labels'].long()
+                
+
+                # Run the forward procedure and output the result
+                result = self.forward(False)
+                val_loss += result['loss']
+                val_acc += result['accuracy']
+                
+                # Add item to priority queues if necessary
+                
+                # Copy the tensors back to the CPU
+                self.labels = self.labels.to("cpu")
+                
+                # Add the local result to the final result
+                labels.extend(self.labels)
+                predictions.extend(result['predicted_labels'])
+                softmaxes.extend(result["softmax"])
+                
+                val_iterations += 1
+                
+        print(val_iterations)
+
+        print("\nTotal val loss : ", val_loss,
+              "\nTotal val acc : ", val_acc,
+              "\nAvg val loss : ", val_loss/val_iterations,
+              "\nAvg val acc : ", val_acc/val_iterations)
+        
+        np.save(self.dirpath + "labels.npy", np.array(labels))
+        np.save(self.dirpath + "predictions.npy", np.array(predictions))
+        np.save(self.dirpath + "softmax.npy", np.array(softmaxes))
+    
+    """
+    def validate(self):
 
         num_dump_events = self.config.num_dump_events
 
@@ -297,12 +351,12 @@ class ClassifierEngine:
             self.data      = data['data'].float()
             self.labels    = data['labels'].long()
 
-            """
+
             self.energies  = data[2].float()
             self.eventids  = data[5].float()
             self.rootfiles = data[6]
             self.angles    = data[3].float()
-            """
+            
 
             res = self.forward(False)
 
@@ -354,6 +408,7 @@ class ClassifierEngine:
         }, filename)
         print('Saved checkpoint as:', filename)
         return filename
+    """
     
     def restore_state(self, weight_file):
         # Open a file in read-binary mode

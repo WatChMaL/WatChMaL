@@ -18,7 +18,7 @@ def main(config):
 
     engine = instantiate(config.engine, model_config=config.model, train_config=config.train, data=data)
 
-    engine.train()
+    #engine.train()
 
     #trainer_logger = instantiate(config.logger) if "logger" in config else True
 
