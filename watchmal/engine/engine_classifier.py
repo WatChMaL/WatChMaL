@@ -107,6 +107,20 @@ class ClassifierEngine:
     # ========================================================================
 
     def train(self):
+        """
+        Train the model on the training set.
+        
+        Parameters: None
+        
+        Outputs : 
+        TODO: fix training outputs
+            total_val_loss = accumulated validation loss
+            avg_val_loss = average validation loss
+            total_val_acc = accumulated validation accuracy
+            avg_val_acc = accumulated validation accuracy
+            
+        Returns : None
+        """
         print("Training")
 
         # initialize training params
@@ -149,12 +163,10 @@ class ClassifierEngine:
                 # Using only the charge data
                 self.data     = batch_data['data'].float()
                 self.labels   = batch_data['labels'].long()
-                
-                """
-                self.energies = batch_data[2]
-                self.angles   = batch_data[3]
-                self.index    = batch_data[4]
-                """
+
+                self.energies = batch_data['energies'].float()
+                self.angles   = batch_data['angles'].float()
+                self.index    = batch_data['index'].float()
 
                 # Call forward: make a prediction & measure the average error using data = self.data
                 res = self.forward(True)
@@ -177,7 +189,7 @@ class ClassifierEngine:
 
                  # print the metrics at given intervals
                 if iteration % report_interval == 0:
-                    print("... Iteration %d ... Epoch %1.2f ... Loss %1.3f ... Accuracy %1.3f" %
+                    print("... Iteration %d ... Epoch %1.2f ... Training Loss %1.3f ... Training Accuracy %1.3f" %
                           (iteration, epoch, res["loss"], res["accuracy"]))
                 
                 # run validation on given intervals
@@ -201,8 +213,9 @@ class ClassifierEngine:
                         self.data     = val_data['data'].float()
                         self.labels   = val_data['labels'].long()
 
-                        self.energies = self.data[2]
-                        self.angles   = self.data[3]
+                        self.energies = val_data['energies'].float()
+                        self.angles   = val_data['angles'].float()
+                        self.index    = val_data['index'].float()
 
                         res = self.forward(False)
 
@@ -271,7 +284,6 @@ class ClassifierEngine:
             
         Returns : None
         """
-       
         
         # Variables to output at the end
         val_loss = 0.0
@@ -323,92 +335,6 @@ class ClassifierEngine:
         np.save(self.dirpath + "labels.npy", np.array(labels))
         np.save(self.dirpath + "predictions.npy", np.array(predictions))
         np.save(self.dirpath + "softmax.npy", np.array(softmaxes))
-    
-    """
-    def validate(self):
-
-        num_dump_events = self.config.num_dump_events
-
-        # Setup the CSV file for logging the output, path to save the actual and reconstructed events, dataloader iterator
-        self.log        = CSVData(self.dirpath+"valid_validation_log.csv")
-        np_event_path   = self.dirpath + "/val_valid_iteration_"
-        dump_iterations = max(1, ceil(num_dump_events/self.config.batch_size_val))
-        
-        print("Dump iterations = {0}".format(dump_iterations))
-        save_arr_dict = {"events":[], "labels":[], "energies":[], "angles":[], "eventids":[], "rootfiles":[], "predicted_labels":[], "softmax":[]}
-
-        # set model in eval mode
-        self.model.eval()
- 
-        avg_loss = 0
-        avg_acc = 0
-        count = 0
-        for iteration, data in enumerate(self.val_loader):
-            
-            stdout.write("Iteration : " + str(iteration) + "\n")
-
-            # Extract the event data from the input data tuple
-            self.data      = data['data'].float()
-            self.labels    = data['labels'].long()
-
-
-            self.energies  = data[2].float()
-            self.eventids  = data[5].float()
-            self.rootfiles = data[6]
-            self.angles    = data[3].float()
-            
-
-            res = self.forward(False)
-
-            # get relevant attributes of result for logging
-            keys   = ["iteration", "loss", "accuracy"]
-            values = [iteration, res["loss"], res["accuracy"]]
-
-            # log/report
-            self.log.record(keys, values)
-            self.log.write()
-
-            avg_acc += res['accuracy']
-            avg_loss += res['loss']
-            count += 1
-
-            if iteration < dump_iterations:
-                save_arr_dict["labels"].append(self.labels.cpu().numpy())
-                save_arr_dict["energies"].append(self.energies.cpu().numpy())
-                save_arr_dict["eventids"].append(self.eventids.cpu().numpy())
-                save_arr_dict["rootfiles"].append(self.rootfiles)
-                save_arr_dict["angles"].append(self.angles.cpu().numpy())
-
-                save_arr_dict["accuracy"].append(res["accuracy"])
-                save_arr_dict["loss"].append(res["loss"])
-            
-            elif iteration == dump_iterations:
-                    break
-        
-        print("Saving the npz dump array :")
-        savez(np_event_path + "dump.npz", **save_arr_dict)
-
-        avg_acc /= count
-        avg_loss /= count
-
-        stdout.write("Overall acc : {}, Overall loss : {}\n".format(avg_acc, avg_loss))
-    
-    def save_state(self, best=False):
-        filename = "{}{}{}{}".format(self.dirpath,
-                                     str(self.model._get_name()),
-                                     ("BEST" if best else ""),
-                                     ".pth")
-        # Save parameters
-        # 0+1) iteration counter + optimizer state => in case we want to "continue training" later
-        # 2) network weight
-        torch.save({
-            'global_step': self.iteration,
-            'optimizer': self.optimizer.state_dict(),
-            'state_dict': self.model.state_dict()
-        }, filename)
-        print('Saved checkpoint as:', filename)
-        return filename
-    """
     
     def restore_state(self, weight_file):
         # Open a file in read-binary mode
