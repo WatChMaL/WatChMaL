@@ -1,49 +1,370 @@
-import torch.nn.functional as F
+# torch imports
 import torch
-import pytorch_lightning as pl
+from torch import optim
+import torch.nn as nn
+import torch.nn.functional as F
+
+# hydra imports
 from hydra.utils import instantiate
 
+# generic imports
+from math import floor, ceil
+import numpy as np
+from numpy import savez
+import os
+from time import strftime, localtime, time
+import sys
 
-class ClassifierEngine(pl.LightningModule):
+# WatChMaL imports
+from watchmal.dataset.data_module import DataModule
+from watchmal.utils.logging_utils import CSVData
 
-    def __init__(self, model_config, train_config):
-        super().__init__()
+class ClassifierEngine:
+    def __init__(self, model_config, train_config, data):
+        self.model = instantiate(model_config)
+        self.train_config = train_config
 
-        self.network = instantiate(model_config)
-        self.network = self.network.float()
-        self.learning_rate = train_config.learning_rate
-        self.weight_decay = train_config.weight_decay
+        # configure device
+        if (self.train_config.device == 'gpu'):
+            print("Requesting a GPU")
+            if torch.cuda.is_available():
+                # TODO: replace specified gpu with "gpus" from config
+                self.device = torch.device("cuda:7")
+                print("CUDA is available")
+                print("Current gpu: ", torch.cuda.current_device())
+            else:
+                self.device=torch.device("cpu")
+                print("CUDA is not available")
+        else:
+            print("Sticking to CPU")
+            self.device=torch.device("cpu")
+        
+        # send model to device
+        self.model.to(self.device)
+        
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.train_config.learning_rate, weight_decay=self.train_config.weight_decay)
+        self.criterion = nn.CrossEntropyLoss()
+        self.softmax = nn.Softmax(dim=1)
 
-    def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
-        return optimizer
+        # initialize dataloaders
+        self.train_loader = data.train_dataloader()
+        self.val_loader = data.val_dataloader()
+        self.test_loader = data.test_dataloader()
 
-    def forward(self, x):
-        return self.network(x)
+        # define the placeholder attributes
+        self.data      = None
+        self.labels    = None
+        self.energies  = None
+        self.eventids  = None
+        self.rootfiles = None
+        self.angles    = None
+        self.index     = None
 
-    def training_step(self, batch, batch_idx):
-        x = batch["data"].float()
-        labels = batch["labels"].long()
-        pred_labels = self(x)
-        loss = F.cross_entropy(pred_labels, labels)
-        result = pl.TrainResult(loss)
-        result.log('train_loss', loss, prog_bar=True)
-        return result
+        # create the directory for saving the log and dump files
+        self.dirpath = self.train_config.dump_path + strftime("%Y%m%d") + "/" #+ strftime("%H%M%S") + "/"
 
-    def validation_step(self, batch, batch_idx):
-        x = batch["data"].float()
-        labels = batch["labels"].long()
-        pred_labels = self(x)
-        loss = F.cross_entropy(pred_labels, labels)
-        result = pl.EvalResult(checkpoint_on=loss)
-        result.log('val_loss', loss)
-        return result
+        try:
+            os.stat(self.dirpath)
+        except:
+            print("Creating a directory for run dump at : {}".format(self.dirpath))
+            os.makedirs(self.dirpath, exist_ok=True)
+        
+        # logging attributes
+        self.train_log = CSVData(self.dirpath + "log_train.csv")
+        self.val_log = CSVData(self.dirpath + "log_val.csv")
+    
+    def forward(self, train=True):
+        """
+        Args: self should have attributes model, criterion, softmax, data, label
+        Returns: a dictionary of loss, predicted labels, softmax, accuracy, and raw model outputs
+        """
+        with torch.set_grad_enabled(train):
+            # move the data and the labels to the GPU (if using CPU this has no effect)
+            self.data = self.data.to(self.device)
+            self.labels = self.labels.to(self.device)
 
-    def test_step(self, batch, batch_idx):
-        result = self.validation_step(batch, batch_idx)
-        result.rename_keys(
-            {
-                "val_loss": "test_loss"
-            }
-        )
-        return result
+            model_out = self.model(self.data)
+            
+            # training
+            self.loss = self.criterion(model_out,self.labels)
+            
+            softmax          = self.softmax(model_out)
+            predicted_labels = torch.argmax(model_out,dim=-1)
+            accuracy         = (predicted_labels == self.labels).sum().item() / float(predicted_labels.nelement())        
+            predicted_labels = predicted_labels
+        
+        return {'loss'             : self.loss.detach().cpu().item(),
+                'predicted_labels' : predicted_labels.cpu().numpy(),
+                'softmax'          : softmax.detach().cpu().numpy(),
+                'accuracy'         : accuracy,
+                "raw_pred_labels"  : model_out}
+    
+    def backward(self):
+        self.optimizer.zero_grad()  # reset accumulated gradient
+        self.loss.backward()        # compute new gradient
+        self.optimizer.step()       # step params
+    
+    # ========================================================================
+
+    def train(self):
+        """
+        Train the model on the training set.
+        
+        Parameters: None
+        
+        Outputs : 
+        TODO: fix training outputs
+            total_val_loss = accumulated validation loss
+            avg_val_loss = average validation loss
+            total_val_acc = accumulated validation accuracy
+            avg_val_acc = accumulated validation accuracy
+            
+        Returns : None
+        """
+        print("Training")
+
+        # initialize training params
+        epochs          = self.train_config.epochs
+        report_interval = self.train_config.report_interval
+        num_vals        = self.train_config.num_vals
+        num_val_batches = self.train_config.num_val_batches
+
+        # set the iterations at which to dump the events and their metrics
+        dump_iterations = self.set_dump_iterations(self.train_loader)
+        print(f"Validation Interval: {dump_iterations[0]}")
+
+        # set neural net to training mode
+        self.model.train()
+
+        # initialize epoch and iteration counters
+        epoch = 0.
+        iteration = 0
+
+        # keep track of the validation accuracy
+        best_val_acc = 0.0
+        best_val_loss = 1.0e6
+
+        # initialize the iterator over the validation subset
+        val_iter = iter(self.val_loader)
+
+        # global training loop for multiple epochs
+        
+        while (floor(epoch) < epochs):
+
+            print('Epoch',floor(epoch),
+                  'Starting @', strftime("%Y-%m-%d %H:%M:%S", localtime()))
+            times = []
+
+            start_time = time()
+
+            # local training loop for batches in a single epoch
+            for i, batch_data in enumerate(self.train_loader):
+
+                # Using only the charge data
+                self.data     = batch_data['data'].float()
+                self.labels   = batch_data['labels'].long()
+
+                self.energies = batch_data['energies'].float()
+                self.angles   = batch_data['angles'].float()
+                self.index    = batch_data['index'].float()
+
+                # Call forward: make a prediction & measure the average error using data = self.data
+                res = self.forward(True)
+
+                #Call backward: backpropagate error and update weights using loss = self.loss
+                self.backward()
+
+                # update the epoch and iteration
+                epoch     += 1./len(self.train_loader)
+                iteration += 1
+
+                # get relevant attributes of result for logging
+                keys   = ["iteration", "epoch", "loss", "accuracy"]
+                values = [iteration, epoch, res["loss"], res["accuracy"]]
+                
+                # record the metrics for the mini-batch in the log
+                self.train_log.record(keys, values)
+                self.train_log.write()
+                self.train_log.flush()
+
+                 # print the metrics at given intervals
+                if iteration % report_interval == 0:
+                    print("... Iteration %d ... Epoch %1.2f ... Training Loss %1.3f ... Training Accuracy %1.3f" %
+                          (iteration, epoch, res["loss"], res["accuracy"]))
+                
+                # run validation on given intervals
+                if iteration % dump_iterations[0] == 0:
+                    # set model to eval mode
+                    self.model.eval()
+
+                    curr_loss = 0.
+                    val_batch = 0
+
+                    val_keys   = ["iteration", "epoch", "loss", "accuracy"]
+                    val_values = []
+
+                    for val_batch in range(num_val_batches):
+                        try:
+                            val_data = next(val_iter)
+                        except StopIteration:
+                            val_iter = iter(self.val_loader)
+
+                        # extract the event data from the input data tuple
+                        self.data     = val_data['data'].float()
+                        self.labels   = val_data['labels'].long()
+
+                        self.energies = val_data['energies'].float()
+                        self.angles   = val_data['angles'].float()
+                        self.index    = val_data['index'].float()
+
+                        res = self.forward(False)
+
+                        if val_batch == 0:
+                            val_values = [iteration, epoch, res["loss"], res["accuracy"]]
+                        else:
+                            val_values[val_keys.index("loss")] += res["loss"]
+                            val_values[val_keys.index("accuracy")] += res["accuracy"]
+                        
+                        curr_loss += res["loss"]
+                    
+                    # return model to training mode
+                    self.model.train()
+
+                    # record the validation stats to the csv
+                    val_values[val_keys.index("loss")] /= num_val_batches
+                    val_values[val_keys.index("accuracy")] /= num_val_batches
+
+                    self.val_log.record(val_keys, val_values)
+
+                    # average the loss over the validation batch
+                    curr_loss = curr_loss / num_val_batches
+
+                    # save if this is the best model so far
+                    # TODO: either make iteration an attribute, or rework logic
+                    self.iteration = iteration
+                    
+                    if curr_loss < best_val_loss:
+                        self.save_state(best=True)
+                        curr_loss = best_val_loss
+                    
+                    if iteration in dump_iterations:
+                        save_arr_keys = ["events", "labels", "energies", "angles", "predicted_labels", "softmax"]
+                        save_arr_values = [self.data.cpu().numpy(), self.labels.cpu().numpy(), self.energies.cpu().numpy(), self.angles.cpu().numpy(), res["predicted_labels"], res["softmax"]]
+
+                        # save the actual and reconstructed event to the disk
+                        savez(self.dirpath + "/iteration_" + str(iteration) + ".npz",
+                              **{key:value for key,value in zip(save_arr_keys,save_arr_values)})
+                    
+                    self.val_log.write()
+
+                    # Save the latest model
+                    self.save_state(best=False)
+                
+                
+                if epoch >= epochs:
+                    break
+            
+            print("... Iteration %d ... Epoch %1.2f ... Loss %1.3f ... Accuracy %1.3f" %
+                  (iteration, epoch, res['loss'], res['accuracy']))
+        
+        self.val_log.close()
+        self.train_log.close()
+    
+    def validate(self, plt_worst=0, plt_best=0):
+        """
+        Test the trained model on the validation set.
+        
+        Parameters: None
+        
+        Outputs : 
+            total_val_loss = accumulated validation loss
+            avg_val_loss = average validation loss
+            total_val_acc = accumulated validation accuracy
+            avg_val_acc = accumulated validation accuracy
+            
+        Returns : None
+        """
+        
+        # Variables to output at the end
+        val_loss = 0.0
+        val_acc = 0.0
+        val_iterations = 0
+        
+        # Iterate over the validation set to calculate val_loss and val_acc
+        with torch.no_grad():
+            
+            # Set the model to evaluation mode
+            self.model.eval()
+            
+            # Variables for the confusion matrix
+            loss, accuracy, labels, predictions, softmaxes= [],[],[],[],[]
+            
+            # Extract the event data and label from the DataLoader iterator
+            for it, val_data in enumerate(self.val_loader):
+                
+                sys.stdout.write("val_iterations : " + str(val_iterations) + "\n")
+                
+                self.data = val_data['data'].float()
+                self.labels = val_data['labels'].long()
+                
+
+                # Run the forward procedure and output the result
+                result = self.forward(False)
+                val_loss += result['loss']
+                val_acc += result['accuracy']
+                
+                # Add item to priority queues if necessary
+                
+                # Copy the tensors back to the CPU
+                self.labels = self.labels.to("cpu")
+                
+                # Add the local result to the final result
+                labels.extend(self.labels)
+                predictions.extend(result['predicted_labels'])
+                softmaxes.extend(result["softmax"])
+                
+                val_iterations += 1
+                
+        print(val_iterations)
+
+        print("\nTotal val loss : ", val_loss,
+              "\nTotal val acc : ", val_acc,
+              "\nAvg val loss : ", val_loss/val_iterations,
+              "\nAvg val acc : ", val_acc/val_iterations)
+        
+        np.save(self.dirpath + "labels.npy", np.array(labels))
+        np.save(self.dirpath + "predictions.npy", np.array(predictions))
+        np.save(self.dirpath + "softmax.npy", np.array(softmaxes))
+    
+    def restore_state(self, weight_file):
+        # Open a file in read-binary mode
+        with open(weight_file, 'rb') as f:
+            print('Restoring state from', weight_file)
+            # torch interprets the file, then we can access using string keys
+            checkpoint = torch.load(f)
+            # load network weights
+            self.model.load_state_dict(checkpoint['state_dict'], strict=False)
+            # if optim is provided, load the state of the optim
+            if self.optimizer is not None:
+                self.optimizer.load_state_dict(checkpoint['optimizer'])
+            # load iteration count
+            self.iteration = checkpoint['global_step']
+        print('Restoration complete.')
+    
+    def set_dump_iterations(self, train_loader):
+        """Determine the intervals during training at which to dump the events and metrics.
+        
+        Args:
+        train_loader       -- Total number of validations performed throughout training
+        """
+
+        # Determine the validation interval to use depending on the 
+        # total number of iterations in the current session
+        valid_interval=max(1, floor(ceil(self.train_config.epochs * len(train_loader)) / self.train_config.num_vals))
+
+        # Save the dump at the earliest validation, middle of the training
+        # and last validation near the end of training
+        dump_iterations=[valid_interval, valid_interval*floor(self.train_config.num_vals/2),
+                         valid_interval*self.train_config.num_vals]
+
+        return dump_iterations

@@ -16,8 +16,7 @@ class DataModule():
         self.val_indices = split_indices["val_idxs"]
         self.test_indices = split_indices["test_idxs"]
         self.num_workers = num_workers
-
-    def setup(self, stage=None):
+        
         self.dataset = instantiate(self.dataset_config)
         self.train_sampler = SubsetRandomSampler(self.train_indices)
         self.val_sampler = SubsetRandomSampler(self.val_indices)
