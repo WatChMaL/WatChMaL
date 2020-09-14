@@ -1,13 +1,13 @@
 train:
-  epochs: 1
+  epochs: 3
   report_interval: 100
-  num_vals: 54
-  num_val_batches: 3
+  num_vals: 162
+  num_val_batches: 50
 
   learning_rate: 0.0001
   weight_decay: 0.0001
-  device: 'gpu'
   gpu_list:
+    - 6
     - 7
   dump_path: './outputs/'
 

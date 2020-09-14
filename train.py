@@ -18,14 +18,9 @@ def main(config):
 
     engine = instantiate(config.engine, model_config=config.model, train_config=config.train, data=data)
 
-    #engine.train()
+    engine.train()
 
-    #trainer_logger = instantiate(config.logger) if "logger" in config else True
-
-    #logger.info(engine)
-    #trainer = Trainer(gpus=config.train.gpus, logger=trainer_logger)
-    #trainer.fit(engine, data)
-
+    engine.validate()
 
 if __name__ == '__main__':
     # pylint: disable=no-value-for-parameter

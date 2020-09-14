@@ -3,6 +3,7 @@ import torch
 from torch import optim
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.nn import DataParallel
 
 # hydra imports
 from hydra.utils import instantiate
@@ -24,20 +25,24 @@ class ClassifierEngine:
         self.model = instantiate(model_config)
         self.train_config = train_config
 
-        # configure device
-        if (self.train_config.device == 'gpu'):
-            print("Requesting a GPU")
+        # configure the device to be used for model training and inference
+        if self.train_config.gpu_list is not None:
+            print("Requesting GPUs. GPU list : " + str(self.train_config.gpu_list))
+            self.devids = ["cuda:{0}".format(x) for x in self.train_config.gpu_list]
+            print("Main GPU : " + self.devids[0])
+
             if torch.cuda.is_available():
-                # TODO: replace specified gpu with "gpus" from config
-                self.device = torch.device("cuda:7")
+                self.device = torch.device(self.devids[0])
+                if len(self.devids) > 1:
+                    print("Using DataParallel on these devices: {}".format(self.devids))
+                    self.model = DataParallel(self.model, device_ids=self.train_config.gpu_list, dim=0)
                 print("CUDA is available")
-                print("Current gpu: ", torch.cuda.current_device())
             else:
-                self.device=torch.device("cpu")
+                self.device = device("cpu")
                 print("CUDA is not available")
         else:
-            print("Sticking to CPU")
-            self.device=torch.device("cpu")
+            print("Using CPU")
+            self.device = device("cpu")
         
         # send model to device
         self.model.to(self.device)
@@ -148,7 +153,6 @@ class ClassifierEngine:
         val_iter = iter(self.val_loader)
 
         # global training loop for multiple epochs
-        
         while (floor(epoch) < epochs):
 
             print('Epoch',floor(epoch),
@@ -166,7 +170,7 @@ class ClassifierEngine:
 
                 self.energies = batch_data['energies'].float()
                 self.angles   = batch_data['angles'].float()
-                self.index    = batch_data['index'].float()
+                self.index    = batch_data['event_ids'].float()
 
                 # Call forward: make a prediction & measure the average error using data = self.data
                 res = self.forward(True)
@@ -187,7 +191,7 @@ class ClassifierEngine:
                 self.train_log.write()
                 self.train_log.flush()
 
-                 # print the metrics at given intervals
+                # print the metrics at given intervals
                 if iteration % report_interval == 0:
                     print("... Iteration %d ... Epoch %1.2f ... Training Loss %1.3f ... Training Accuracy %1.3f" %
                           (iteration, epoch, res["loss"], res["accuracy"]))
@@ -215,7 +219,7 @@ class ClassifierEngine:
 
                         self.energies = val_data['energies'].float()
                         self.angles   = val_data['angles'].float()
-                        self.index    = val_data['index'].float()
+                        self.index    = val_data['event_ids'].float()
 
                         res = self.forward(False)
 
@@ -351,6 +355,22 @@ class ClassifierEngine:
             self.iteration = checkpoint['global_step']
         print('Restoration complete.')
     
+    def save_state(self,best=False):
+        filename = "{}{}{}{}".format(self.dirpath,
+                                     str(self.model._get_name()),
+                                     ("BEST" if best else ""),
+                                     ".pth")
+        # Save parameters
+        # 0+1) iteration counter + optimizer state => in case we want to "continue training" later
+        # 2) network weight
+        torch.save({
+            'global_step': self.iteration,
+            'optimizer': self.optimizer.state_dict(),
+            'state_dict': self.model.state_dict()
+        }, filename)
+        print('Saved checkpoint as:', filename)
+        return filename
+    
     def set_dump_iterations(self, train_loader):
         """Determine the intervals during training at which to dump the events and metrics.
         
@@ -358,12 +378,10 @@ class ClassifierEngine:
         train_loader       -- Total number of validations performed throughout training
         """
 
-        # Determine the validation interval to use depending on the 
-        # total number of iterations in the current session
+        # Determine the validation interval to use depending on the total number of iterations in the current session
         valid_interval=max(1, floor(ceil(self.train_config.epochs * len(train_loader)) / self.train_config.num_vals))
 
-        # Save the dump at the earliest validation, middle of the training
-        # and last validation near the end of training
+        # Save the dump at the earliest validation, middle of the training and last validation near the end of training
         dump_iterations=[valid_interval, valid_interval*floor(self.train_config.num_vals/2),
                          valid_interval*self.train_config.num_vals]
 
