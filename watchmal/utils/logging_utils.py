@@ -6,9 +6,8 @@ class CSVData:
         self._str  = None
         self._dict = {}
 
-    def record(self, keys, vals):
-        for i, key in enumerate(keys):
-            self._dict[key] = vals[i]
+    def record(self, input_dict):
+        self._dict = input_dict.copy()
 
     def write(self):
         if self._str is None:

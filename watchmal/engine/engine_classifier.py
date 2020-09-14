@@ -63,7 +63,7 @@ class ClassifierEngine:
         self.eventids  = None
         self.rootfiles = None
         self.angles    = None
-        self.event_ids     = None
+        self.event_ids = None
 
         # create the directory for saving the log and dump files
         self.dirpath = self.train_config.dump_path + strftime("%Y%m%d") + "/" #+ strftime("%H%M%S") + "/"
@@ -147,7 +147,7 @@ class ClassifierEngine:
 
         # initialize epoch and iteration counters
         epoch = 0.
-        iteration = 0
+        self.iteration = 0
 
         # keep track of the validation accuracy
         best_val_acc = 0.0
@@ -183,28 +183,23 @@ class ClassifierEngine:
                 self.backward()
 
                 # update the epoch and iteration
-                epoch     += 1./len(self.train_loader)
-                iteration += 1
+                epoch          += 1./len(self.train_loader)
+                self.iteration += 1
 
                 # get relevant attributes of result for logging
-                train_metrics = {"iteration": iteration, "epoch": epoch, "loss": res["loss"], "accuracy": res["accuracy"]}
+                train_metrics = {"iteration": self.iteration, "epoch": epoch, "loss": res["loss"], "accuracy": res["accuracy"]}
                 
                 # record the metrics for the mini-batch in the log
-                self.train_log.record(list(train_metrics.keys()), list(train_metrics.values()))
+                self.train_log.record(train_metrics)
                 self.train_log.write()
                 self.train_log.flush()
-
-                # print the metrics at given intervals
-                if iteration % report_interval == 0:
-                    print("... Iteration %d ... Epoch %1.2f ... Training Loss %1.3f ... Training Accuracy %1.3f" %
-                          (iteration, epoch, res["loss"], res["accuracy"]))
                 
                 # run validation on given intervals
-                if iteration % dump_iterations[0] == 0:
+                if self.iteration % dump_iterations[0] == 0:
                     # set model to eval mode
                     self.model.eval()
 
-                    val_metrics = {"iteration": iteration, "epoch": epoch, "loss": 0., "accuracy": 0.}
+                    val_metrics = {"iteration": self.iteration, "epoch": epoch, "loss": 0., "accuracy": 0.}
 
                     for val_batch in range(num_val_batches):
                         try:
@@ -232,24 +227,21 @@ class ClassifierEngine:
                     val_metrics["loss"] /= num_val_batches
                     val_metrics["accuracy"] /= num_val_batches
 
-                    self.val_log.record(list(val_metrics.keys()), list(val_metrics.values()))
+                    self.val_log.record(val_metrics)
 
                     # save if this is the best model so far
-                    # TODO: either make iteration an attribute, or rework logic
-                    self.iteration = iteration
-                    
                     if val_metrics["loss"] < best_val_loss:
                         self.save_state(best=True)
 
                         best_val_loss = val_metrics["loss"]
                         print('best validation loss so far!: {}'.format(best_val_loss))
                     
-                    if iteration in dump_iterations:
+                    if self.iteration in dump_iterations:
                         save_arr_keys = ["events", "labels", "energies", "angles", "predicted_labels", "softmax"]
                         save_arr_values = [self.data.cpu().numpy(), self.labels.cpu().numpy(), self.energies.cpu().numpy(), self.angles.cpu().numpy(), val_res["predicted_labels"], val_res["softmax"]]
 
                         # save the actual and reconstructed event to the disk
-                        savez(self.dirpath + "/iteration_" + str(iteration) + ".npz",
+                        savez(self.dirpath + "/iteration_" + str(self.iteration) + ".npz",
                               **{key:value for key,value in zip(save_arr_keys,save_arr_values)})
                     
                     self.val_log.write()
@@ -257,11 +249,13 @@ class ClassifierEngine:
                     # Save the latest model
                     self.save_state(best=False)
                 
+                # print the metrics at given intervals
+                if self.iteration % report_interval == 0:
+                    print("... Iteration %d ... Epoch %1.2f ... Training Loss %1.3f ... Training Accuracy %1.3f" %
+                          (self.iteration, epoch, res["loss"], res["accuracy"]))
+                
                 if epoch >= epochs:
                     break
-            
-            print("... Iteration %d ... Epoch %1.2f ... Loss %1.3f ... Accuracy %1.3f" %
-                  (iteration, epoch, res['loss'], res['accuracy']))
         
         self.val_log.close()
         self.train_log.close()
@@ -305,7 +299,7 @@ class ClassifierEngine:
 
                 # Run the forward procedure and output the result
                 result = self.forward(False)
-                
+
                 val_loss += result['loss']
                 val_acc += result['accuracy']
                 
@@ -344,6 +338,8 @@ class ClassifierEngine:
             # load iteration count
             self.iteration = checkpoint['global_step']
         print('Restoration complete.')
+    
+    # ========================================================================
     
     def save_state(self,best=False):
         filename = "{}{}{}{}".format(self.dirpath,

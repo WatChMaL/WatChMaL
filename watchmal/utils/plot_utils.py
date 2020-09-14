@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
+
 def disp_learn_hist(location,losslim=None,show=True):
     
     """
@@ -86,7 +87,7 @@ def disp_learn_hist_smoothed(location, losslim=None, window_train=400,window_val
     ax1.tick_params('x',colors='black',labelsize=18)
     ax1.set_ylabel('Loss', fontsize=24, fontweight='bold',color='b')
     ax1.tick_params('y',colors='b',labelsize=18)
-    
+
     if losslim is not None:
         ax1.set_ylim(0.,losslim)
     
