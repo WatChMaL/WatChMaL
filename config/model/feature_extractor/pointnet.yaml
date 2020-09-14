@@ -1,0 +1,6 @@
+# @package _group_
+_target_: watchmal.model.pointnet.PointNetFeat
+feature_transform: True
+k: 5
+mean_pool: 256
+num_output_channels: 256

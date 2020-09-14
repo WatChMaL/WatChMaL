@@ -26,7 +26,7 @@ class DataModule():
         return DataLoader(self.dataset, batch_size=self.train_batch_size, sampler=self.train_sampler, num_workers=self.num_workers)
 
     def val_dataloader(self):
-        return DataLoader(self.dataset, batch_size=self.val_batch_size, sampler=self.train_sampler, num_workers=self.num_workers)
+        return DataLoader(self.dataset, batch_size=self.val_batch_size, sampler=self.val_sampler, num_workers=self.num_workers)
 
     def test_dataloader(self):
-        return DataLoader(self.dataset, batch_size=self.val_batch_size, sampler=self.train_sampler, num_workers=self.num_workers)
+        return DataLoader(self.dataset, batch_size=self.val_batch_size, sampler=self.test_sampler, num_workers=self.num_workers)

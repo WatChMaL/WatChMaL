@@ -36,3 +36,22 @@ class ResNetFullyConnected(nn.Module):
         x = self.relu(self.cl_fc3(x))
         x = self.cl_fc4(x)
         return x
+
+
+class PointNetFullyConnected(nn.Module):
+    def __init__(self, num_inputs, num_classes):
+        super().__init__()
+        self.fc1 = nn.Linear(num_inputs, num_inputs//2)
+        self.fc2 = nn.Linear(num_inputs//2, num_inputs//4)
+        self.fc3 = nn.Linear(num_inputs//4, num_classes)
+        self.dropout = nn.Dropout(p=0.3)
+        self.bn1 = nn.BatchNorm1d(num_inputs//2)
+        self.bn2 = nn.BatchNorm1d(num_inputs//4)
+        self.relu = nn.ReLU()
+
+
+    def forward(self, x):
+        x = self.relu(self.bn1(self.fc1(x)))
+        x = self.relu(self.bn2(self.dropout(self.fc2(x))))
+        x = self.fc3(x)
+        return x
