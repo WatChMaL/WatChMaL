@@ -38,11 +38,11 @@ class ClassifierEngine:
                     self.model = DataParallel(self.model, device_ids=self.train_config.gpu_list, dim=0)
                 print("CUDA is available")
             else:
-                self.device = device("cpu")
-                print("CUDA is not available")
+                self.device = torch.device("cpu")
+                print("CUDA is not available, using CPU")
         else:
             print("Using CPU")
-            self.device = device("cpu")
+            self.device = torch.device("cpu")
         
         # send model to device
         self.model.to(self.device)
