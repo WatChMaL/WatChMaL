@@ -63,7 +63,7 @@ class ClassifierEngine:
         self.eventids  = None
         self.rootfiles = None
         self.angles    = None
-        self.index     = None
+        self.event_ids     = None
 
         # create the directory for saving the log and dump files
         self.dirpath = self.train_config.dump_path + strftime("%Y%m%d") + "/" #+ strftime("%H%M%S") + "/"
@@ -80,8 +80,13 @@ class ClassifierEngine:
     
     def forward(self, train=True):
         """
-        Args: self should have attributes model, criterion, softmax, data, label
-        Returns: a dictionary of loss, predicted labels, softmax, accuracy, and raw model outputs
+        Compute predictions and metrics for a batch of data
+
+        Parameters:
+            train = whether to compute gradients for backpropagation
+            self should have attributes model, criterion, softmax, data, label
+        
+        Returns : a dict of loss, predicted labels, softmax, accuracy, and raw model outputs
         """
         with torch.set_grad_enabled(train):
             # move the data and the labels to the GPU (if using CPU this has no effect)
@@ -89,8 +94,7 @@ class ClassifierEngine:
             self.labels = self.labels.to(self.device)
 
             model_out = self.model(self.data)
-            
-            # training
+
             self.loss = self.criterion(model_out,self.labels)
             
             softmax          = self.softmax(model_out)
@@ -115,7 +119,7 @@ class ClassifierEngine:
         """
         Train the model on the training set.
         
-        Parameters: None
+        Parameters : None
         
         Outputs : 
         TODO: fix training outputs
@@ -126,7 +130,7 @@ class ClassifierEngine:
             
         Returns : None
         """
-        print("Training")
+        print("Training...")
 
         # initialize training params
         epochs          = self.train_config.epochs
@@ -138,7 +142,7 @@ class ClassifierEngine:
         dump_iterations = self.set_dump_iterations(self.train_loader)
         print(f"Validation Interval: {dump_iterations[0]}")
 
-        # set neural net to training mode
+        # set model to training mode
         self.model.train()
 
         # initialize epoch and iteration counters
@@ -149,7 +153,7 @@ class ClassifierEngine:
         best_val_acc = 0.0
         best_val_loss = 1.0e6
 
-        # initialize the iterator over the validation subset
+        # initialize the iterator over the validation set
         val_iter = iter(self.val_loader)
 
         # global training loop for multiple epochs
@@ -170,7 +174,7 @@ class ClassifierEngine:
 
                 self.energies = batch_data['energies'].float()
                 self.angles   = batch_data['angles'].float()
-                self.index    = batch_data['event_ids'].float()
+                self.event_ids    = batch_data['event_ids'].float()
 
                 # Call forward: make a prediction & measure the average error using data = self.data
                 res = self.forward(True)
@@ -183,11 +187,10 @@ class ClassifierEngine:
                 iteration += 1
 
                 # get relevant attributes of result for logging
-                keys   = ["iteration", "epoch", "loss", "accuracy"]
-                values = [iteration, epoch, res["loss"], res["accuracy"]]
+                train_metrics = {"iteration": iteration, "epoch": epoch, "loss": res["loss"], "accuracy": res["accuracy"]}
                 
                 # record the metrics for the mini-batch in the log
-                self.train_log.record(keys, values)
+                self.train_log.record(list(train_metrics.keys()), list(train_metrics.values()))
                 self.train_log.write()
                 self.train_log.flush()
 
@@ -201,11 +204,7 @@ class ClassifierEngine:
                     # set model to eval mode
                     self.model.eval()
 
-                    curr_loss = 0.
-                    val_batch = 0
-
-                    val_keys   = ["iteration", "epoch", "loss", "accuracy"]
-                    val_values = []
+                    val_metrics = {"iteration": iteration, "epoch": epoch, "loss": 0., "accuracy": 0.}
 
                     for val_batch in range(num_val_batches):
                         try:
@@ -214,46 +213,40 @@ class ClassifierEngine:
                             val_iter = iter(self.val_loader)
 
                         # extract the event data from the input data tuple
-                        self.data     = val_data['data'].float()
-                        self.labels   = val_data['labels'].long()
+                        self.data      = val_data['data'].float()
+                        self.labels    = val_data['labels'].long()
 
-                        self.energies = val_data['energies'].float()
-                        self.angles   = val_data['angles'].float()
-                        self.index    = val_data['event_ids'].float()
+                        self.energies  = val_data['energies'].float()
+                        self.angles    = val_data['angles'].float()
+                        self.event_ids = val_data['event_ids'].float()
 
-                        res = self.forward(False)
-
-                        if val_batch == 0:
-                            val_values = [iteration, epoch, res["loss"], res["accuracy"]]
-                        else:
-                            val_values[val_keys.index("loss")] += res["loss"]
-                            val_values[val_keys.index("accuracy")] += res["accuracy"]
+                        val_res = self.forward(False)
                         
-                        curr_loss += res["loss"]
+                        val_metrics["loss"] += val_res["loss"]
+                        val_metrics["accuracy"] += val_res["accuracy"]
                     
                     # return model to training mode
                     self.model.train()
 
                     # record the validation stats to the csv
-                    val_values[val_keys.index("loss")] /= num_val_batches
-                    val_values[val_keys.index("accuracy")] /= num_val_batches
+                    val_metrics["loss"] /= num_val_batches
+                    val_metrics["accuracy"] /= num_val_batches
 
-                    self.val_log.record(val_keys, val_values)
-
-                    # average the loss over the validation batch
-                    curr_loss = curr_loss / num_val_batches
+                    self.val_log.record(list(val_metrics.keys()), list(val_metrics.values()))
 
                     # save if this is the best model so far
                     # TODO: either make iteration an attribute, or rework logic
                     self.iteration = iteration
                     
-                    if curr_loss < best_val_loss:
+                    if val_metrics["loss"] < best_val_loss:
                         self.save_state(best=True)
-                        curr_loss = best_val_loss
+
+                        best_val_loss = val_metrics["loss"]
+                        print('best validation loss so far!: {}'.format(best_val_loss))
                     
                     if iteration in dump_iterations:
                         save_arr_keys = ["events", "labels", "energies", "angles", "predicted_labels", "softmax"]
-                        save_arr_values = [self.data.cpu().numpy(), self.labels.cpu().numpy(), self.energies.cpu().numpy(), self.angles.cpu().numpy(), res["predicted_labels"], res["softmax"]]
+                        save_arr_values = [self.data.cpu().numpy(), self.labels.cpu().numpy(), self.energies.cpu().numpy(), self.angles.cpu().numpy(), val_res["predicted_labels"], val_res["softmax"]]
 
                         # save the actual and reconstructed event to the disk
                         savez(self.dirpath + "/iteration_" + str(iteration) + ".npz",
@@ -264,7 +257,6 @@ class ClassifierEngine:
                     # Save the latest model
                     self.save_state(best=False)
                 
-                
                 if epoch >= epochs:
                     break
             
@@ -274,11 +266,11 @@ class ClassifierEngine:
         self.val_log.close()
         self.train_log.close()
     
-    def validate(self, plt_worst=0, plt_best=0):
+    def evaluate(self, plt_worst=0, plt_best=0):
         """
-        Test the trained model on the validation set.
+        Evaluate the performance of the trained model on the validation set.
         
-        Parameters: None
+        Parameters : None
         
         Outputs : 
             total_val_loss = accumulated validation loss
@@ -310,14 +302,12 @@ class ClassifierEngine:
                 
                 self.data = val_data['data'].float()
                 self.labels = val_data['labels'].long()
-                
 
                 # Run the forward procedure and output the result
                 result = self.forward(False)
+                
                 val_loss += result['loss']
                 val_acc += result['accuracy']
-                
-                # Add item to priority queues if necessary
                 
                 # Copy the tensors back to the CPU
                 self.labels = self.labels.to("cpu")
@@ -372,10 +362,11 @@ class ClassifierEngine:
         return filename
     
     def set_dump_iterations(self, train_loader):
-        """Determine the intervals during training at which to dump the events and metrics.
+        """
+        Determine the intervals during training at which to dump the events and metrics.
         
-        Args:
-        train_loader       -- Total number of validations performed throughout training
+        Parameters :
+            train_loader - Total number of validations performed throughout training
         """
 
         # Determine the validation interval to use depending on the total number of iterations in the current session

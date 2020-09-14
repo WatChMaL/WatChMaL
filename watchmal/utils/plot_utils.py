@@ -11,8 +11,8 @@ def disp_learn_hist(location,losslim=None,show=True):
           losslim      ... sets bound on y axis of loss
           show         ... if true then display figure, otherwise return figure
     """
-    train_log=location+'/log_train.csv'
-    val_log=location+'/log_val.csv'
+    train_log=location + '/log_train.csv'
+    val_log=location + '/log_val.csv'
 
     train_log_csv = pd.read_csv(train_log)
     val_log_csv  = pd.read_csv(val_log)
@@ -20,6 +20,7 @@ def disp_learn_hist(location,losslim=None,show=True):
     fig, ax1 = plt.subplots(figsize=(12,8),facecolor='w')
     line11 = ax1.plot(train_log_csv.epoch, train_log_csv.loss, linewidth=2, label='Train loss', color='b', alpha=0.3)
     line12 = ax1.plot(val_log_csv.epoch, val_log_csv.loss, marker='o', markersize=3, linestyle='', label='Validation loss', color='blue')
+
     if losslim is not None:
         ax1.set_ylim(0.,losslim)
     
@@ -31,7 +32,6 @@ def disp_learn_hist(location,losslim=None,show=True):
     ax1.tick_params('x',colors='black',labelsize=18)
     ax1.set_ylabel('Loss', fontsize=24, fontweight='bold',color='b')
     ax1.tick_params('y',colors='b',labelsize=18)
-    
     
     ax2.set_ylabel('Accuracy', fontsize=24, fontweight='bold',color='r')
     ax2.tick_params('y',colors='r',labelsize=18)
@@ -69,11 +69,12 @@ def disp_learn_hist_smoothed(location, losslim=None, window_train=400,window_val
     epoch_val_uns    = np.array(val_log_csv.epoch)
     accuracy_val_uns = np.array(val_log_csv.accuracy)
     loss_val_uns     = np.array(val_log_csv.loss)
-    saved_best=np.array(val_log_csv.saved_best)
-    stored_indices=np.where(saved_best>1.0e-3)
-    epoch_val_st=epoch_val_uns[stored_indices]
-    accuracy_val_st=accuracy_val_uns[stored_indices]
-    loss_val_st=loss_val_uns[stored_indices]
+
+    saved_best      = np.array(val_log_csv.saved_best)
+    stored_indices  = np.where(saved_best>1.0e-3)
+    epoch_val_st    = epoch_val_uns[stored_indices]
+    accuracy_val_st = accuracy_val_uns[stored_indices]
+    loss_val_st     = loss_val_uns[stored_indices]
 
     fig, ax1 = plt.subplots(figsize=(12,8),facecolor='w')
     line11 = ax1.plot(epoch_train, loss_train, linewidth=2, label='Average training loss', color='b', alpha=0.3)
@@ -85,6 +86,7 @@ def disp_learn_hist_smoothed(location, losslim=None, window_train=400,window_val
     ax1.tick_params('x',colors='black',labelsize=18)
     ax1.set_ylabel('Loss', fontsize=24, fontweight='bold',color='b')
     ax1.tick_params('y',colors='b',labelsize=18)
+    
     if losslim is not None:
         ax1.set_ylim(0.,losslim)
     
