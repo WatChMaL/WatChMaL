@@ -41,12 +41,15 @@ class ResNetFullyConnected(nn.Module):
 class PointNetFullyConnected(nn.Module):
     def __init__(self, num_inputs, num_classes):
         super().__init__()
-        self.fc1 = nn.Linear(num_inputs, num_inputs//2)
-        self.fc2 = nn.Linear(num_inputs//2, num_inputs//4)
-        self.fc3 = nn.Linear(num_inputs//4, num_classes)
+        min_channels = 256
+        channels_1 = max(num_inputs // 2, min_channels)
+        channels_2 = max(num_inputs // 4, min_channels)
+        self.fc1 = nn.Linear(num_inputs, channels_1)
+        self.fc2 = nn.Linear(channels_1, channels_2)
+        self.fc3 = nn.Linear(channels_2, num_classes)
         self.dropout = nn.Dropout(p=0.3)
-        self.bn1 = nn.BatchNorm1d(num_inputs//2)
-        self.bn2 = nn.BatchNorm1d(num_inputs//4)
+        self.bn1 = nn.BatchNorm1d(channels_1)
+        self.bn2 = nn.BatchNorm1d(channels_2)
         self.relu = nn.ReLU()
 
 

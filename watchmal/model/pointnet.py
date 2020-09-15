@@ -38,7 +38,7 @@ class STNkd(nn.Module):
     def __init__(self, k=64, mean_pool=0, max_feat=256):
         super().__init__()
         self.max_feat = max_feat
-        min_feat = 1 << (k * k - 1).bit_length()
+        min_feat = 256 #1 << (k * k - 1).bit_length()
         n_feat2 = max(max_feat // 2, min_feat)
         n_feat3 = max(n_feat2 // 2, min_feat)
         self.conv1 = torch.nn.Conv1d(k, 64, 1)
@@ -101,7 +101,7 @@ class PointNetFeat(nn.Module):
         else:
             self.pool = PointMeanMaxPool(mean_pool)
         if self.feature_transform:
-            self.fstn = STNkd(k=64, mean_pool=mean_pool)
+            self.fstn = STNkd(k=64, mean_pool=mean_pool, max_feat=num_output_channels)
 
     def forward(self, x):
         trans = self.stn(x)
