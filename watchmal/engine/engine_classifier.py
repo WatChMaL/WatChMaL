@@ -47,7 +47,8 @@ class ClassifierEngine:
         # send model to device
         self.model.to(self.device)
         
-        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.train_config.learning_rate, weight_decay=self.train_config.weight_decay)
+        # TODO: sort out how to handle weight decay
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.train_config.learning_rate)#, weight_decay=self.train_config.weight_decay)
         self.criterion = nn.CrossEntropyLoss()
         self.softmax = nn.Softmax(dim=1)
 
@@ -95,7 +96,7 @@ class ClassifierEngine:
 
             model_out = self.model(self.data)
 
-            self.loss = self.criterion(model_out,self.labels)
+            self.loss = self.criterion(model_out, self.labels)
             
             softmax          = self.softmax(model_out)
             predicted_labels = torch.argmax(model_out,dim=-1)
@@ -199,7 +200,7 @@ class ClassifierEngine:
                     # set model to eval mode
                     self.model.eval()
 
-                    val_metrics = {"iteration": self.iteration, "epoch": epoch, "loss": 0., "accuracy": 0.}
+                    val_metrics = {"iteration": self.iteration, "epoch": epoch, "loss": 0., "accuracy": 0., "saved_best": 0}
 
                     for val_batch in range(num_val_batches):
                         try:
@@ -227,11 +228,10 @@ class ClassifierEngine:
                     val_metrics["loss"] /= num_val_batches
                     val_metrics["accuracy"] /= num_val_batches
 
-                    self.val_log.record(val_metrics)
-
                     # save if this is the best model so far
                     if val_metrics["loss"] < best_val_loss:
                         self.save_state(best=True)
+                        val_metrics["saved_best"] = 1
 
                         best_val_loss = val_metrics["loss"]
                         print('best validation loss so far!: {}'.format(best_val_loss))
@@ -244,7 +244,9 @@ class ClassifierEngine:
                         savez(self.dirpath + "/iteration_" + str(self.iteration) + ".npz",
                               **{key:value for key,value in zip(save_arr_keys,save_arr_values)})
                     
+                    self.val_log.record(val_metrics)
                     self.val_log.write()
+                    self.val_log.flush()
 
                     # Save the latest model
                     self.save_state(best=False)

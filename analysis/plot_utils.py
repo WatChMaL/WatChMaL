@@ -53,11 +53,11 @@ def disp_learn_hist(location,losslim=None,show=True):
     return fig
 
 def disp_learn_hist_smoothed(location, losslim=None, window_train=400,window_val=40,show=True):
-    train_log=location+'/log_train.csv'
-    val_log=location+'/log_val.csv'
+    train_log=location + '/log_train.csv'
+    val_log=location + '/log_val.csv'
     
     train_log_csv = pd.read_csv(train_log)
-    val_log_csv  = pd.read_csv(val_log)
+    val_log_csv   = pd.read_csv(val_log)
 
     epoch_train    = moving_average(np.array(train_log_csv.epoch),window_train)
     accuracy_train = moving_average(np.array(train_log_csv.accuracy),window_train)
@@ -119,7 +119,6 @@ def disp_learn_hist_smoothed(location, losslim=None, window_train=400,window_val
         return
 
     return fig
-
 
 def moving_average(a, n=3) :
     ret = np.cumsum(a, dtype=float)
