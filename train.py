@@ -10,7 +10,7 @@ from watchmal.dataset.data_module import DataModule
 logger = logging.getLogger('train')
 
 # TODO: change config_name back to 'train' rather than 'train_pointnet'
-@hydra.main(config_path='config/', config_name='train_pointnet')
+@hydra.main(config_path='config/', config_name='train')
 def main(config):
     logger.info(f"Training with the following config:\n{OmegaConf.to_yaml(config)}")
 

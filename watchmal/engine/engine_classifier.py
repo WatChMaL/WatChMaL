@@ -47,8 +47,8 @@ class ClassifierEngine:
         # send model to device
         self.model.to(self.device)
         
-        # TODO: sort out how to handle weight decay
-        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.train_config.learning_rate)#, weight_decay=self.train_config.weight_decay)
+        # TODO: sort out how to handle weight decay for pointnet
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.train_config.learning_rate, weight_decay=self.train_config.weight_decay)
         self.criterion = nn.CrossEntropyLoss()
         self.softmax = nn.Softmax(dim=1)
 
