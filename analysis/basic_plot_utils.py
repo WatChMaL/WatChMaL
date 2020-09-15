@@ -335,3 +335,90 @@ def separate_particles(input_array_list,labels,index_dict,desired_labels=['gamma
         separated_arrays.append(tuple([array[idxs] for idxs in idxs_list]))
 
     return separated_arrays
+
+def plot_roc(softmax_out_val, labels_val):
+    labels_val_e_gamma = labels_val[np.where( (labels_val==0) | (labels_val==1))]
+    softmax_out_val_e_gamma = softmax_out_val[np.where( (labels_val==0) | (labels_val==1))][:,1]
+
+    fpr, tpr, thr = roc_curve(labels_val_e_gamma,softmax_out_val_e_gamma)
+    
+    roc_AUC = auc(fpr,tpr)
+
+    fig1, ax1 = plt.subplots(figsize=(12,8),facecolor="w")
+    ax1.tick_params(axis="both", labelsize=20)
+    ax1.plot(fpr,tpr,label=r'$e$ VS $\gamma$ ROC, AUC={:.3f}'.format(roc_AUC))
+    ax1.set_xlabel('FPR',fontweight='bold',fontsize=24,color='black')
+    ax1.set_ylabel('TPR',fontweight='bold',fontsize=24,color='black')
+    ax1.legend(loc="lower right",prop={'size': 16})
+
+    rejection=1.0/(fpr+1e-10)
+
+    fig2, ax2 = plt.subplots(figsize=(12,8),facecolor="w")
+    ax2.tick_params(axis="both", labelsize=20)
+    plt.yscale('log')
+    plt.ylim(1.0,1.0e3)
+    plt.grid(b=True, which='major', color='gray', linestyle='-')
+    plt.grid(b=True, which='minor', color='gray', linestyle='--')
+    ax2.plot(tpr, rejection, label=r'$e$ VS $\gamma$ ROC, AUC={:.3f}'.format(roc_AUC))
+    ax2.set_xlabel('efficiency',fontweight='bold',fontsize=24,color='black')
+    ax2.set_ylabel('Rejection',fontweight='bold',fontsize=24,color='black')
+    ax2.legend(loc="upper right",prop={'size': 16})
+
+    fig2, ax2 = plt.subplots(figsize=(12,8),facecolor="w")
+    ax2.tick_params(axis="both", labelsize=20)
+    #plt.yscale('log')
+    #plt.ylim(1.0,1)
+    plt.grid(b=True, which='major', color='gray', linestyle='-')
+    plt.grid(b=True, which='minor', color='gray', linestyle='--')
+    ax2.plot(tpr, tpr/np.sqrt(fpr), label=r'$e$ VS $\gamma$ ROC, AUC={:.3f}'.format(roc_AUC))
+    ax2.set_xlabel('efficiency',fontweight='bold',fontsize=24,color='black')
+    ax2.set_ylabel('~significance',fontweight='bold',fontsize=24,color='black')
+    ax2.legend(loc="upper right",prop={'size': 16})
+
+    plt.show()
+
+def prep_roc_data(softmaxes, labels, metric, softmax_index_dict, label_0, label_1, energies=None,threshold=None):
+    """
+    prep_roc_data(softmaxes, labels, metric, softmax_index_dict, label_0, label_1, energies=None,threshold=None)
+    Purpose : Prepare data for plotting the ROC curves. If threshold is not none, filters 
+    out events with energy greater than threshold. Returns true positive rates, false positive 
+    rates, and thresholds for plotting the ROC curve, or true positive rates, rejection fraction,
+    and thresholds, switched on 'metric'.
+    Args: softmaxes           ... array of resnet softmax output, the 0th dim= sample size
+          labels              ... 1D array of true label value, the length = sample size
+          metric              ... string, name of metrix to use ('rejection' or 'fraction')
+                                  for background rejection or background rejection fraction.
+          softmax_index_dict  ... Dictionary pointing to label integer from particle name
+          label_0 and label_1 ... Labels indicating which particles to use - label_0 is the positive label
+          energies            ... 1D array of true event energies, the length = sample 
+                                  size
+          threshold           ... optional maximum to impose on energies, events with higher energy will be discarded (legacy)
+    author: Calum Macdonald
+    May 2020
+    """    
+    if threshold is not None and energies is not None:
+        low_energy_idxs = np.where(np.squeeze(energies) < threshold)[0]
+        rsoftmaxes = softmaxes[low_energy_idxs]
+        rlabels = labels[low_energy_idxs]
+        renergies = energies[low_energy_idxs]
+    else:
+        rsoftmaxes = softmaxes
+        rlabels = labels
+        renergies = energies
+
+    (pos_softmaxes, neg_softmaxes), (pos_labels, neg_labels) = separate_particles([rsoftmaxes, rlabels], rlabels, softmax_index_dict, [label_0, label_1])    
+    total_softmax = np.concatenate((pos_softmaxes, neg_softmaxes), axis=0)
+    total_labels = np.concatenate((pos_labels, neg_labels), axis=0)
+    assert total_labels.shape[0]==total_softmax.shape[0]
+
+    if metric == 'rejection':
+        return roc_curve(total_labels, total_softmax[:,softmax_index_dict[label_0]], pos_label=softmax_index_dict[label_0])
+    else:
+        fps, tps, thresholds = binary_clf_curve(total_labels,total_softmax[:,softmax_index_dict[label_0]], 
+                                                pos_label=softmax_index_dict[label_0])
+        fns = tps[-1] - tps
+        tns = fps[-1] - fps
+        tprs = tps / (tps + fns)
+        rejection_fraction = tns / (tns + fps)
+        fprs = fps / (fps + tns)
+        return rejection_fraction, tprs, fprs, thresholds
