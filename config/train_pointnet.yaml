@@ -1,10 +1,10 @@
 train:
-  epochs: 1
+  epochs: 2
   report_interval: 100
   num_vals: 54
   num_val_batches: 50
 
-  learning_rate: 0.0001
+  learning_rate: 0.001
   weight_decay: 0.0001
   gpu_list:
     - 6
@@ -14,7 +14,7 @@ train:
 defaults:
   - engine: classifier
   - model: classifier
-  - model/feature_extractor: resnet18
-  - model/classification_network: resnet_fc
+  - model/feature_extractor: pointnet
+  - model/classification_network: pointnet_fc
   - data: iwcd_postveto_nomichel
-  - data/dataset: iwcd_cnn
+  - data/dataset: iwcd_pointnet
