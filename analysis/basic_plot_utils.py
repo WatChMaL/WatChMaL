@@ -324,17 +324,21 @@ def separate_particles(input_array_list,labels,index_dict,desired_labels=['gamma
 
     return separated_arrays
 
-def plot_rocs(softmax_out_val, labels_val, labels_dict, plot_list=None, show=True):
-    # if no list of labels to plot, assume plotting all
+def plot_rocs(softmax_out_val, labels_val, labels_dict, plot_list=None, vs_list = None, show=True):
+    # if no list of labels to plot, assume using all members of dict
     all_labels = list(labels_dict.keys())
+
     if plot_list is None:
         plot_list = all_labels
+    
+    if vs_list is None:
+        vs_list = all_labels
+    
     figs = []
     # plot ROC curves for each specified label
     for true_label_name in plot_list:
         true_label = labels_dict[true_label_name]
-        
-        for false_label_name in all_labels:
+        for false_label_name in vs_list:
             false_label = labels_dict[false_label_name]
             if not (false_label_name == true_label_name):
                 # initialize figure
@@ -346,7 +350,7 @@ def plot_rocs(softmax_out_val, labels_val, labels_dict, plot_list=None, show=Tru
                 
                 figs.append(fig)
     if show:
-        plt.show()      
+        plt.show()
         return
     
     return figs
