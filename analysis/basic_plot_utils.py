@@ -234,7 +234,7 @@ def plot_confusion_matrix(labels, predictions, class_names):
    
     plt.show()
 
-def plot_response(softmaxes, labels, particle_names, index_dict,linestyles=None,bins=None,legend_locs=None,fitqun=False,
+def plot_classifier_response(softmaxes, labels, particle_names, index_dict,linestyles=None,bins=None,legend_locs=None,fitqun=False,
                   extra_panes=[], xlim=None,label_size=14, legend_label_dict=None, show=True):
     '''
     Plots classifier softmax outputs for each particle type.
@@ -270,41 +270,30 @@ def plot_response(softmaxes, labels, particle_names, index_dict,linestyles=None,
     if isinstance(particle_names[0],str):
         particle_names = [particle_names for _ in range(num_panes)]
 
-    if fitqun:
-        ax = axes
-        density = False
-        for i in [index_dict[particle_name] for particle_name in particle_names[1]]:
-            _,bins,_ = ax.hist(softmaxes_list[i][:,1],
-                        label=legend_label_dict[label_dict[i]],range=xlim,
-                        alpha=0.7,histtype=u'step',bins=bins,density=density,
-                        linestyle=None,linewidth=2)    
-            ax.legend(loc=legend_locs[0] if legend_locs is not None else 'best', fontsize=legend_size)
-            ax.set_xlabel('e-muon nLL Difference')
-            ax.set_ylabel('Normalized Density' if density else 'N Events', fontsize=label_size)
-    else:
-        for output_idx,ax in enumerate(axes[:softmaxes.shape[1]]):
-            for i in [index_dict[particle_name] for particle_name in particle_names[output_idx]]:
-                ax.hist(softmaxes_list[i][:,output_idx],
-                        label=f"{legend_label_dict[label_dict[i]]} Events",
+
+    for output_idx,ax in enumerate(axes[:softmaxes.shape[1]]):
+        for i in [index_dict[particle_name] for particle_name in particle_names[output_idx]]:
+            ax.hist(softmaxes_list[i][:,output_idx],
+                    label=f"{legend_label_dict[label_dict[i]]} Events",
+                    alpha=0.7,histtype=u'step',bins=bins,density=True,
+                    linestyle=linestyles[i],linewidth=2)            
+        ax.legend(loc=legend_locs[output_idx] if legend_locs is not None else 'best', fontsize=legend_size)
+        ax.set_xlabel('P({})'.format(legend_label_dict[label_dict[output_idx]]), fontsize=label_size)
+        ax.set_ylabel('Normalized Density', fontsize=label_size)
+        ax.set_yscale('log')
+    ax = axes[-1]
+    for n, extra_pane_particle_names in enumerate(extra_panes):
+        pane_idx = softmaxes.shape[1]+n
+        ax=axes[pane_idx]
+        for i in [index_dict[particle_name] for particle_name in particle_names[pane_idx]]:
+                ax.hist(reduce(lambda x,y : x+y, [softmaxes_list[i][:,index_dict[pname]] for pname in extra_pane_particle_names]),
+                        label=legend_label_dict[particle_names[-1][i]],
                         alpha=0.7,histtype=u'step',bins=bins,density=True,
-                        linestyle=linestyles[i],linewidth=2)            
-            ax.legend(loc=legend_locs[output_idx] if legend_locs is not None else 'best', fontsize=legend_size)
-            ax.set_xlabel('P({})'.format(legend_label_dict[label_dict[output_idx]]), fontsize=label_size)
-            ax.set_ylabel('Normalized Density', fontsize=label_size)
-            ax.set_yscale('log')
-        ax = axes[-1]
-        for n, extra_pane_particle_names in enumerate(extra_panes):
-            pane_idx = softmaxes.shape[1]+n
-            ax=axes[pane_idx]
-            for i in [index_dict[particle_name] for particle_name in particle_names[pane_idx]]:
-                    ax.hist(reduce(lambda x,y : x+y, [softmaxes_list[i][:,index_dict[pname]] for pname in extra_pane_particle_names]),
-                            label=legend_label_dict[particle_names[-1][i]],
-                            alpha=0.7,histtype=u'step',bins=bins,density=True,
-                            linestyle=linestyle[i],linewidth=2)         
-            ax.legend(loc=legend_locs[-1] if legend_locs is not None else 'best', fontsize=legend_size)
-            ax.set_xlabel('P({}) + P({})'.format(legend_label_dict['gamma'],legend_label_dict['e']), fontsize=label_size)
-            ax.set_ylabel('Normalized Density', fontsize=label_size)
-            ax.set_yscale('log')
+                        linestyle=linestyle[i],linewidth=2)         
+        ax.legend(loc=legend_locs[-1] if legend_locs is not None else 'best', fontsize=legend_size)
+        ax.set_xlabel('P({}) + P({})'.format(legend_label_dict['gamma'],legend_label_dict['e']), fontsize=label_size)
+        ax.set_ylabel('Normalized Density', fontsize=label_size)
+        ax.set_yscale('log')
     
     plt.tight_layout()
 
@@ -336,89 +325,83 @@ def separate_particles(input_array_list,labels,index_dict,desired_labels=['gamma
 
     return separated_arrays
 
-def plot_roc(softmax_out_val, labels_val):
-    labels_val_e_gamma = labels_val[np.where( (labels_val==0) | (labels_val==1))]
-    softmax_out_val_e_gamma = softmax_out_val[np.where( (labels_val==0) | (labels_val==1))][:,1]
+def plot_rocs(softmax_out_val, labels_val, labels_dict, plot_list=None, show=True):
+    # if no list of labels to plot, assume plotting all
+    all_labels = list(labels_dict.keys())
+    if plot_list is None:
+        plot_list = all_labels
+    figs = []
+    # plot ROC curves for each specified label
+    for true_label_name in plot_list:
+        true_label = labels_dict[true_label_name]
+        
+        for false_label_name in all_labels:
+            false_label = labels_dict[false_label_name]
+            if not (false_label_name == true_label_name):
+                # initialize figure
+                num_panes = 3
+                fig, axes = plt.subplots(1, num_panes, figsize=(8*num_panes,12))
+                fig.suptitle("ROC for {} vs {}".format(true_label_name, false_label_name), fontweight='bold',fontsize=32)
 
-    fpr, tpr, thr = roc_curve(labels_val_e_gamma,softmax_out_val_e_gamma)
+                plot_roc(softmax_out_val, labels_val, true_label_name, true_label, false_label_name, false_label, axes=axes)
+                
+                figs.append(fig)
+    if show:
+        plt.show()      
+        return
+    
+    return figs
+
+def plot_roc(softmax_out_val, labels_val, true_label_name, true_label, false_label_name, false_label, axes=None, show=False):
+    # Compute ROC metrics
+    labels_val_for_comp = labels_val[np.where( (labels_val==false_label) | (labels_val==true_label)  )]
+    softmax_out_for_comp = softmax_out_val[np.where(  (labels_val==false_label) | (labels_val==true_label)  )][:,true_label]
+
+    fpr, tpr, thr = roc_curve(labels_val_for_comp, softmax_out_for_comp, pos_label=true_label)
     
     roc_AUC = auc(fpr,tpr)
 
-    fig1, ax1 = plt.subplots(figsize=(12,8),facecolor="w")
+    # Plot results
+    if axes is None:
+        fig1, ax1 = plt.subplots(figsize=(12,8),facecolor="w")
+        fig2, ax2 = plt.subplots(figsize=(12,8),facecolor="w")
+        fig3, ax3 = plt.subplots(figsize=(12,8),facecolor="w")
+    else:
+        ax1 = axes[0]
+        ax2 = axes[1]
+        ax3 = axes[2]
+
     ax1.tick_params(axis="both", labelsize=20)
-    ax1.plot(fpr,tpr,label=r'$e$ VS $\gamma$ ROC, AUC={:.3f}'.format(roc_AUC))
+    ax1.plot(fpr,tpr,label=r'{} VS {} ROC, AUC={:.3f}'.format(true_label_name, false_label_name, roc_AUC))
     ax1.set_xlabel('FPR',fontweight='bold',fontsize=24,color='black')
     ax1.set_ylabel('TPR',fontweight='bold',fontsize=24,color='black')
     ax1.legend(loc="lower right",prop={'size': 16})
 
     rejection=1.0/(fpr+1e-10)
-
-    fig2, ax2 = plt.subplots(figsize=(12,8),facecolor="w")
+    
     ax2.tick_params(axis="both", labelsize=20)
-    plt.yscale('log')
-    plt.ylim(1.0,1.0e3)
-    plt.grid(b=True, which='major', color='gray', linestyle='-')
-    plt.grid(b=True, which='minor', color='gray', linestyle='--')
-    ax2.plot(tpr, rejection, label=r'$e$ VS $\gamma$ ROC, AUC={:.3f}'.format(roc_AUC))
+    ax2.set_yscale('log')
+    ax2.set_ylim(1.0,1.0e3)
+    ax2.grid(b=True, which='major', color='gray', linestyle='-')
+    ax2.grid(b=True, which='minor', color='gray', linestyle='--')
+    ax2.plot(tpr, rejection, label=r'{} VS {} ROC, AUC={:.3f}'.format(true_label_name, false_label_name, roc_AUC))
     ax2.set_xlabel('efficiency',fontweight='bold',fontsize=24,color='black')
     ax2.set_ylabel('Rejection',fontweight='bold',fontsize=24,color='black')
     ax2.legend(loc="upper right",prop={'size': 16})
-
-    fig2, ax2 = plt.subplots(figsize=(12,8),facecolor="w")
-    ax2.tick_params(axis="both", labelsize=20)
+    
+    ax3.tick_params(axis="both", labelsize=20)
     #plt.yscale('log')
     #plt.ylim(1.0,1)
-    plt.grid(b=True, which='major', color='gray', linestyle='-')
-    plt.grid(b=True, which='minor', color='gray', linestyle='--')
-    ax2.plot(tpr, tpr/np.sqrt(fpr), label=r'$e$ VS $\gamma$ ROC, AUC={:.3f}'.format(roc_AUC))
-    ax2.set_xlabel('efficiency',fontweight='bold',fontsize=24,color='black')
-    ax2.set_ylabel('~significance',fontweight='bold',fontsize=24,color='black')
-    ax2.legend(loc="upper right",prop={'size': 16})
+    ax3.grid(b=True, which='major', color='gray', linestyle='-')
+    ax3.grid(b=True, which='minor', color='gray', linestyle='--')
+    ax3.plot(tpr, tpr/np.sqrt(fpr), label=r'{} VS {} ROC, AUC={:.3f}'.format(true_label_name, false_label_name, roc_AUC))
+    ax3.set_xlabel('efficiency',fontweight='bold',fontsize=24,color='black')
+    ax3.set_ylabel('~significance',fontweight='bold',fontsize=24,color='black')
+    ax3.legend(loc="upper right",prop={'size': 16})
 
-    plt.show()
-
-def prep_roc_data(softmaxes, labels, metric, softmax_index_dict, label_0, label_1, energies=None,threshold=None):
-    """
-    prep_roc_data(softmaxes, labels, metric, softmax_index_dict, label_0, label_1, energies=None,threshold=None)
-    Purpose : Prepare data for plotting the ROC curves. If threshold is not none, filters 
-    out events with energy greater than threshold. Returns true positive rates, false positive 
-    rates, and thresholds for plotting the ROC curve, or true positive rates, rejection fraction,
-    and thresholds, switched on 'metric'.
-    Args: softmaxes           ... array of resnet softmax output, the 0th dim= sample size
-          labels              ... 1D array of true label value, the length = sample size
-          metric              ... string, name of metrix to use ('rejection' or 'fraction')
-                                  for background rejection or background rejection fraction.
-          softmax_index_dict  ... Dictionary pointing to label integer from particle name
-          label_0 and label_1 ... Labels indicating which particles to use - label_0 is the positive label
-          energies            ... 1D array of true event energies, the length = sample 
-                                  size
-          threshold           ... optional maximum to impose on energies, events with higher energy will be discarded (legacy)
-    author: Calum Macdonald
-    May 2020
-    """    
-    if threshold is not None and energies is not None:
-        low_energy_idxs = np.where(np.squeeze(energies) < threshold)[0]
-        rsoftmaxes = softmaxes[low_energy_idxs]
-        rlabels = labels[low_energy_idxs]
-        renergies = energies[low_energy_idxs]
-    else:
-        rsoftmaxes = softmaxes
-        rlabels = labels
-        renergies = energies
-
-    (pos_softmaxes, neg_softmaxes), (pos_labels, neg_labels) = separate_particles([rsoftmaxes, rlabels], rlabels, softmax_index_dict, [label_0, label_1])    
-    total_softmax = np.concatenate((pos_softmaxes, neg_softmaxes), axis=0)
-    total_labels = np.concatenate((pos_labels, neg_labels), axis=0)
-    assert total_labels.shape[0]==total_softmax.shape[0]
-
-    if metric == 'rejection':
-        return roc_curve(total_labels, total_softmax[:,softmax_index_dict[label_0]], pos_label=softmax_index_dict[label_0])
-    else:
-        fps, tps, thresholds = binary_clf_curve(total_labels,total_softmax[:,softmax_index_dict[label_0]], 
-                                                pos_label=softmax_index_dict[label_0])
-        fns = tps[-1] - tps
-        tns = fps[-1] - fps
-        tprs = tps / (tps + fns)
-        rejection_fraction = tns / (tns + fps)
-        fprs = fps / (fps + tns)
-        return rejection_fraction, tprs, fprs, thresholds
+    if show:
+        plt.show()
+        return
+    
+    if axes is None:
+        return fig1, fig2, fig3
