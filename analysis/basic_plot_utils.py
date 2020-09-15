@@ -262,14 +262,13 @@ def plot_classifier_response(softmaxes, labels, particle_names, index_dict,lines
 
     num_panes = softmaxes.shape[1]+len(extra_panes)
 
-    fig, axes = plt.subplots(1,num_panes,figsize=(5*num_panes,5)) if not fitqun else plt.subplots(1,1,figsize=(7,7))
+    fig, axes = plt.subplots(1,num_panes,figsize=(5*num_panes,5))
     label_dict = {value:key for key, value in index_dict.items()}
 
     softmaxes_list = separate_particles([softmaxes], labels, index_dict, [name for name in index_dict.keys()])[0]
 
     if isinstance(particle_names[0],str):
         particle_names = [particle_names for _ in range(num_panes)]
-
 
     for output_idx,ax in enumerate(axes[:softmaxes.shape[1]]):
         for i in [index_dict[particle_name] for particle_name in particle_names[output_idx]]:
