@@ -117,6 +117,14 @@ def disp_learn_hist(location,losslim=None,show=True):
     return fig
 
 def disp_learn_hist_smoothed(location, losslim=None, window_train=400,window_val=40,show=True):
+    
+    """
+    Purpose : Plot the loss and accuracy history for a training session with averaging to clean up noise
+    
+    Args: location     ... output directory containing log files
+          losslim      ... sets bound on y axis of loss
+          show         ... if true then display figure, otherwise return figure
+    """
     train_log=location + '/log_train.csv'
     val_log=location + '/log_val.csv'
     
@@ -288,7 +296,9 @@ def plot_classifier_response(softmaxes, labels, particle_names, label_dict,lines
         ax.set_xlabel('P({})'.format(legend_label_dict[inverse_label_dict[independent_particle_label]]), fontsize=label_size)
         ax.set_ylabel('Normalized Density', fontsize=label_size)
         ax.set_yscale('log')
+
     ax = axes[-1]
+
     for n, extra_pane_particle_names in enumerate(extra_panes):
         # generate joint plots
         pane_idx = softmaxes.shape[1]+n
@@ -340,6 +350,15 @@ def separate_particles(input_array_list,labels,index_dict,desired_labels=['gamma
     return separated_arrays
 
 def plot_rocs(softmax_out_val, labels_val, labels_dict, plot_list=None, vs_list = None, show=True):
+    
+    """
+    Purpose : Plot ROC curves for a classifier that has been evaluated on a validation set for a series of combinations of labels
+    
+    Args: location     ... output directory containing log files
+          losslim      ... sets bound on y axis of loss
+          show         ... if true then display figure, otherwise return figure
+    """
+    # Compute ROC metrics
     # if no list of labels to plot, assume using all members of dict
     all_labels = list(labels_dict.keys())
 
@@ -371,6 +390,14 @@ def plot_rocs(softmax_out_val, labels_val, labels_dict, plot_list=None, vs_list 
     return figs
 
 def plot_roc(softmax_out_val, labels_val, true_label_name, true_label, false_label_name, false_label, axes=None, show=False):
+    
+    """
+    Purpose : Plot ROC curves for a classifier that has been evaluated on a validation set with respect to given labels
+    
+    Args: location     ... output directory containing log files
+          losslim      ... sets bound on y axis of loss
+          show         ... if true then display figure, otherwise return figure
+    """
     # Compute ROC metrics
     labels_val_for_comp = labels_val[np.where( (labels_val==false_label) | (labels_val==true_label)  )]
     softmax_out_for_comp = softmax_out_val[np.where(  (labels_val==false_label) | (labels_val==true_label)  )][:,true_label]
