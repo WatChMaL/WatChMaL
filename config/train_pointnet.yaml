@@ -1,7 +1,7 @@
 train:
   epochs: 15
   report_interval: 100
-  num_vals: 810
+  val_interval: 400
   num_val_batches: 8
 
   learning_rate: 0.001

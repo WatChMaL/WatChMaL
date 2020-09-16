@@ -1,7 +1,7 @@
 train:
   epochs: 20
   report_interval: 50
-  num_vals: 2160
+  val_interval: 100
   num_val_batches: 32
 
   optimizer:

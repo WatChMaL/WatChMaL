@@ -142,12 +142,12 @@ class ClassifierEngine:
         # initialize training params
         epochs          = self.train_config.epochs
         report_interval = self.train_config.report_interval
-        num_vals        = self.train_config.num_vals
+        val_interval    = self.train_config.val_interval
         num_val_batches = self.train_config.num_val_batches
 
         # set the iterations at which to dump the events and their metrics
         dump_iterations = self.set_dump_iterations(self.train_loader)
-        print(f"Validation Interval: {dump_iterations[0]}")
+        print(f"Validation Interval: {val_interval}")
 
         # set model to training mode
         self.model.train()
@@ -173,36 +173,10 @@ class ClassifierEngine:
             start_time = time()
 
             # local training loop for batches in a single epoch
-            for i, batch_data in enumerate(self.train_loader):
+            for i, train_data in enumerate(self.train_loader):
 
-                # Using only the charge data
-                self.data     = batch_data['data'].float()
-                self.labels   = batch_data['labels'].long()
-
-                self.energies = batch_data['energies'].float()
-                self.angles   = batch_data['angles'].float()
-                self.event_ids    = batch_data['event_ids'].float()
-
-                # Call forward: make a prediction & measure the average error using data = self.data
-                res = self.forward(True)
-
-                #Call backward: backpropagate error and update weights using loss = self.loss
-                self.backward()
-
-                # update the epoch and iteration
-                epoch          += 1./len(self.train_loader)
-                self.iteration += 1
-
-                # get relevant attributes of result for logging
-                train_metrics = {"iteration": self.iteration, "epoch": epoch, "loss": res["loss"], "accuracy": res["accuracy"]}
-                
-                # record the metrics for the mini-batch in the log
-                self.train_log.record(train_metrics)
-                self.train_log.write()
-                self.train_log.flush()
-                
                 # run validation on given intervals
-                if self.iteration % dump_iterations[0] == 0:
+                if self.iteration % val_interval == 0:
                     # set model to eval mode
                     self.model.eval()
 
@@ -217,7 +191,6 @@ class ClassifierEngine:
                         # extract the event data from the input data tuple
                         self.data      = val_data['data'].float()
                         self.labels    = val_data['labels'].long()
-
                         self.energies  = val_data['energies'].float()
                         self.angles    = val_data['angles'].float()
                         self.event_ids = val_data['event_ids'].float()
@@ -241,21 +214,38 @@ class ClassifierEngine:
 
                         best_val_loss = val_metrics["loss"]
                         print('best validation loss so far!: {}'.format(best_val_loss))
-                    
-                    if self.iteration in dump_iterations:
-                        save_arr_keys = ["events", "labels", "energies", "angles", "predicted_labels", "softmax"]
-                        save_arr_values = [self.data.cpu().numpy(), self.labels.cpu().numpy(), self.energies.cpu().numpy(), self.angles.cpu().numpy(), val_res["predicted_labels"], val_res["softmax"]]
-
-                        # save the actual and reconstructed event to the disk
-                        savez(self.dirpath + "/iteration_" + str(self.iteration) + ".npz",
-                              **{key:value for key,value in zip(save_arr_keys,save_arr_values)})
-                    
+                                    
                     self.val_log.record(val_metrics)
                     self.val_log.write()
                     self.val_log.flush()
 
                     # Save the latest model
                     self.save_state(best=False)
+                
+                # Train on batch
+                self.data      = train_data['data'].float()
+                self.labels    = train_data['labels'].long()
+                self.energies  = train_data['energies'].float()
+                self.angles    = train_data['angles'].float()
+                self.event_ids = train_data['event_ids'].float()
+
+                # Call forward: make a prediction & measure the average error using data = self.data
+                res = self.forward(True)
+
+                #Call backward: backpropagate error and update weights using loss = self.loss
+                self.backward()
+
+                # update the epoch and iteration
+                epoch          += 1./len(self.train_loader)
+                self.iteration += 1
+
+                # get relevant attributes of result for logging
+                train_metrics = {"iteration": self.iteration, "epoch": epoch, "loss": res["loss"], "accuracy": res["accuracy"]}
+                
+                # record the metrics for the mini-batch in the log
+                self.train_log.record(train_metrics)
+                self.train_log.write()
+                self.train_log.flush()
                 
                 # print the metrics at given intervals
                 if self.iteration % report_interval == 0:
@@ -383,20 +373,3 @@ class ClassifierEngine:
         }, filename)
         print('Saved checkpoint as:', filename)
         return filename
-    
-    def set_dump_iterations(self, train_loader):
-        """
-        Determine the intervals during training at which to dump the events and metrics.
-        
-        Parameters :
-            train_loader - Total number of validations performed throughout training
-        """
-
-        # Determine the validation interval to use depending on the total number of iterations in the current session
-        valid_interval=max(1, floor(ceil(self.train_config.epochs * len(train_loader)) / self.train_config.num_vals))
-
-        # Save the dump at the earliest validation, middle of the training and last validation near the end of training
-        dump_iterations=[valid_interval, valid_interval*floor(self.train_config.num_vals/2),
-                         valid_interval*self.train_config.num_vals]
-
-        return dump_iterations
