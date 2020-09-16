@@ -146,7 +146,6 @@ class ClassifierEngine:
         num_val_batches = self.train_config.num_val_batches
 
         # set the iterations at which to dump the events and their metrics
-        dump_iterations = self.set_dump_iterations(self.train_loader)
         print(f"Validation Interval: {val_interval}")
 
         # set model to training mode
