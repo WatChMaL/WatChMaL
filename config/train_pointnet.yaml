@@ -5,7 +5,7 @@ train:
   num_val_batches: 8
 
   learning_rate: 0.001
-  weight_decay:
+  weight_decay: 0
   gpu_list:
     - 5
   dump_path: './outputs/'

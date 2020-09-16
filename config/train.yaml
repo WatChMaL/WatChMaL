@@ -4,11 +4,13 @@ train:
   num_vals: 2160
   num_val_batches: 32
 
-  learning_rate: 0.0001
-  weight_decay: 0.0001
+  optimizer:
+    name: 'Adam'
+    learning_rate: 0.0001
+    weight_decay: 0.0001
+  
   gpu_list:
-    - 6
-    - 7
+    - 5
   dump_path: './outputs/'
 
 defaults:

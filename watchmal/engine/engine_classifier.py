@@ -25,6 +25,8 @@ class ClassifierEngine:
         self.model = instantiate(model_config)
         self.train_config = train_config
 
+        print("Dump path: ", self.train_config.dump_path)
+
         # configure the device to be used for model training and inference
         if self.train_config.gpu_list is not None:
             print("Requesting GPUs. GPU list : " + str(self.train_config.gpu_list))
@@ -47,8 +49,12 @@ class ClassifierEngine:
         # send model to device
         self.model.to(self.device)
         
-        # TODO: sort out how to handle weight decay for pointnet
-        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.train_config.learning_rate, weight_decay=self.train_config.weight_decay)
+        # TODO: make sure optimizer works
+        # self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.train_config.learning_rate, weight_decay=self.train_config.weight_decay)
+        # self.optimizer = instantiate(self.train_config.optimizer, model_params=self.model.parameters())
+
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.train_config.optimizer.learning_rate, weight_decay=self.train_config.optimizer.weight_decay)
+
         self.criterion = nn.CrossEntropyLoss()
         self.softmax = nn.Softmax(dim=1)
 
@@ -67,7 +73,7 @@ class ClassifierEngine:
         self.event_ids = None
 
         # create the directory for saving the log and dump files
-        self.dirpath = self.train_config.dump_path + strftime("%Y%m%d") + "/" #+ strftime("%H%M%S") + "/"
+        self.dirpath = self.train_config.dump_path
 
         try:
             os.stat(self.dirpath)
@@ -81,7 +87,7 @@ class ClassifierEngine:
     
     def forward(self, train=True):
         """
-        Compute predictions and metrics for a batch of data
+        Compute predictions and metrics for a batch of data.
 
         Parameters:
             train = whether to compute gradients for backpropagation
@@ -262,7 +268,7 @@ class ClassifierEngine:
         self.val_log.close()
         self.train_log.close()
     
-    def evaluate(self, plt_worst=0, plt_best=0):
+    def evaluate(self):
         """
         Evaluate the performance of the trained model on the validation set.
         
@@ -327,6 +333,16 @@ class ClassifierEngine:
         np.save(self.dirpath + "softmax.npy", np.array(softmaxes))
     
     def restore_state(self, weight_file):
+        """
+        Restore model using weights stored from a previous run.
+        
+        Parameters : weight_file
+        
+        Outputs : 
+            
+        Returns : None
+        """
+
         # Open a file in read-binary mode
         with open(weight_file, 'rb') as f:
             print('Restoring state from', weight_file)
@@ -344,6 +360,15 @@ class ClassifierEngine:
     # ========================================================================
     
     def save_state(self,best=False):
+        """
+        Save model weights to a file.
+        
+        Parameters : best
+        
+        Outputs : 
+            
+        Returns : filename
+        """
         filename = "{}{}{}{}".format(self.dirpath,
                                      str(self.model._get_name()),
                                      ("BEST" if best else ""),
