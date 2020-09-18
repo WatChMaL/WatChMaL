@@ -1,8 +1,23 @@
 from torch.utils.data import DataLoader
-from torch.utils.data.sampler import SubsetRandomSampler, SubsetSequenceSampler
+from torch.utils.data.sampler import SubsetRandomSampler, Sampler
 from hydra.utils import instantiate
 import numpy as np
 
+# TODO: remove this class, and replace with sequentialsampler
+class SubsetSequenceSampler(Sampler):
+    r"""Samples elements randomly from a given list of indices, without replacement.
+    Arguments:
+        indices (sequence): a sequence of indices
+    """
+
+    def __init__(self,indices):
+        self.indices = indices
+
+    def __iter__(self):
+        return (self.indices[i] for i in range(len(self.indices)))
+
+    def __len__(self):
+        return len(self.indices)
 
 class DataModule():
 

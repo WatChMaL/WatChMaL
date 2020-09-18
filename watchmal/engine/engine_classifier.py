@@ -378,6 +378,9 @@ class ClassifierEngine:
 
             # translation dict to convert between old names and new names
             translate_dict = {'feature_extractor':'encoder', 'classification_network':'classifier'}
+            print(checkpoint['encoder'].keys())
+            print("###################################################")
+            print(self.model.state_dict()['feature_extractor'].keys())
 
             modules = list(self.model_accs._modules.keys())
             for module in modules:
