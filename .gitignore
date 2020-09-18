@@ -107,6 +107,15 @@ datasets/
 testing/
 test.py
 test_load.py
+test_notebook.ipynb
+test_utils.py
+
+best_run_analysis.py
+best_run_numpy_analysis.py
+best_run_reloading.py
+replication_run_analysis.py
+replication_run_reloading.py
+base_reloading.py
 
 # editor, os cache directory
 .vscode/

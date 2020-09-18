@@ -1,5 +1,5 @@
 train:
-  epochs: 15
+  epochs: 7
   report_interval: 100
   val_interval: 400
   num_val_batches: 8
@@ -7,6 +7,7 @@ train:
   learning_rate: 0.001
   weight_decay: 0
   gpu_list:
+    - 4
     - 5
   dump_path: './outputs/'
 
@@ -17,5 +18,5 @@ defaults:
   - model/classification_network: pointnet_fc
   - data: iwcd_postveto_nomichel
   - data/dataset: iwcd_pointnet
-  - train_batch_dir: ${defaults.0.engine}_${defaults.2.model/feature_extractor}
+  - train_model_dir: ${defaults.0.engine}_${defaults.2.model/feature_extractor}
     optional: true

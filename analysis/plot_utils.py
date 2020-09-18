@@ -222,7 +222,7 @@ def plot_confusion_matrix(labels, predictions, class_names):
                            range=((-0.5,num_labels-0.5),(-0.5,num_labels-0.5)),cmap=plt.cm.Blues)
 
     # Normalize the confusion matrix
-    mat = mat.astype("float") / mat.sum(axis=0)[:, np.newaxis]
+    mat = mat.astype("float") / mat.sum(axis=0)#[:, np.newaxis]
 
     cbar = plt.colorbar(im, ax=ax)
     cbar.ax.tick_params(labelsize=20) 
@@ -284,8 +284,8 @@ def plot_classifier_response(softmaxes, labels, particle_names, label_dict,lines
     if isinstance(particle_names[0],str):
         particle_names = [particle_names for _ in range(num_panes)]
 
+    # generate single particle plots
     for independent_particle_label, ax in enumerate(axes[:softmaxes.shape[1]]):
-        # generate single particle plots
         dependent_particle_labels = [label_dict[particle_name] for particle_name in particle_names[independent_particle_label]]
         for dependent_particle_label in dependent_particle_labels:
             ax.hist(softmaxes_list[dependent_particle_label][:,independent_particle_label],
@@ -299,8 +299,8 @@ def plot_classifier_response(softmaxes, labels, particle_names, label_dict,lines
 
     ax = axes[-1]
 
+    # generate joint plots
     for n, extra_pane_particle_names in enumerate(extra_panes):
-        # generate joint plots
         pane_idx = softmaxes.shape[1]+n
         ax=axes[pane_idx]
         dependent_particle_labels = [label_dict[particle_name] for particle_name in particle_names[pane_idx]]
@@ -426,7 +426,7 @@ def plot_roc(softmax_out_val, labels_val, true_label_name, true_label, false_lab
     
     ax2.tick_params(axis="both", labelsize=20)
     ax2.set_yscale('log')
-    ax2.set_ylim(1.0,1.0e3)
+    ax2.set_ylim(0.2,1.2e6)
     ax2.grid(b=True, which='major', color='gray', linestyle='-')
     ax2.grid(b=True, which='minor', color='gray', linestyle='--')
     ax2.plot(tpr, rejection, label=r'{} VS {} ROC, AUC={:.3f}'.format(true_label_name, false_label_name, roc_AUC))

@@ -46,15 +46,18 @@ class ClassifierEngine:
             print("Using CPU")
             self.device = torch.device("cpu")
         
+        # TODO: remove this logic once reloading reworked
+        # Setup the parameters tp save given the model type
+        if type(self.model) == DataParallel:
+            self.model_accs=self.model.module
+        else:
+            self.model_accs=self.model
+        
         # send model to device
         self.model.to(self.device)
         
         # TODO: make sure optimizer works
-        # self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.train_config.learning_rate, weight_decay=self.train_config.weight_decay)
-        # self.optimizer = instantiate(self.train_config.optimizer, model_params=self.model.parameters())
-
-        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.train_config.optimizer.learning_rate, weight_decay=self.train_config.optimizer.weight_decay)
-
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.train_config.learning_rate, weight_decay=self.train_config.weight_decay)
         self.criterion = nn.CrossEntropyLoss()
         self.softmax = nn.Softmax(dim=1)
 
@@ -113,7 +116,7 @@ class ClassifierEngine:
                 'predicted_labels' : predicted_labels.cpu().numpy(),
                 'softmax'          : softmax.detach().cpu().numpy(),
                 'accuracy'         : accuracy,
-                "raw_pred_labels"  : model_out}
+                'raw_pred_labels'  : model_out}
     
     def backward(self):
         self.optimizer.zero_grad()  # reset accumulated gradient
@@ -271,6 +274,10 @@ class ClassifierEngine:
             
         Returns : None
         """
+        # TODO: this should be removed after replication
+        print("evaluating in directory: ", self.dirpath)
+        print("data has shape")
+
         
         # Variables to output at the end
         val_loss = 0.0
@@ -287,9 +294,7 @@ class ClassifierEngine:
             loss, accuracy, labels, predictions, softmaxes= [],[],[],[],[]
             
             # Extract the event data and label from the DataLoader iterator
-            for it, val_data in enumerate(self.val_loader):
-                
-                sys.stdout.write("val_iterations : " + str(val_iterations) + "\n")
+            for it, val_data in enumerate(self.test_loader):
                 
                 self.data = val_data['data'].float()
                 self.labels = val_data['labels'].long()
@@ -307,6 +312,8 @@ class ClassifierEngine:
                 labels.extend(self.labels)
                 predictions.extend(result['predicted_labels'])
                 softmaxes.extend(result["softmax"])
+
+                sys.stdout.write("val_iteration : " + str(it) + " val_loss : " + str(result["loss"]) + " val_accuracy : " + str(result["accuracy"]) + "\n")
                 
                 val_iterations += 1
                 
@@ -337,6 +344,7 @@ class ClassifierEngine:
             print('Restoring state from', weight_file)
             # torch interprets the file, then we can access using string keys
             checkpoint = torch.load(f)
+            # OLD LOADING
             # load network weights
             self.model.load_state_dict(checkpoint['state_dict'], strict=False)
             # if optim is provided, load the state of the optim
@@ -344,6 +352,48 @@ class ClassifierEngine:
                 self.optimizer.load_state_dict(checkpoint['optimizer'])
             # load iteration count
             self.iteration = checkpoint['global_step']
+        print('Restoration complete.')
+    
+    def restore_state_from_old_framework(self, weight_file):
+        """
+        Restore model using weights stored from a previous run.
+        
+        Parameters : weight_file
+        
+        Outputs : 
+            
+        Returns : None
+        """
+
+        # Open a file in read-binary mode
+        with open(weight_file, 'rb') as f:
+            print('Restoring state from', weight_file)
+            # torch interprets the file, then we can access using string keys
+            checkpoint = torch.load(f)
+
+            # NEW LOADING
+            # TODO: remove this section to rework loading
+            print(checkpoint.keys())
+            print(list(self.model_accs._modules.keys()))
+
+            # translation dict to convert between old names and new names
+            translate_dict = {'feature_extractor':'encoder', 'classification_network':'classifier'}
+
+            modules = list(self.model_accs._modules.keys())
+            for module in modules:
+                print("Loading weights for module = ", module)
+                getattr(self.model_accs, module).load_state_dict(checkpoint[translate_dict[module]])
+
+            """
+            # OLD LOADING
+            # load network weights
+            self.model.load_state_dict(checkpoint['state_dict'], strict=False)
+            # if optim is provided, load the state of the optim
+            if self.optimizer is not None:
+                self.optimizer.load_state_dict(checkpoint['optimizer'])
+            # load iteration count
+            self.iteration = checkpoint['global_step']
+            """
         print('Restoration complete.')
     
     # ========================================================================
@@ -372,3 +422,79 @@ class ClassifierEngine:
         }, filename)
         print('Saved checkpoint as:', filename)
         return filename
+
+
+
+    def replicate(self):
+        """Overrides the validate method in Engine.py.
+        
+        Args:
+        subset          -- One of 'train', 'validation', 'test' to select the subset to perform validation on
+        """
+        import torch.multiprocessing
+        torch.multiprocessing.set_sharing_strategy('file_system')
+        # Print start message
+        num_dump_events = 3351020 #self.config.num_dump_events
+        test_batch_size = 512
+        
+        # Setup the CSV file for logging the output, path to save the actual and reconstructed events, dataloader iterator
+
+        self.log        = CSVData(self.dirpath+"test_validation_log.csv")
+        np_event_path   = self.dirpath + "/test_validation_iteration_"
+        data_iter       = self.test_loader
+        dump_iterations = max(1, ceil(num_dump_events/test_batch_size))
+        
+        print("Dump iterations = {0}".format(dump_iterations))
+        save_arr_dict = {"events":[], "labels":[], "energies":[], "angles":[], "eventids":[], "rootfiles":[], "predicted_labels":[], "softmax":[]}
+
+        with torch.no_grad():
+            self.model.eval()
+
+            avg_loss = 0
+            avg_acc = 0
+            count = 0
+            for iteration, data in enumerate(data_iter):
+
+                # Extract the event data from the input data tuple
+                self.data     = data['data'].float()
+                self.labels   = data['labels'].long()
+                
+                self.energies = data['energies'].float()
+                self.eventids = data['event_ids'].float()
+                self.rootfiles = data['root_files']
+                self.angles = data['angles'].float()
+                
+                
+                
+                res = self.forward(train=False)
+                    
+                vals   = {"iteration":iteration, "loss":res["loss"], "accuracy":res["accuracy"]}
+                
+                # Log/Report
+                self.log.record(vals)
+                self.log.write()
+                self.log.flush()
+                
+                sys.stdout.write("val_iteration : " + str(iteration) + "val_loss : " + res["loss"] + "val_accuracy : " + res["accuracy"] + "\n")
+                
+                avg_acc += res['accuracy']
+                avg_loss += res['loss']
+                count += 1
+
+                if iteration < dump_iterations:
+                    save_arr_dict["labels"].append(self.labels.cpu().numpy())
+                    save_arr_dict["energies"].append(self.energies.cpu().numpy())
+                    save_arr_dict["eventids"].append(self.eventids.cpu().numpy())
+                    save_arr_dict["rootfiles"].append(self.rootfiles)
+                    save_arr_dict["angles"].append(self.angles.cpu().numpy())
+                    save_arr_dict["predicted_labels"].append(res["predicted_labels"])
+                    save_arr_dict["softmax"].append(res["softmax"])
+                    
+                elif iteration == dump_iterations:
+                    break
+        
+        print("Saving the npz dump array :")
+        savez(np_event_path + "dump.npz", **save_arr_dict)
+        avg_acc /= count
+        avg_loss /= count
+        print("Overall acc : {}, Overall loss : {}".format(avg_acc, avg_loss))

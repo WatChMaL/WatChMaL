@@ -1,5 +1,5 @@
 from torch.utils.data import DataLoader
-from torch.utils.data.sampler import SubsetRandomSampler
+from torch.utils.data.sampler import SubsetRandomSampler, SubsetSequenceSampler
 from hydra.utils import instantiate
 import numpy as np
 
@@ -20,7 +20,7 @@ class DataModule():
         self.dataset = instantiate(self.dataset_config)
         self.train_sampler = SubsetRandomSampler(self.train_indices)
         self.val_sampler = SubsetRandomSampler(self.val_indices)
-        self.test_sampler = SubsetRandomSampler(self.test_indices)
+        self.test_sampler = SubsetSequenceSampler(self.test_indices)
 
     def train_dataloader(self):
         return DataLoader(self.dataset, batch_size=self.train_batch_size, sampler=self.train_sampler, num_workers=self.num_workers)
