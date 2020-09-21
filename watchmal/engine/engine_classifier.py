@@ -313,7 +313,7 @@ class ClassifierEngine:
                 predictions.extend(result['predicted_labels'])
                 softmaxes.extend(result["softmax"])
 
-                sys.stdout.write("val_iteration : " + str(it) + " val_loss : " + str(result["loss"]) + " val_accuracy : " + str(result["accuracy"]) + "\n")
+                print("val_iteration : " + str(it) + " val_loss : " + str(result["loss"]) + " val_accuracy : " + str(result["accuracy"]))
                 
                 val_iterations += 1
                 
@@ -369,23 +369,71 @@ class ClassifierEngine:
         with open(weight_file, 'rb') as f:
             print('Restoring state from', weight_file)
             # torch interprets the file, then we can access using string keys
-            checkpoint = torch.load(f)
+            checkpoint = torch.load(f, map_location=self.device)
+            
+            # examine local model keys
+            local_module_keys=list(self.model_accs._modules.keys())
+            print("local modules: ", local_module_keys)
+            #print(self.model.state_dict())
 
             # NEW LOADING
             # TODO: remove this section to rework loading
-            print(checkpoint.keys())
-            print(list(self.model_accs._modules.keys()))
+            #print(list(self.model_accs._modules.keys()))
 
             # translation dict to convert between old names and new names
             translate_dict = {'feature_extractor':'encoder', 'classification_network':'classifier'}
-            print(checkpoint['encoder'].keys())
-            print("###################################################")
-            print(self.model.state_dict()['feature_extractor'].keys())
+
+            # examine checkpoint keys
+            #print("current model keys: ", self.model.state_dict().keys())
+            #print("current model: ", getattr(self.model_accs, 'feature_extractor').state_dict()['fc1.bias'])
+            print("#################################################################")
+            print()
+            print("#################################################################")
+            #print("old model keys: ", checkpoint['encoder'].keys())
+            print("#################################################################")
+            #print(self.model.state_dict())
 
             modules = list(self.model_accs._modules.keys())
-            for module in modules:
-                print("Loading weights for module = ", module)
-                getattr(self.model_accs, module).load_state_dict(checkpoint[translate_dict[module]])
+
+            #########################################
+            """
+            params = self.model.parameters()
+            param_names = [name for name, param in self.model.named_parameters()]
+            print("curr param names: ", param_names)
+            """
+            print("#################################################################")
+            # verify that state dicts are the same
+            old_encoder_keys = set(getattr(self.model_accs, 'feature_extractor').state_dict().keys())
+            new_encoder_keys = set(checkpoint[translate_dict['feature_extractor']].keys())
+            # print(old_encoder_keys)
+            # print(new_encoder_keys)
+            assert(old_encoder_keys == new_encoder_keys)
+
+
+            old_classifier_keys = set(getattr(self.model_accs, 'classification_network').state_dict().keys())
+            new_classifier_keys = set(checkpoint[translate_dict['classification_network']].keys())
+            # print(old_classifier_keys)
+            # print(new_classifier_keys)
+            assert(old_classifier_keys == new_classifier_keys)
+            print("#################################################################")
+
+            for module_name in modules:
+                print("Loading weights for module = ", module_name)
+                #print(module.keys())
+                module = getattr(self.model_accs, module_name)
+                module.load_state_dict(checkpoint[translate_dict[module_name]])
+            
+            
+            """
+            params = self.model.parameters()
+            param_names = [name for name, param in self.model.named_parameters()]
+            print("updated param names: ", param_names)
+            """
+            #print("updated model keys: ", self.model.state_dict().keys())
+            #print("updated model: ", getattr(self.model_accs, 'feature_extractor').state_dict()['fc1.bias'])
+            print("#################################################################")
+            #print(self.model.state_dict()['feature_extractor'].keys())
+            #print(self.model.state_dict())
 
             """
             # OLD LOADING
@@ -478,7 +526,7 @@ class ClassifierEngine:
                 self.log.write()
                 self.log.flush()
                 
-                sys.stdout.write("val_iteration : " + str(iteration) + "val_loss : " + res["loss"] + "val_accuracy : " + res["accuracy"] + "\n")
+                sys.stdout.write("val_iteration : " + str(iteration) + "val_loss : " + str(res["loss"]) + "val_accuracy : " + str(res["accuracy"]) + "\n")
                 
                 avg_acc += res['accuracy']
                 avg_loss += res['loss']
