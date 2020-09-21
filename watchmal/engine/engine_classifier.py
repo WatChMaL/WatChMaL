@@ -354,101 +354,6 @@ class ClassifierEngine:
             self.iteration = checkpoint['global_step']
         print('Restoration complete.')
     
-    def restore_state_from_old_framework(self, weight_file):
-        """
-        Restore model using weights stored from a previous run.
-        
-        Parameters : weight_file
-        
-        Outputs : 
-            
-        Returns : None
-        """
-
-        # Open a file in read-binary mode
-        with open(weight_file, 'rb') as f:
-            print('Restoring state from', weight_file)
-            # torch interprets the file, then we can access using string keys
-            checkpoint = torch.load(f, map_location=self.device)
-            
-            # examine local model keys
-            local_module_keys=list(self.model_accs._modules.keys())
-            print("local modules: ", local_module_keys)
-            #print(self.model.state_dict())
-
-            # NEW LOADING
-            # TODO: remove this section to rework loading
-            #print(list(self.model_accs._modules.keys()))
-
-            # translation dict to convert between old names and new names
-            translate_dict = {'feature_extractor':'encoder', 'classification_network':'classifier'}
-
-            # examine checkpoint keys
-            #print("current model keys: ", self.model.state_dict().keys())
-            #print("current model: ", getattr(self.model_accs, 'feature_extractor').state_dict()['fc1.bias'])
-            print("#################################################################")
-            print()
-            print("#################################################################")
-            #print("old model keys: ", checkpoint['encoder'].keys())
-            print("#################################################################")
-            #print(self.model.state_dict())
-
-            modules = list(self.model_accs._modules.keys())
-
-            #########################################
-            """
-            params = self.model.parameters()
-            param_names = [name for name, param in self.model.named_parameters()]
-            print("curr param names: ", param_names)
-            """
-            print("#################################################################")
-            # verify that state dicts are the same
-            old_encoder_keys = set(getattr(self.model_accs, 'feature_extractor').state_dict().keys())
-            new_encoder_keys = set(checkpoint[translate_dict['feature_extractor']].keys())
-            # print(old_encoder_keys)
-            # print(new_encoder_keys)
-            assert(old_encoder_keys == new_encoder_keys)
-
-
-            old_classifier_keys = set(getattr(self.model_accs, 'classification_network').state_dict().keys())
-            new_classifier_keys = set(checkpoint[translate_dict['classification_network']].keys())
-            # print(old_classifier_keys)
-            # print(new_classifier_keys)
-            assert(old_classifier_keys == new_classifier_keys)
-            print("#################################################################")
-
-            for module_name in modules:
-                print("Loading weights for module = ", module_name)
-                #print(module.keys())
-                module = getattr(self.model_accs, module_name)
-                module.load_state_dict(checkpoint[translate_dict[module_name]])
-            
-            
-            """
-            params = self.model.parameters()
-            param_names = [name for name, param in self.model.named_parameters()]
-            print("updated param names: ", param_names)
-            """
-            #print("updated model keys: ", self.model.state_dict().keys())
-            #print("updated model: ", getattr(self.model_accs, 'feature_extractor').state_dict()['fc1.bias'])
-            print("#################################################################")
-            #print(self.model.state_dict()['feature_extractor'].keys())
-            #print(self.model.state_dict())
-
-            """
-            # OLD LOADING
-            # load network weights
-            self.model.load_state_dict(checkpoint['state_dict'], strict=False)
-            # if optim is provided, load the state of the optim
-            if self.optimizer is not None:
-                self.optimizer.load_state_dict(checkpoint['optimizer'])
-            # load iteration count
-            self.iteration = checkpoint['global_step']
-            """
-        print('Restoration complete.')
-    
-    # ========================================================================
-    
     def save_state(self,best=False):
         """
         Save model weights to a file.
@@ -474,6 +379,52 @@ class ClassifierEngine:
         print('Saved checkpoint as:', filename)
         return filename
 
+    # ========================================================================
+
+    def restore_state_from_old_framework(self, weight_file):
+        """
+        Restore model using weights stored from a previous run.
+        
+        Parameters : weight_file
+        
+        Outputs : 
+            
+        Returns : None
+        """
+
+        # Open a file in read-binary mode
+        with open(weight_file, 'rb') as f:
+            print('Restoring state from', weight_file)
+            # torch interprets the file, then we can access using string keys
+            checkpoint = torch.load(f, map_location=self.device)
+            
+            # translation dict to convert between old names and new names
+            translate_dict = {'feature_extractor':'encoder', 'classification_network':'classifier'}
+            modules = list(self.model_accs._modules.keys())
+            
+            print("#################################################################")
+            # verify that state dicts are the same
+            old_encoder_keys = set(getattr(self.model_accs, 'feature_extractor').state_dict().keys())
+            new_encoder_keys = set(checkpoint[translate_dict['feature_extractor']].keys())
+            # print(old_encoder_keys)
+            # print(new_encoder_keys)
+            assert(old_encoder_keys == new_encoder_keys)
+
+
+            old_classifier_keys = set(getattr(self.model_accs, 'classification_network').state_dict().keys())
+            new_classifier_keys = set(checkpoint[translate_dict['classification_network']].keys())
+            # print(old_classifier_keys)
+            # print(new_classifier_keys)
+            assert(old_classifier_keys == new_classifier_keys)
+            print("#################################################################")
+
+            for module_name in modules:
+                print("Loading weights for module = ", module_name)
+                module = getattr(self.model_accs, module_name)
+                module.load_state_dict(checkpoint[translate_dict[module_name]])
+            
+        print('Restoration complete.')
+    
 
 
     def replicate(self):
@@ -482,7 +433,7 @@ class ClassifierEngine:
         Args:
         subset          -- One of 'train', 'validation', 'test' to select the subset to perform validation on
         """
-        import torch.multiprocessing
+        #import torch.multiprocessing
         torch.multiprocessing.set_sharing_strategy('file_system')
         # Print start message
         num_dump_events = 3351020 #self.config.num_dump_events

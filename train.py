@@ -9,8 +9,9 @@ from watchmal.dataset.data_module import DataModule
 
 logger = logging.getLogger('train')
 
-# TODO: to run resnet use config 'train', to use pointnet use config 'train_pointnet'
-@hydra.main(config_path='config/', config_name='train')
+# TODO: to run resnet use config 'train', to use pointnet use config 'train_pointnet', to 
+# replicate run from old framwork 'replicate'
+@hydra.main(config_path='config/', config_name='replicate')
 def main(config):
     logger.info(f"Training with the following config:\n{OmegaConf.to_yaml(config)}")
 

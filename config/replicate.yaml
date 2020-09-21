@@ -1,0 +1,22 @@
+train:
+  epochs: 1
+  report_interval: 50
+  val_interval: 100
+  num_val_batches: 32
+
+  
+  learning_rate: 0.0001
+  weight_decay: 0
+  
+  gpu_list:
+    - 6
+    - 7
+  dump_path: './outputs/'
+
+defaults:
+  - engine: classifier
+  - model: classifier
+  - model/feature_extractor: resnet18
+  - model/classification_network: resnet_fc
+  - data: iwcd_postveto_nomichel
+  - data/dataset: iwcd_cnn
