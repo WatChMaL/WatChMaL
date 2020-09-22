@@ -90,7 +90,7 @@ class ClassifierEngine:
         self.val_log = CSVData(self.dirpath + "log_val.csv")
     
     # TODO: restore old forward method
-    def forward(self, mode): #train=True):
+    def forward(self, train=True):
         """
         Compute predictions and metrics for a batch of data.
 
@@ -100,45 +100,15 @@ class ClassifierEngine:
         
         Returns : a dict of loss, predicted labels, softmax, accuracy, and raw model outputs
         """
-        if self.data is not None and len(self.data.size()) == 4:
-            self.data = self.data.to(self.device)
-            #print("switched")
-            #self.data = self.data.permute(0,3,1,2)
-            
-        if self.labels is not None:
-            self.labels = self.labels.to(self.device)
-        
-        # Set the correct grad_mode given the mode
-        grad_mode= False
-        self.model.eval()
-        
-        predicted_labels = self.model(self.data)
 
-        #print(self.labels)
-        torch.set_printoptions(threshold=10_000)
-        print(type(predicted_labels))
-        print(predicted_labels)
-        print("Waiting...")
-        input()
-
-        # TODO: restpre old model
-        """
-        #print(self.model.state_dict())
-        print(self.data.size())
-
-        #TODO: undo change here
-        # with torch.set_grad_enabled(train):
-        with torch.set_grad_enabled(True):
+        with torch.set_grad_enabled(train):
             # move the data and the labels to the GPU (if using CPU this has no effect)
             self.data = self.data.to(self.device)
             self.labels = self.labels.to(self.device)
 
             model_out = self.model(self.data)
 
-            #print(self.labels)
-            self.model.eval()
             torch.set_printoptions(threshold=10_000)
-            print(type(model_out))
             print(model_out)
             print("Waiting...")
             input()
@@ -148,7 +118,7 @@ class ClassifierEngine:
             softmax          = self.softmax(model_out)
             predicted_labels = torch.argmax(model_out,dim=-1)
             accuracy         = (predicted_labels == self.labels).sum().item() / float(predicted_labels.nelement())
-        """
+        
         return {'loss'             : self.loss.detach().cpu().item(),
                 'predicted_labels' : predicted_labels.cpu().numpy(),
                 'softmax'          : softmax.detach().cpu().numpy(),
@@ -313,8 +283,6 @@ class ClassifierEngine:
         """
         # TODO: this should be removed after replication
         print("evaluating in directory: ", self.dirpath)
-        print("data has shape")
-
         
         # Variables to output at the end
         val_loss = 0.0
@@ -437,42 +405,31 @@ class ClassifierEngine:
             
             # translation dict to convert between old names and new names
             translate_dict = {'feature_extractor':'encoder', 'classification_network':'classifier'}
+
             modules = list(self.model_accs._modules.keys())
             
-            print("#################################################################")
             # verify that state dicts are the same
             old_encoder_keys = set(getattr(self.model_accs, 'feature_extractor').state_dict().keys())
             new_encoder_keys = set(checkpoint[translate_dict['feature_extractor']].keys())
-            # print(old_encoder_keys)
-            # print(new_encoder_keys)
             assert(old_encoder_keys == new_encoder_keys)
-
 
             old_classifier_keys = set(getattr(self.model_accs, 'classification_network').state_dict().keys())
             new_classifier_keys = set(checkpoint[translate_dict['classification_network']].keys())
-            # print(old_classifier_keys)
-            # print(new_classifier_keys)
             assert(old_classifier_keys == new_classifier_keys)
-            print("#################################################################")
 
             for module_name in modules:
                 print("Loading weights for module = ", module_name)
                 module = getattr(self.model_accs, module_name)
                 module.load_state_dict(checkpoint[translate_dict[module_name]])
             
-            print("#################################################################")
-            #print(getattr(self.model_accs, 'feature_extractor').state_dict()['conv1.weight'])#.keys())
-            #print(getattr(self.model_accs, 'classification_network').state_dict())
-            
         print('Restoration complete.')
     
+    """    
     def replicate(self):
-        """
         Overrides the validate method in Engine.py.
         
         Args:
         subset          -- One of 'train', 'validation', 'test' to select the subset to perform validation on
-        """
         # Print start message
         if True:
             message = "Validating model on the test set"
@@ -539,14 +496,15 @@ class ClassifierEngine:
         avg_acc /= count
         avg_loss /= count
         stdout.write("Overall acc : {}, Overall loss : {}\n".format(avg_acc, avg_loss))
-  
+    """
     #TODO: restore old replicate
-"""
     def replicate(self):
+        """
         Overrides the validate method in Engine.py.
         
         Args:
         subset          -- One of 'train', 'validation', 'test' to select the subset to perform validation on
+        """
         
         #import torch.multiprocessing
         torch.multiprocessing.set_sharing_strategy('file_system')
@@ -614,4 +572,3 @@ class ClassifierEngine:
         avg_acc /= count
         avg_loss /= count
         print("Overall acc : {}, Overall loss : {}".format(avg_acc, avg_loss))
-"""

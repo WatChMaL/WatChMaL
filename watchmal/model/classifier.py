@@ -16,11 +16,7 @@ class Classifier(nn.Module):
         self.classification_network = instantiate(classification_network, **classification_kwargs)
 
     def forward(self, x):
-        #print("model input: ", x[0])
         x = self.feature_extractor(x)
-        #print("feature_extractor output: ", x[0])
-        #print("Waiting...")
-        #input()
         x = self.classification_network(x)
         return x
 
