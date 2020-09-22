@@ -466,18 +466,16 @@ class ClassifierEngine:
                 self.rootfiles = data['root_files']
                 self.angles = data['angles'].float()
                 
-                
-                
-                res = self.forward(train=False)
+                res  = self.forward(train=False)
                     
-                vals   = {"iteration":iteration, "loss":res["loss"], "accuracy":res["accuracy"]}
+                vals = {"iteration":iteration, "loss":res["loss"], "accuracy":res["accuracy"]}
                 
                 # Log/Report
                 self.log.record(vals)
                 self.log.write()
                 self.log.flush()
                 
-                sys.stdout.write("val_iteration : " + str(iteration) + "val_loss : " + str(res["loss"]) + "val_accuracy : " + str(res["accuracy"]) + "\n")
+                sys.stdout.write("val_iteration : " + str(iteration) + " val_loss : " + str(res["loss"]) + " val_accuracy : " + str(res["accuracy"]) + "\n")
                 
                 avg_acc += res['accuracy']
                 avg_loss += res['loss']
