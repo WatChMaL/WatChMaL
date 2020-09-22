@@ -25,14 +25,19 @@ class DataModule():
         super().__init__()
         self.train_batch_size = train_batch_size
         self.val_batch_size = val_batch_size
+
         self.dataset_config = dataset
+
         split_indices = np.load(split_path, allow_pickle=True)
+
         self.train_indices = split_indices["train_idxs"]
         self.val_indices = split_indices["val_idxs"]
         self.test_indices = split_indices["test_idxs"]
+
         self.num_workers = num_workers
         
         self.dataset = instantiate(self.dataset_config)
+
         self.train_sampler = SubsetRandomSampler(self.train_indices)
         self.val_sampler = SubsetRandomSampler(self.val_indices)
         self.test_sampler = SubsetSequenceSampler(self.test_indices)
@@ -43,5 +48,6 @@ class DataModule():
     def val_dataloader(self):
         return DataLoader(self.dataset, batch_size=self.val_batch_size, sampler=self.val_sampler, num_workers=self.num_workers)
 
+    # TODO: fix test dataloading
     def test_dataloader(self):
-        return DataLoader(self.dataset, batch_size=self.val_batch_size, sampler=self.test_sampler, num_workers=self.num_workers)
+        return DataLoader(self.dataset, batch_size=self.val_batch_size, shuffle=False, pin_memory=False, sampler=self.test_sampler, num_workers=8)

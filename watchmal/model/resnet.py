@@ -206,7 +206,8 @@ class ResNet(nn.Module):
             x = self.conv3b(x)
         elif x.size()[-2:] == (2, 2):
             x = self.conv3c(x)
-
+        
+        x = self.bn3(x)
         x = self.relu(x)
         x = x.view(x.size(0), -1)
         x = self.relu(self.fc1(x))

@@ -15,6 +15,7 @@ from numpy import savez
 import os
 from time import strftime, localtime, time
 import sys
+from sys import stdout
 
 # WatChMaL imports
 from watchmal.dataset.data_module import DataModule
@@ -45,6 +46,8 @@ class ClassifierEngine:
         else:
             print("Using CPU")
             self.device = torch.device("cpu")
+                # send model to device
+        self.model.to(self.device)
         
         # TODO: remove this logic once reloading reworked
         # Setup the parameters tp save given the model type
@@ -53,11 +56,9 @@ class ClassifierEngine:
         else:
             self.model_accs=self.model
         
-        # send model to device
-        self.model.to(self.device)
-        
-        # TODO: make sure optimizer works
-        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.train_config.learning_rate, weight_decay=self.train_config.weight_decay)
+        # TODO: reset optimizer if found to not work
+        #self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.train_config.learning_rate, weight_decay=self.train_config.weight_decay)
+        self.optimizer = torch.optim.Adam(self.model_accs.parameters(), lr=self.train_config.learning_rate, weight_decay=self.train_config.weight_decay)
         self.criterion = nn.CrossEntropyLoss()
         self.softmax = nn.Softmax(dim=1)
 
@@ -88,7 +89,8 @@ class ClassifierEngine:
         self.train_log = CSVData(self.dirpath + "log_train.csv")
         self.val_log = CSVData(self.dirpath + "log_val.csv")
     
-    def forward(self, train=True):
+    # TODO: restore old forward method
+    def forward(self, mode): #train=True):
         """
         Compute predictions and metrics for a batch of data.
 
@@ -98,20 +100,55 @@ class ClassifierEngine:
         
         Returns : a dict of loss, predicted labels, softmax, accuracy, and raw model outputs
         """
-        with torch.set_grad_enabled(train):
+        if self.data is not None and len(self.data.size()) == 4:
+            self.data = self.data.to(self.device)
+            #print("switched")
+            #self.data = self.data.permute(0,3,1,2)
+            
+        if self.labels is not None:
+            self.labels = self.labels.to(self.device)
+        
+        # Set the correct grad_mode given the mode
+        grad_mode= False
+        self.model.eval()
+        
+        predicted_labels = self.model(self.data)
+
+        #print(self.labels)
+        torch.set_printoptions(threshold=10_000)
+        print(type(predicted_labels))
+        print(predicted_labels)
+        print("Waiting...")
+        input()
+
+        # TODO: restpre old model
+        """
+        #print(self.model.state_dict())
+        print(self.data.size())
+
+        #TODO: undo change here
+        # with torch.set_grad_enabled(train):
+        with torch.set_grad_enabled(True):
             # move the data and the labels to the GPU (if using CPU this has no effect)
             self.data = self.data.to(self.device)
             self.labels = self.labels.to(self.device)
 
             model_out = self.model(self.data)
 
+            #print(self.labels)
+            self.model.eval()
+            torch.set_printoptions(threshold=10_000)
+            print(type(model_out))
+            print(model_out)
+            print("Waiting...")
+            input()
+
             self.loss = self.criterion(model_out, self.labels)
             
             softmax          = self.softmax(model_out)
             predicted_labels = torch.argmax(model_out,dim=-1)
-            accuracy         = (predicted_labels == self.labels).sum().item() / float(predicted_labels.nelement())        
-            predicted_labels = predicted_labels
-        
+            accuracy         = (predicted_labels == self.labels).sum().item() / float(predicted_labels.nelement())
+        """
         return {'loss'             : self.loss.detach().cpu().item(),
                 'predicted_labels' : predicted_labels.cpu().numpy(),
                 'softmax'          : softmax.detach().cpu().numpy(),
@@ -423,16 +460,94 @@ class ClassifierEngine:
                 module = getattr(self.model_accs, module_name)
                 module.load_state_dict(checkpoint[translate_dict[module_name]])
             
+            print("#################################################################")
+            #print(getattr(self.model_accs, 'feature_extractor').state_dict()['conv1.weight'])#.keys())
+            #print(getattr(self.model_accs, 'classification_network').state_dict())
+            
         print('Restoration complete.')
     
-
-
     def replicate(self):
-        """Overrides the validate method in Engine.py.
+        """
+        Overrides the validate method in Engine.py.
         
         Args:
         subset          -- One of 'train', 'validation', 'test' to select the subset to perform validation on
         """
+        # Print start message
+        if True:
+            message = "Validating model on the test set"
+        
+        print(message)
+        
+        num_dump_events = 3351020
+        batch_size_test = 512
+        
+        self.log        = CSVData(self.dirpath+"test_validation_log.csv")
+        np_event_path   = self.dirpath + "/test_validation_iteration_"
+        data_iter       = self.test_loader
+        dump_iterations = max(1, ceil(num_dump_events/batch_size_test))
+    
+        print("Dump iterations = {0}".format(dump_iterations))
+        save_arr_dict = {"events":[], "labels":[], "energies":[], "angles":[], "eventids":[], "rootfiles":[]}
+
+        avg_loss = 0
+        avg_acc = 0
+        count = 0
+        for iteration, data in enumerate(data_iter):
+            
+            stdout.write("Iteration : " + str(iteration) + "\n")
+
+            # Extract the event data from the input data tuple
+            self.data     = data['data'][:,:,:,:].float()
+            self.labels   = data["labels"].long()
+            #print(self.data[0].size())
+            #input()
+
+            #self.energies = data[2].float()
+            #self.eventids = data[5].float()
+            #self.rootfiles = data[6]
+            #self.angles = data[3].float()
+            
+                    
+            res = self.forward(mode="validation")
+                 
+            keys   = ["iteration"]
+            values = [iteration]
+            
+            # Log/Report
+            self.log.record(keys, values)
+            self.log.write()
+            
+            # Add the result keys to the dump dict in the first iterations
+            
+            avg_acc += res['accuracy']
+            avg_loss += res['loss']
+            count += 1
+
+            if iteration < dump_iterations:
+                save_arr_dict["labels"].append(self.labels.cpu().numpy())
+                save_arr_dict["energies"].append(self.energies.cpu().numpy())
+                save_arr_dict["eventids"].append(self.eventids.cpu().numpy())
+                save_arr_dict["rootfiles"].append(self.rootfiles)
+                save_arr_dict["angles"].append(self.angles.cpu().numpy())
+            
+            elif iteration == dump_iterations:
+                break
+        
+        print("Saving the npz dump array :")
+        savez(np_event_path + "dump.npz", **save_arr_dict)
+        avg_acc /= count
+        avg_loss /= count
+        stdout.write("Overall acc : {}, Overall loss : {}\n".format(avg_acc, avg_loss))
+  
+    #TODO: restore old replicate
+"""
+    def replicate(self):
+        Overrides the validate method in Engine.py.
+        
+        Args:
+        subset          -- One of 'train', 'validation', 'test' to select the subset to perform validation on
+        
         #import torch.multiprocessing
         torch.multiprocessing.set_sharing_strategy('file_system')
         # Print start message
@@ -449,52 +564,54 @@ class ClassifierEngine:
         print("Dump iterations = {0}".format(dump_iterations))
         save_arr_dict = {"events":[], "labels":[], "energies":[], "angles":[], "eventids":[], "rootfiles":[], "predicted_labels":[], "softmax":[]}
 
-        with torch.no_grad():
-            self.model.eval()
+        #with torch.no_grad():
+        self.model.eval()
 
-            avg_loss = 0
-            avg_acc = 0
-            count = 0
-            for iteration, data in enumerate(data_iter):
+        avg_loss = 0
+        avg_acc = 0
+        count = 0
+        for iteration, data in enumerate(data_iter):
 
-                # Extract the event data from the input data tuple
-                self.data     = data['data'].float()
-                self.labels   = data['labels'].long()
+            # Extract the event data from the input data tuple
+            self.data     = data['data'].float()
+            self.labels   = data['labels'].long()
+            #print(self.labels)
+            
+            self.energies = data['energies'].float()
+            self.eventids = data['event_ids'].float()
+            self.rootfiles = data['root_files']
+            self.angles = data['angles'].float()
+            
+            res  = self.forward(train=False)
                 
-                self.energies = data['energies'].float()
-                self.eventids = data['event_ids'].float()
-                self.rootfiles = data['root_files']
-                self.angles = data['angles'].float()
-                
-                res  = self.forward(train=False)
-                    
-                vals = {"iteration":iteration, "loss":res["loss"], "accuracy":res["accuracy"]}
-                
-                # Log/Report
-                self.log.record(vals)
-                self.log.write()
-                self.log.flush()
-                
-                sys.stdout.write("val_iteration : " + str(iteration) + " val_loss : " + str(res["loss"]) + " val_accuracy : " + str(res["accuracy"]) + "\n")
-                
-                avg_acc += res['accuracy']
-                avg_loss += res['loss']
-                count += 1
+            vals = {"iteration":iteration, "loss":res["loss"], "accuracy":res["accuracy"]}
+            
+            # Log/Report
+            self.log.record(vals)
+            self.log.write()
+            self.log.flush()
+            
+            sys.stdout.write("val_iteration : " + str(iteration) + " val_loss : " + str(res["loss"]) + " val_accuracy : " + str(res["accuracy"]) + "\n")
+            
+            avg_acc += res['accuracy']
+            avg_loss += res['loss']
+            count += 1
 
-                if iteration < dump_iterations:
-                    save_arr_dict["labels"].append(self.labels.cpu().numpy())
-                    save_arr_dict["energies"].append(self.energies.cpu().numpy())
-                    save_arr_dict["eventids"].append(self.eventids.cpu().numpy())
-                    save_arr_dict["rootfiles"].append(self.rootfiles)
-                    save_arr_dict["angles"].append(self.angles.cpu().numpy())
-                    save_arr_dict["predicted_labels"].append(res["predicted_labels"])
-                    save_arr_dict["softmax"].append(res["softmax"])
-                    
-                elif iteration == dump_iterations:
-                    break
+            if iteration < dump_iterations:
+                save_arr_dict["labels"].append(self.labels.cpu().numpy())
+                save_arr_dict["energies"].append(self.energies.cpu().numpy())
+                save_arr_dict["eventids"].append(self.eventids.cpu().numpy())
+                save_arr_dict["rootfiles"].append(self.rootfiles)
+                save_arr_dict["angles"].append(self.angles.cpu().numpy())
+                save_arr_dict["predicted_labels"].append(res["predicted_labels"])
+                save_arr_dict["softmax"].append(res["softmax"])
+                
+            elif iteration == dump_iterations:
+                break
         
         print("Saving the npz dump array :")
         savez(np_event_path + "dump.npz", **save_arr_dict)
         avg_acc /= count
         avg_loss /= count
         print("Overall acc : {}, Overall loss : {}".format(avg_acc, avg_loss))
+"""
