@@ -28,10 +28,10 @@ class ClassifierEngine:
 
         print("Dump path: ", self.train_config.dump_path)
 
-        # configure the device to be used for model training and inference
-        if self.train_config.gpu_list is not None:
-            print("Requesting GPUs. GPU list : " + str(self.train_config.gpu_list))
-            self.devids = ["cuda:{0}".format(x) for x in self.train_config.gpu_list]
+         # configure the device to be used for model training and inference
+        if train_config.gpu_list is not None:
+            print("Requesting GPUs. GPU list : " + str(train_config.gpu_list))
+            self.devids = ["cuda:{0}".format(x) for x in train_config.gpu_list]
             print("Main GPU : " + self.devids[0])
 
             if torch.cuda.is_available():
@@ -370,10 +370,10 @@ class ClassifierEngine:
                                      ("BEST" if best else ""),
                                      ".pth")
         # Save model state dict in appropriate from depending on number of gpus
-        if isinstance(self.model, nn.DataParallel):
-            model_dict = self.model.module.state_dict()
-        else:
-            model_dict = self.model.state_dict()
+        #if isinstance(self.model, nn.DataParallel):
+        #    model_dict = self.model.module.state_dict()
+        #else:
+        model_dict = self.model.state_dict()
         # Save parameters
         # 0+1) iteration counter + optimizer state => in case we want to "continue training" later
         # 2) network weight
