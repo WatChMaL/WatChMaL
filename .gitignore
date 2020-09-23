@@ -109,16 +109,12 @@ test.py
 test_load.py
 test_notebook.ipynb
 test_utils.py
-best_run_analysis.py
 best_run_numpy_analysis.py
-best_run_analysis_evaluate.py
 best_run_reloading.py
 best_run_reloading_analysis.py
-alt_run_reloading.py
-alt_run_analysis.py
-replication_run_analysis.py
 replication_run_reloading.py
 replication_run_analysis_old_framework.py
+replication_run_analysis_new_framework.py
 
 # editor, os cache directory
 .vscode/

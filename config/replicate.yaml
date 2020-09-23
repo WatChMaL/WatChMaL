@@ -1,7 +1,7 @@
 train:
   epochs: 20
-  report_interval: 50
-  val_interval: 100
+  report_interval: 10
+  val_interval: 10
   num_val_batches: 32
 
   
@@ -9,8 +9,8 @@ train:
   weight_decay: 0
   
   gpu_list:
-    - 6
-    - 7
+    - 4
+    - 5
   dump_path: './outputs/'
 
 defaults:

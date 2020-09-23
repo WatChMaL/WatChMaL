@@ -435,7 +435,7 @@ class ClassifierEngine:
         
         # Setup the CSV file for logging the output, path to save the actual and reconstructed events, dataloader iterator
 
-        self.log        = CSVData(self.dirpath+"test_validation_log.csv")
+        self.log        = CSVData(self.dirpath+ "/test_validation_log.csv")
         np_event_path   = self.dirpath + "/test_validation_iteration_"
         data_iter       = self.test_loader
         dump_iterations = max(1, ceil(num_dump_events/test_batch_size))
