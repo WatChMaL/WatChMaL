@@ -50,4 +50,4 @@ class DataModule():
 
     # TODO: fix test dataloading
     def test_dataloader(self):
-        return DataLoader(self.dataset, batch_size=self.val_batch_size, shuffle=False, pin_memory=False, sampler=self.test_sampler, num_workers=8)
+        return DataLoader(self.dataset, batch_size=self.val_batch_size, sampler=self.test_sampler, num_workers=self.num_workers)
