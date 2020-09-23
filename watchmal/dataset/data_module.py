@@ -21,17 +21,18 @@ class DataModule():
 
         self.num_workers = num_workers
         
-        self.dataset = instantiate(self.dataset_config)
+        self.dataset_transforms = instantiate(self.dataset_config)
+        self.dataset_no_transforms = instantiate(self.dataset_config, transforms=None)
 
         self.train_sampler = SubsetRandomSampler(self.train_indices)
         self.val_sampler = SubsetRandomSampler(self.val_indices)
         self.test_sampler = self.test_indices
 
     def train_dataloader(self):
-        return DataLoader(self.dataset, batch_size=self.train_batch_size, sampler=self.train_sampler, num_workers=self.num_workers)
+        return DataLoader(self.dataset_transforms, batch_size=self.train_batch_size, sampler=self.train_sampler, num_workers=self.num_workers)
 
     def val_dataloader(self):
-        return DataLoader(self.dataset, batch_size=self.val_batch_size, sampler=self.val_sampler, num_workers=self.num_workers)
+        return DataLoader(self.dataset_no_transforms, batch_size=self.val_batch_size, sampler=self.val_sampler, num_workers=self.num_workers)
 
     def test_dataloader(self):
-        return DataLoader(self.dataset, batch_size=self.test_batch_size, sampler=self.test_sampler, num_workers=self.num_workers)
+        return DataLoader(self.dataset_no_transforms, batch_size=self.test_batch_size, sampler=self.test_sampler, num_workers=self.num_workers)
