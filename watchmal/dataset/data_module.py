@@ -21,10 +21,11 @@ class SubsetSequenceSampler(Sampler):
 
 class DataModule():
 
-    def __init__(self, dataset, train_batch_size, val_batch_size, split_path, num_workers):
+    def __init__(self, dataset, train_batch_size, val_batch_size, test_batch_size, split_path, num_workers):
         super().__init__()
         self.train_batch_size = train_batch_size
         self.val_batch_size = val_batch_size
+        self.test_batch_size = test_batch_size
 
         self.dataset_config = dataset
 
@@ -50,4 +51,4 @@ class DataModule():
 
     # TODO: fix test dataloading
     def test_dataloader(self):
-        return DataLoader(self.dataset, batch_size=self.val_batch_size, sampler=self.test_sampler, num_workers=self.num_workers)
+        return DataLoader(self.dataset, batch_size=self.test_batch_size, sampler=self.test_sampler, num_workers=self.num_workers)

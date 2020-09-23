@@ -1,6 +1,7 @@
 # @package _group_
 train_batch_size: 512
 val_batch_size: 512
+test_batch_size: 512
 num_workers: 4
 split_path: /fast_scratch/WatChMaL/data/IWCD_fulltank_300_post_veto_nomichel_pe_idxs.npz
 dataset:
