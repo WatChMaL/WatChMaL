@@ -108,11 +108,6 @@ class ClassifierEngine:
 
             model_out = self.model(self.data)
 
-            torch.set_printoptions(threshold=10_000)
-            print(model_out)
-            print("Waiting...")
-            input()
-
             self.loss = self.criterion(model_out, self.labels)
             
             softmax          = self.softmax(model_out)
@@ -424,80 +419,6 @@ class ClassifierEngine:
             
         print('Restoration complete.')
     
-    """    
-    def replicate(self):
-        Overrides the validate method in Engine.py.
-        
-        Args:
-        subset          -- One of 'train', 'validation', 'test' to select the subset to perform validation on
-        # Print start message
-        if True:
-            message = "Validating model on the test set"
-        
-        print(message)
-        
-        num_dump_events = 3351020
-        batch_size_test = 512
-        
-        self.log        = CSVData(self.dirpath+"test_validation_log.csv")
-        np_event_path   = self.dirpath + "/test_validation_iteration_"
-        data_iter       = self.test_loader
-        dump_iterations = max(1, ceil(num_dump_events/batch_size_test))
-    
-        print("Dump iterations = {0}".format(dump_iterations))
-        save_arr_dict = {"events":[], "labels":[], "energies":[], "angles":[], "eventids":[], "rootfiles":[]}
-
-        avg_loss = 0
-        avg_acc = 0
-        count = 0
-        for iteration, data in enumerate(data_iter):
-            
-            stdout.write("Iteration : " + str(iteration) + "\n")
-
-            # Extract the event data from the input data tuple
-            self.data     = data['data'][:,:,:,:].float()
-            self.labels   = data["labels"].long()
-            #print(self.data[0].size())
-            #input()
-
-            #self.energies = data[2].float()
-            #self.eventids = data[5].float()
-            #self.rootfiles = data[6]
-            #self.angles = data[3].float()
-            
-                    
-            res = self.forward(mode="validation")
-                 
-            keys   = ["iteration"]
-            values = [iteration]
-            
-            # Log/Report
-            self.log.record(keys, values)
-            self.log.write()
-            
-            # Add the result keys to the dump dict in the first iterations
-            
-            avg_acc += res['accuracy']
-            avg_loss += res['loss']
-            count += 1
-
-            if iteration < dump_iterations:
-                save_arr_dict["labels"].append(self.labels.cpu().numpy())
-                save_arr_dict["energies"].append(self.energies.cpu().numpy())
-                save_arr_dict["eventids"].append(self.eventids.cpu().numpy())
-                save_arr_dict["rootfiles"].append(self.rootfiles)
-                save_arr_dict["angles"].append(self.angles.cpu().numpy())
-            
-            elif iteration == dump_iterations:
-                break
-        
-        print("Saving the npz dump array :")
-        savez(np_event_path + "dump.npz", **save_arr_dict)
-        avg_acc /= count
-        avg_loss /= count
-        stdout.write("Overall acc : {}, Overall loss : {}\n".format(avg_acc, avg_loss))
-    """
-    #TODO: restore old replicate
     def replicate(self):
         """
         Overrides the validate method in Engine.py.

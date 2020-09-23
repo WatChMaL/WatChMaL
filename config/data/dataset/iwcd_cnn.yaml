@@ -2,4 +2,6 @@
 _target_: watchmal.dataset.cnn_mpmt.cnn_mpmt_dataset.CNNmPMTDataset
 mpmt_positions_file: /data/WatChMaL/data/IWCD_mPMT_image_positions.npz
 transforms:
+  - horizontal_flip
+  - vertical_flip
 collapse_arrays: False
