@@ -3,22 +3,6 @@ from torch.utils.data.sampler import SubsetRandomSampler, Sampler
 from hydra.utils import instantiate
 import numpy as np
 
-# TODO: remove this class, and replace with sequentialsampler
-class SubsetSequenceSampler(Sampler):
-    r"""Samples elements randomly from a given list of indices, without replacement.
-    Arguments:
-        indices (sequence): a sequence of indices
-    """
-
-    def __init__(self,indices):
-        self.indices = indices
-
-    def __iter__(self):
-        return (self.indices[i] for i in range(len(self.indices)))
-
-    def __len__(self):
-        return len(self.indices)
-
 class DataModule():
 
     def __init__(self, dataset, train_batch_size, val_batch_size, test_batch_size, split_path, num_workers):
@@ -41,7 +25,7 @@ class DataModule():
 
         self.train_sampler = SubsetRandomSampler(self.train_indices)
         self.val_sampler = SubsetRandomSampler(self.val_indices)
-        self.test_sampler = SubsetSequenceSampler(self.test_indices)
+        self.test_sampler = self.test_indices
 
     def train_dataloader(self):
         return DataLoader(self.dataset, batch_size=self.train_batch_size, sampler=self.train_sampler, num_workers=self.num_workers)
@@ -49,6 +33,5 @@ class DataModule():
     def val_dataloader(self):
         return DataLoader(self.dataset, batch_size=self.val_batch_size, sampler=self.val_sampler, num_workers=self.num_workers)
 
-    # TODO: fix test dataloading
     def test_dataloader(self):
         return DataLoader(self.dataset, batch_size=self.test_batch_size, sampler=self.test_sampler, num_workers=self.num_workers)
