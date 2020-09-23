@@ -46,7 +46,8 @@ class ClassifierEngine:
         else:
             print("Using CPU")
             self.device = torch.device("cpu")
-                # send model to device
+        
+        # send model to device
         self.model.to(self.device)
         
         # TODO: remove this logic once reloading reworked
@@ -368,13 +369,18 @@ class ClassifierEngine:
                                      str(self.model._get_name()),
                                      ("BEST" if best else ""),
                                      ".pth")
+        # Save model state dict in appropriate from depending on number of gpus
+        if isinstance(self.model, nn.DataParallel):
+            model_dict = self.model.module.state_dict()
+        else:
+            model_dict = self.model.state_dict()
         # Save parameters
         # 0+1) iteration counter + optimizer state => in case we want to "continue training" later
         # 2) network weight
         torch.save({
             'global_step': self.iteration,
             'optimizer': self.optimizer.state_dict(),
-            'state_dict': self.model.state_dict()
+            'state_dict': model_dict
         }, filename)
         print('Saved checkpoint as:', filename)
         return filename
