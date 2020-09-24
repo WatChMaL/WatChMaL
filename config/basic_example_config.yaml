@@ -1,22 +1,10 @@
 defaults:
     - data: iwcd_postveto_nomichel
+    - data/dataset: iwcd_cnn
     - model: classifier
     - model/feature_extractor: resnet18
-    - engine: classifier
     - model/classification_network: resnet_fc
-
-model:
-    epochs: 1
-train:
-  epochs: 1
-  report_interval: 50
-  val_interval: 100
-  num_val_batches: 32
-
-  learning_rate: 0.0001
-  weight_decay: 0
-  
-  dump_path: './outputs/'
-test:
-    epochs: 1
-
+    - optimizer: adam
+    - engine: classifier
+    - train: train_resnet
+    - test: test_resnet

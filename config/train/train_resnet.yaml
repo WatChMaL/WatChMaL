@@ -1,0 +1,14 @@
+# @package _group_
+epochs: 1
+  
+train_batch_size: 512
+val_batch_size: 512
+
+report_interval: 50
+val_interval: 100
+num_val_batches: 32
+
+learning_rate: 0.0001
+weight_decay: 0
+
+dump_path: './outputs/'
