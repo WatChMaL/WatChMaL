@@ -17,9 +17,12 @@ def main(config):
 
     model = instantiate(config.model)
 
-    engine = instantiate(config.engine, model=model, data=data)
+    optim = -1
 
-    #engine.train(train_config=config.train)
+    engine = instantiate(config.engine, model=model, optimizer=optim, data=data)
+
+    if (config.train is not None):
+        engine.train(train_config=config.train)
 
     #engine.evaluate(test_config=config.test)
 

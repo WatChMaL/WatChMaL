@@ -22,13 +22,15 @@ from watchmal.dataset.data_module import DataModule
 from watchmal.utils.logging_utils import CSVData
 
 class ClassifierEngine:
-    def __init__(self, model, data, gpu_list, dump_path):
-        
+    def __init__(self, model, optimizer, data, gpu_list, dump_path):
+
         # create the directory for saving the log and dump files
         self.dirpath = dump_path
         print("Dump path: ", self.dirpath)
 
         self.model = model
+
+        self.optimizer = optimizer
 
          # configure the device to be used for model training and inference
         if gpu_list is not None:
@@ -129,7 +131,7 @@ class ClassifierEngine:
         """
         self.optimizer = torch.optim.Adam(self.model_accs.parameters(), lr=lr, weight_decay=weight_decay)
 
-    def train(self, optimizer):
+    def train(self, train_config):
         """
         Train the model on the training set.
         
@@ -147,10 +149,10 @@ class ClassifierEngine:
         print("Training...")
 
         # initialize training params
-        epochs          = self.train_config.epochs
-        report_interval = self.train_config.report_interval
-        val_interval    = self.train_config.val_interval
-        num_val_batches = self.train_config.num_val_batches
+        epochs          = train_config.epochs
+        report_interval = train_config.report_interval
+        val_interval    = train_config.val_interval
+        num_val_batches = train_config.num_val_batches
 
         # set the iterations at which to dump the events and their metrics
         print(f"Validation Interval: {val_interval}")
