@@ -1,0 +1,10 @@
+defaults:
+    - data: iwcd_postveto_nomichel
+    - data/dataset: iwcd_cnn
+    - model: classifier
+    - model/feature_extractor: resnet18
+    - model/classification_network: resnet_fc
+    - optimizer: adam
+    - engine: classifier
+    - train: train_resnet
+    - test: test_resnet

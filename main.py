@@ -9,7 +9,7 @@ from watchmal.dataset.data_module import DataModule
 
 logger = logging.getLogger('train')
 
-@hydra.main(config_path='config/', config_name='basic_example_config')
+@hydra.main(config_path='config/', config_name='resnet_example_config')
 def main(config):
     logger.info(f"Running with the following config:\n{OmegaConf.to_yaml(config)}")
 
@@ -17,11 +17,11 @@ def main(config):
 
     model = instantiate(config.model)
 
-    engine = instantiate(config.engine, model=model, data=data)
+    #engine = instantiate(config.engine, model=model, data=data)
 
-    engine.train(train_config=config.train)
+    #engine.train(train_config=config.train)
 
-    engine.evaluate(test_config=config.test)
+    #engine.evaluate(test_config=config.test)
 
 if __name__ == '__main__':
     # pylint: disable=no-value-for-parameter
