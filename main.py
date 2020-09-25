@@ -17,7 +17,7 @@ def main(config):
 
     model = instantiate(config.model)
 
-    #engine = instantiate(config.engine, model=model, data=data)
+    engine = instantiate(config.engine, model=model, data=data)
 
     #engine.train(train_config=config.train)
 

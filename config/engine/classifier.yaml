@@ -1,4 +1,5 @@
 # @package _group_
 _target_: watchmal.engine.engine_classifier.ClassifierEngine
+dump_path: './outputs/'
 gpu_list:
     - 2

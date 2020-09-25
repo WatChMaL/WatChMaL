@@ -22,11 +22,13 @@ from watchmal.dataset.data_module import DataModule
 from watchmal.utils.logging_utils import CSVData
 
 class ClassifierEngine:
-    def __init__(self, model, train_config, data, gpu_list):
-        self.model = model
-        self.train_config = train_config
+    def __init__(self, model, data, gpu_list, dump_path):
+        
+        # create the directory for saving the log and dump files
+        self.dirpath = dump_path
+        print("Dump path: ", self.dirpath)
 
-        print("Dump path: ", self.train_config.dump_path)
+        self.model = model
 
          # configure the device to be used for model training and inference
         if gpu_list is not None:
@@ -73,9 +75,6 @@ class ClassifierEngine:
         self.rootfiles = None
         self.angles    = None
         self.event_ids = None
-
-        # create the directory for saving the log and dump files
-        self.dirpath = self.train_config.dump_path
 
         try:
             os.stat(self.dirpath)
