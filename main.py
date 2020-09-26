@@ -21,10 +21,13 @@ def main(config):
 
     engine.configure_optimizers(config.optimizer)
 
-    if ("train" in config):
+    if ('load_model' in config):
+        engine.reload(config.load_model)
+
+    if ('train' in config):
         engine.train(train_config=config.train)
 
-    if ("test" in config):
+    if ('test' in config):
         engine.evaluate(test_config=config.test)
 
 if __name__ == '__main__':
