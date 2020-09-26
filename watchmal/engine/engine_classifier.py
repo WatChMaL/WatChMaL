@@ -22,15 +22,13 @@ from watchmal.dataset.data_module import DataModule
 from watchmal.utils.logging_utils import CSVData
 
 class ClassifierEngine:
-    def __init__(self, model, optimizer, data, gpu_list, dump_path):
+    def __init__(self, model, data, gpu_list, dump_path):
 
         # create the directory for saving the log and dump files
         self.dirpath = dump_path
         print("Dump path: ", self.dirpath)
 
         self.model = model
-
-        self.optimizer = optimizer
 
          # configure the device to be used for model training and inference
         if gpu_list is not None:
@@ -125,11 +123,11 @@ class ClassifierEngine:
         self.optimizer.step()       # step params
     
     # ========================================================================
-    def configure_optimizers(self, lr, weight_decay):
+    def configure_optimizers(self, optimizer_config):
         """
         Inspired by pytorch lightning approach
         """
-        self.optimizer = torch.optim.Adam(self.model_accs.parameters(), lr=lr, weight_decay=weight_decay)
+        self.optimizer = torch.optim.Adam(self.model_accs.parameters(), lr=optimizer_config.lr, weight_decay=optimizer_config.weight_decay)
 
     def train(self, train_config):
         """
@@ -266,7 +264,7 @@ class ClassifierEngine:
         self.val_log.close()
         self.train_log.close()
     
-    def evaluate(self):
+    def evaluate(self, test_config):
         """
         Evaluate the performance of the trained model on the validation set.
         

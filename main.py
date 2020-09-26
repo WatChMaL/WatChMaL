@@ -17,14 +17,15 @@ def main(config):
 
     model = instantiate(config.model)
 
-    optim = -1
+    engine = instantiate(config.engine, model=model, data=data)
 
-    engine = instantiate(config.engine, model=model, optimizer=optim, data=data)
+    engine.configure_optimizers(config.optimizer)
 
-    if (config.train is not None):
+    if ("train" in config):
         engine.train(train_config=config.train)
 
-    #engine.evaluate(test_config=config.test)
+    if ("test" in config):
+        engine.evaluate(test_config=config.test)
 
 if __name__ == '__main__':
     # pylint: disable=no-value-for-parameter

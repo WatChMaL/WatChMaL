@@ -6,5 +6,4 @@ defaults:
     - model/classification_network: resnet_fc
     - optimizer: adam
     - engine: classifier
-    - train: train_resnet
     - test: test_resnet
