@@ -1,0 +1,11 @@
+defaults:
+    - data: iwcd_postveto_nomichel
+    - data/dataset: iwcd_cnn
+    - model: classifier
+    - model/feature_extractor: pointnet
+    - model/classification_network: pointnet_fc
+    - optimizer: adam
+    - load_model: '/home/jtindall/new_framework_replication_run/run_4_1_gpu/ClassifierBEST.pth'
+    - engine: classifier
+    - train: train_pointnet
+    - test: test_pointnet

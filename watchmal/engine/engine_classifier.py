@@ -22,11 +22,13 @@ from watchmal.dataset.data_module import DataModule
 from watchmal.utils.logging_utils import CSVData
 
 class ClassifierEngine:
-    def __init__(self, model, train_config, data, gpu_list):
-        self.model = model
-        self.train_config = train_config
+    def __init__(self, model, data, gpu_list, dump_path):
 
-        print("Dump path: ", self.train_config.dump_path)
+        # create the directory for saving the log and dump files
+        self.dirpath = dump_path
+        print("Dump path: ", self.dirpath)
+
+        self.model = model
 
          # configure the device to be used for model training and inference
         if gpu_list is not None:
@@ -74,9 +76,6 @@ class ClassifierEngine:
         self.angles    = None
         self.event_ids = None
 
-        # create the directory for saving the log and dump files
-        self.dirpath = self.train_config.dump_path
-
         try:
             os.stat(self.dirpath)
         except:
@@ -86,6 +85,12 @@ class ClassifierEngine:
         # logging attributes
         self.train_log = CSVData(self.dirpath + "log_train.csv")
         self.val_log = CSVData(self.dirpath + "log_val.csv")
+    
+    def configure_optimizers(self, optimizer_config):
+        """
+        Inspired by pytorch lightning approach
+        """
+        self.optimizer = instantiate(optimizer_config, params=self.model_accs.parameters())
     
     # TODO: restore old forward method
     def forward(self, train=True):
@@ -124,13 +129,8 @@ class ClassifierEngine:
         self.optimizer.step()       # step params
     
     # ========================================================================
-    def configure_optimizers(self, lr, weight_decay):
-        """
-        Inspired by pytorch lightning approach
-        """
-        self.optimizer = torch.optim.Adam(self.model_accs.parameters(), lr=lr, weight_decay=weight_decay)
 
-    def train(self, optimizer):
+    def train(self, train_config):
         """
         Train the model on the training set.
         
@@ -148,10 +148,10 @@ class ClassifierEngine:
         print("Training...")
 
         # initialize training params
-        epochs          = self.train_config.epochs
-        report_interval = self.train_config.report_interval
-        val_interval    = self.train_config.val_interval
-        num_val_batches = self.train_config.num_val_batches
+        epochs          = train_config.epochs
+        report_interval = train_config.report_interval
+        val_interval    = train_config.val_interval
+        num_val_batches = train_config.num_val_batches
 
         # set the iterations at which to dump the events and their metrics
         print(f"Validation Interval: {val_interval}")
@@ -265,7 +265,7 @@ class ClassifierEngine:
         self.val_log.close()
         self.train_log.close()
     
-    def evaluate(self):
+    def evaluate(self, test_config):
         """
         Evaluate the performance of the trained model on the validation set.
         
@@ -331,6 +331,8 @@ class ClassifierEngine:
         np.save(self.dirpath + "predictions.npy", np.array(predictions))
         np.save(self.dirpath + "softmax.npy", np.array(softmaxes))
     
+    # ========================================================================
+
     def restore_state(self, weight_file):
         """
         Restore model using weights stored from a previous run.
