@@ -19,7 +19,7 @@ def main(config):
 
     engine = instantiate(config.engine, model=model, data=data)
 
-    engine.configure_optimizers(config.optimizer)
+    engine.configure_optimizers(optimizer_config=config.optimizer)
 
     if ('load_model' in config):
         engine.reload(config.load_model)

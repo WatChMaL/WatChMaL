@@ -86,6 +86,12 @@ class ClassifierEngine:
         self.train_log = CSVData(self.dirpath + "log_train.csv")
         self.val_log = CSVData(self.dirpath + "log_val.csv")
     
+    def configure_optimizers(self, optimizer_config):
+        """
+        Inspired by pytorch lightning approach
+        """
+        self.optimizer = instantiate(optimizer_config, params=self.model_accs.parameters())
+    
     # TODO: restore old forward method
     def forward(self, train=True):
         """
@@ -123,11 +129,6 @@ class ClassifierEngine:
         self.optimizer.step()       # step params
     
     # ========================================================================
-    def configure_optimizers(self, optimizer_config):
-        """
-        Inspired by pytorch lightning approach
-        """
-        self.optimizer = instantiate(optimizer_config, params=self.model_accs.parameters())
 
     def train(self, train_config):
         """
@@ -330,6 +331,8 @@ class ClassifierEngine:
         np.save(self.dirpath + "predictions.npy", np.array(predictions))
         np.save(self.dirpath + "softmax.npy", np.array(softmaxes))
     
+    # ========================================================================
+
     def restore_state(self, weight_file):
         """
         Restore model using weights stored from a previous run.
