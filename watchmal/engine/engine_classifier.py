@@ -127,7 +127,7 @@ class ClassifierEngine:
         """
         Inspired by pytorch lightning approach
         """
-        self.optimizer = torch.optim.Adam(self.model_accs.parameters(), lr=optimizer_config.lr, weight_decay=optimizer_config.weight_decay)
+        self.optimizer = instantiate(optimizer_config, params=self.model_accs.parameters())
 
     def train(self, train_config):
         """

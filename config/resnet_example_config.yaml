@@ -6,6 +6,5 @@ defaults:
     - model/classification_network: resnet_fc
     - optimizer: adam
     - engine: classifier
-    - load_model: '/home/jtindall/new_framework_replication_run/run_4_1_gpu/ClassifierBEST.pth'
     - train: train_resnet
     - test: test_resnet
