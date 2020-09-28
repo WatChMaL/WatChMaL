@@ -22,23 +22,23 @@ from watchmal.dataset.data_module import DataModule
 from watchmal.utils.logging_utils import CSVData
 
 class ClassifierEngine:
-    def __init__(self, model_config, train_config, data):
-        self.model = instantiate(model_config)
+    def __init__(self, model, train_config, data, gpu_list):
+        self.model = model
         self.train_config = train_config
 
         print("Dump path: ", self.train_config.dump_path)
 
          # configure the device to be used for model training and inference
-        if train_config.gpu_list is not None:
-            print("Requesting GPUs. GPU list : " + str(train_config.gpu_list))
-            self.devids = ["cuda:{0}".format(x) for x in train_config.gpu_list]
+        if gpu_list is not None:
+            print("Requesting GPUs. GPU list : " + str(gpu_list))
+            self.devids = ["cuda:{0}".format(x) for x in gpu_list]
             print("Main GPU : " + self.devids[0])
 
             if torch.cuda.is_available():
                 self.device = torch.device(self.devids[0])
                 if len(self.devids) > 1:
                     print("Using DataParallel on these devices: {}".format(self.devids))
-                    self.model = DataParallel(self.model, device_ids=self.train_config.gpu_list, dim=0)
+                    self.model = DataParallel(self.model, device_ids=gpu_list, dim=0)
                 print("CUDA is available")
             else:
                 self.device = torch.device("cpu")
@@ -57,9 +57,6 @@ class ClassifierEngine:
         else:
             self.model_accs=self.model
         
-        # TODO: reset optimizer if found to not work
-        #self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.train_config.learning_rate, weight_decay=self.train_config.weight_decay)
-        self.optimizer = torch.optim.Adam(self.model_accs.parameters(), lr=self.train_config.learning_rate, weight_decay=self.train_config.weight_decay)
         self.criterion = nn.CrossEntropyLoss()
         self.softmax = nn.Softmax(dim=1)
 
@@ -127,8 +124,13 @@ class ClassifierEngine:
         self.optimizer.step()       # step params
     
     # ========================================================================
+    def configure_optimizers(self, lr, weight_decay):
+        """
+        Inspired by pytorch lightning approach
+        """
+        self.optimizer = torch.optim.Adam(self.model_accs.parameters(), lr=lr, weight_decay=weight_decay)
 
-    def train(self):
+    def train(self, optimizer):
         """
         Train the model on the training set.
         
