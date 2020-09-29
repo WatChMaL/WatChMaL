@@ -22,7 +22,7 @@ from watchmal.dataset.data_utils import get_data_loader
 from watchmal.utils.logging_utils import CSVData
 
 class ClassifierEngine:
-    def __init__(self, model, gpu_list, dump_path, data_config, task_config):
+    def __init__(self, model, gpu_list, dump_path):
 
         # create the directory for saving the log and dump files
         self.dirpath = dump_path
@@ -62,13 +62,7 @@ class ClassifierEngine:
         self.criterion = nn.CrossEntropyLoss()
         self.softmax = nn.Softmax(dim=1)
 
-        # initialize optimizers and dataloaders
-        if "train" in task_config:
-            self.configure_optimizers(task_config.train.optimizer)
-            self.train_loader = get_data_loader(**data_config, **task_config.train.train_data)
-            self.val_loader = get_data_loader(**data_config, **task_config.train.validation_data)
-        if "evaluate" in task_config:
-            self.test_loader = get_data_loader(**data_config, **task_config.evaluate.data)
+        self.data_loaders = {}
 
         # define the placeholder attributes
         self.data      = None
@@ -94,6 +88,10 @@ class ClassifierEngine:
         Inspired by pytorch lightning approach
         """
         self.optimizer = instantiate(optimizer_config, params=self.model_accs.parameters())
+
+    def configure_data_loaders(self, data_config, loaders_config):
+        for name, loader_config in loaders_config.items():
+            self.data_loaders[name] = get_data_loader(**data_config, **loader_config)
 
     # TODO: restore old forward method
     def forward(self, train=True):
@@ -171,7 +169,7 @@ class ClassifierEngine:
         best_val_loss = 1.0e6
 
         # initialize the iterator over the validation set
-        val_iter = iter(self.val_loader)
+        val_iter = iter(self.data_loaders["validation"])
 
         # global training loop for multiple epochs
         while (floor(epoch) < epochs):
@@ -183,7 +181,7 @@ class ClassifierEngine:
             start_time = time()
 
             # local training loop for batches in a single epoch
-            for i, train_data in enumerate(self.train_loader):
+            for i, train_data in enumerate(self.data_loaders["train"]):
 
                 # run validation on given intervals
                 if self.iteration % val_interval == 0:
@@ -196,7 +194,7 @@ class ClassifierEngine:
                         try:
                             val_data = next(val_iter)
                         except StopIteration:
-                            val_iter = iter(self.val_loader)
+                            val_iter = iter(self.data_loaders["validation"])
 
                         # extract the event data from the input data tuple
                         self.data      = val_data['data'].float()
@@ -246,7 +244,7 @@ class ClassifierEngine:
                 self.backward()
 
                 # update the epoch and iteration
-                epoch          += 1./len(self.train_loader)
+                epoch          += 1./len(self.data_loaders["train"])
                 self.iteration += 1
 
                 # get relevant attributes of result for logging
@@ -300,7 +298,7 @@ class ClassifierEngine:
             loss, accuracy, labels, predictions, softmaxes= [],[],[],[],[]
             
             # Extract the event data and label from the DataLoader iterator
-            for it, val_data in enumerate(self.test_loader):
+            for it, val_data in enumerate(self.data_loaders["test"]):
                 
                 self.data = val_data['data'].float()
                 self.labels = val_data['labels'].long()
@@ -450,7 +448,7 @@ class ClassifierEngine:
 
         self.log        = CSVData(self.dirpath+ "/test_validation_log.csv")
         np_event_path   = self.dirpath + "/test_validation_iteration_"
-        data_iter       = self.test_loader
+        data_iter       = self.data_loaders["test"]
         dump_iterations = max(1, ceil(num_dump_events/test_batch_size))
         
         print("Dump iterations = {0}".format(dump_iterations))

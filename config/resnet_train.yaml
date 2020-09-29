@@ -7,7 +7,7 @@ defaults:
     - engine: classifier
     - tasks/train: train_resnet
     - optimizer@tasks.train.optimizer: adam
-    - sampler@tasks.train.train_data.sampler: subset_random
-    - sampler@tasks.train.validation_data.sampler: subset_sequential
+    - sampler@tasks.train.data_loaders.train.sampler: subset_random
+    - sampler@tasks.train.data_loaders.validation.sampler: subset_sequential
     - tasks/evaluate: test
-    - sampler@tasks.evaluate.data.sampler: subset_sequential
+    - sampler@tasks.evaluate.data_loaders.test.sampler: subset_sequential

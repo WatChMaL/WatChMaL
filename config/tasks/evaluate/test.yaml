@@ -1,4 +1,5 @@
 # @package _group_
-data:
-  split_key: test_idxs
-  batch_size: 512
+data_loaders:
+  test:
+    split_key: test_idxs
+    batch_size: 512

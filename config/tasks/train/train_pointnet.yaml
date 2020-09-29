@@ -5,9 +5,10 @@ report_interval: 50
 val_interval: 100
 num_val_batches: 32
 
-train_data:
-  split_key: train_idxs
-  batch_size: 128
-validation_data:
-  split_key: val_idxs
-  batch_size: 512
+data_loaders:
+  train:
+    split_key: train_idxs
+    batch_size: 128
+  validation:
+    split_key: val_idxs
+    batch_size: 512
