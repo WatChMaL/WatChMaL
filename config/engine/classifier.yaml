@@ -2,5 +2,5 @@
 _target_: watchmal.engine.engine_classifier.ClassifierEngine
 dump_path: './outputs/'
 gpu_list:
-    - 6
-    - 7
+    - 4
+    - 5

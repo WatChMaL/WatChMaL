@@ -343,20 +343,27 @@ class ClassifierEngine:
             
         Returns : None
         """
-
         # Open a file in read-binary mode
         with open(weight_file, 'rb') as f:
             print('Restoring state from', weight_file)
+
             # torch interprets the file, then we can access using string keys
             checkpoint = torch.load(f)
-            # OLD LOADING
+            
             # load network weights
-            self.model.load_state_dict(checkpoint['state_dict'], strict=False)
+            if isinstance(self.model, nn.DataParallel):
+                print("is dataparallel")
+                self.model.module.load_state_dict(checkpoint['state_dict'], strict=False)
+            else:
+                self.model.load_state_dict(checkpoint['state_dict'], strict=False)
+            
             # if optim is provided, load the state of the optim
             if self.optimizer is not None:
                 self.optimizer.load_state_dict(checkpoint['optimizer'])
+            
             # load iteration count
             self.iteration = checkpoint['global_step']
+        
         print('Restoration complete.')
     
     def save_state(self,best=False):
@@ -373,11 +380,13 @@ class ClassifierEngine:
                                      str(self.model._get_name()),
                                      ("BEST" if best else ""),
                                      ".pth")
+        
         # Save model state dict in appropriate from depending on number of gpus
-        #if isinstance(self.model, nn.DataParallel):
-        #    model_dict = self.model.module.state_dict()
-        #else:
-        model_dict = self.model.state_dict()
+        if isinstance(self.model, nn.DataParallel):
+            model_dict = self.model.module.state_dict()
+        else:
+            model_dict = self.model.state_dict()
+        
         # Save parameters
         # 0+1) iteration counter + optimizer state => in case we want to "continue training" later
         # 2) network weight
