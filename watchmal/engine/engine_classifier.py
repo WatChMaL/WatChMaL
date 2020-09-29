@@ -55,9 +55,9 @@ class ClassifierEngine:
         # TODO: remove this logic once reloading reworked
         # Setup the parameters tp save given the model type
         if type(self.model) == DataParallel:
-            self.model_accs=self.model.module
+            self.model_accs = self.model.module
         else:
-            self.model_accs=self.model
+            self.model_accs = self.model
         
         self.criterion = nn.CrossEntropyLoss()
         self.softmax = nn.Softmax(dim=1)
@@ -351,11 +351,7 @@ class ClassifierEngine:
             checkpoint = torch.load(f)
             
             # load network weights
-            if isinstance(self.model, nn.DataParallel):
-                print("is dataparallel")
-                self.model.module.load_state_dict(checkpoint['state_dict'], strict=False)
-            else:
-                self.model.load_state_dict(checkpoint['state_dict'], strict=False)
+            self.model_accs.load_state_dict(checkpoint['state_dict'], strict=False)
             
             # if optim is provided, load the state of the optim
             if self.optimizer is not None:
@@ -382,10 +378,7 @@ class ClassifierEngine:
                                      ".pth")
         
         # Save model state dict in appropriate from depending on number of gpus
-        if isinstance(self.model, nn.DataParallel):
-            model_dict = self.model.module.state_dict()
-        else:
-            model_dict = self.model.state_dict()
+        model_dict = self.model_accs.state_dict()
         
         # Save parameters
         # 0+1) iteration counter + optimizer state => in case we want to "continue training" later
