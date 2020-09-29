@@ -10,16 +10,23 @@ logger = logging.getLogger('train')
 def main(config):
     logger.info(f"Running with the following config:\n{OmegaConf.to_yaml(config)}")
 
+    # Instantiate model and engine
     model = instantiate(config.model)
-
     engine = instantiate(config.engine, model=model)
 
+    # Configure optimizers and data loaders
+    for task, task_config in config.tasks.items():
+        if 'optimizer' in task_config:
+            engine.configure_optimizers(task_config.optimizer)
+        if 'data_loaders' in task_config:
+            engine.configure_data_loaders(config.data, task_config.data_loaders)
+
+    # Reload previous state
     if 'load_state' in config:
         engine.reload(config.load_model)
 
+    # Perform tasks
     for task, task_config in config.tasks.items():
-        engine.configure_optimizers(task_config.optimizer)
-        engine.configure_data_loaders(config.data, task_config.data_loaders)
         getattr(engine, task)(task_config)
 
 
