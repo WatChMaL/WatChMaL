@@ -441,7 +441,7 @@ class ClassifierEngine:
         """
         
         #import torch.multiprocessing
-        torch.multiprocessing.set_sharing_strategy('file_system')
+        #torch.multiprocessing.set_sharing_strategy('file_system')
         # Print start message
         num_dump_events = 3351020 #self.config.num_dump_events
         test_batch_size = 512
