@@ -38,9 +38,11 @@ class ClassifierEngine:
 
             if torch.cuda.is_available():
                 self.device = torch.device(self.devids[0])
+
                 if len(self.devids) > 1:
                     print("Using DataParallel on these devices: {}".format(self.devids))
                     self.model = DataParallel(self.model, device_ids=gpu_list, dim=0)
+                
                 print("CUDA is available")
             else:
                 self.device = torch.device("cpu")
@@ -52,9 +54,8 @@ class ClassifierEngine:
         # send model to device
         self.model.to(self.device)
         
-        # TODO: remove this logic once reloading reworked
         # Setup the parameters tp save given the model type
-        if type(self.model) == DataParallel:
+        if isinstance(self.model, DataParallel):
             self.model_accs = self.model.module
         else:
             self.model_accs = self.model
