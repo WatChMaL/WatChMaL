@@ -18,11 +18,11 @@ import sys
 from sys import stdout
 
 # WatChMaL imports
-from watchmal.dataset.data_module import DataModule
+from watchmal.dataset.data_utils import get_data_loader
 from watchmal.utils.logging_utils import CSVData
 
 class ClassifierEngine:
-    def __init__(self, model, data, gpu_list, dump_path):
+    def __init__(self, model, gpu_list, dump_path, data_config, task_config):
 
         # create the directory for saving the log and dump files
         self.dirpath = dump_path
@@ -30,7 +30,7 @@ class ClassifierEngine:
 
         self.model = model
 
-         # configure the device to be used for model training and inference
+        # configure the device to be used for model training and inference
         if gpu_list is not None:
             print("Requesting GPUs. GPU list : " + str(gpu_list))
             self.devids = ["cuda:{0}".format(x) for x in gpu_list]
@@ -62,10 +62,13 @@ class ClassifierEngine:
         self.criterion = nn.CrossEntropyLoss()
         self.softmax = nn.Softmax(dim=1)
 
-        # initialize dataloaders
-        self.train_loader = data.train_dataloader()
-        self.val_loader = data.val_dataloader()
-        self.test_loader = data.test_dataloader()
+        # initialize optimizers and dataloaders
+        if "train" in task_config:
+            self.configure_optimizers(task_config.train.optimizer)
+            self.train_loader = get_data_loader(**data_config, **task_config.train.train_data)
+            self.val_loader = get_data_loader(**data_config, **task_config.train.validation_data)
+        if "evaluate" in task_config:
+            self.test_loader = get_data_loader(**data_config, **task_config.evaluate.data)
 
         # define the placeholder attributes
         self.data      = None
@@ -91,7 +94,7 @@ class ClassifierEngine:
         Inspired by pytorch lightning approach
         """
         self.optimizer = instantiate(optimizer_config, params=self.model_accs.parameters())
-    
+
     # TODO: restore old forward method
     def forward(self, train=True):
         """

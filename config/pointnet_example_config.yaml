@@ -4,8 +4,10 @@ defaults:
     - model: classifier
     - model/feature_extractor: pointnet
     - model/classification_network: pointnet_fc
-    - optimizer: adam
-    - load_model: '/home/jtindall/new_framework_replication_run/run_4_1_gpu/ClassifierBEST.pth'
     - engine: classifier
-    - train: train_pointnet
-    - test: test_pointnet
+    - tasks/train: train_pointnet
+    - optimizer@tasks.train.optimizer: adam
+    - sampler@tasks.train.train_data.sampler: subset_random
+    - sampler@tasks.train.validation_data.sampler: subset_sequential
+    - tasks/evaluate: test
+    - sampler@tasks.evaluate.data.sampler: subset_sequential

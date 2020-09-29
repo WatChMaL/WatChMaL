@@ -4,7 +4,10 @@ defaults:
     - model: classifier
     - model/feature_extractor: resnet18
     - model/classification_network: resnet_fc
-    - optimizer: adam
     - engine: classifier
-    - train: train_resnet
-    - test: test_resnet
+    - tasks/train: train_resnet
+    - optimizer@tasks.train.optimizer: adam
+    - sampler@tasks.train.train_data.sampler: subset_random
+    - sampler@tasks.train.validation_data.sampler: subset_sequential
+    - tasks/evaluate: test
+    - sampler@tasks.evaluate.data.sampler: subset_sequential

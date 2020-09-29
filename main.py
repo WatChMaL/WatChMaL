@@ -1,34 +1,25 @@
 import logging
 import hydra
 from omegaconf import OmegaConf
-
-#from pytorch_lightning import Trainer
 from hydra.utils import instantiate
 
-from watchmal.dataset.data_module import DataModule
-
 logger = logging.getLogger('train')
+
 
 @hydra.main(config_path='config/', config_name='resnet_example_config')
 def main(config):
     logger.info(f"Running with the following config:\n{OmegaConf.to_yaml(config)}")
 
-    data = DataModule(**config.data)
-
     model = instantiate(config.model)
 
-    engine = instantiate(config.engine, model=model, data=data)
+    engine = instantiate(config.engine, model=model, data_config=config.data, task_config=config.tasks)
 
-    engine.configure_optimizers(optimizer_config=config.optimizer)
-
-    if ('load_model' in config):
+    if 'load_state' in config:
         engine.reload(config.load_model)
 
-    if ('train' in config):
-        engine.train(train_config=config.train)
+    for task, config in config.tasks.items():
+        getattr(engine, task)(config)
 
-    if ('test' in config):
-        engine.evaluate(test_config=config.test)
 
 if __name__ == '__main__':
     # pylint: disable=no-value-for-parameter
