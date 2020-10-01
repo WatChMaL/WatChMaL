@@ -8,7 +8,7 @@ train:
   weight_decay: 0
   
   gpu_list:
-    - 6
+    - 7
   dump_path: './outputs/'
 
 defaults:

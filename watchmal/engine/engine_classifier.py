@@ -33,7 +33,6 @@ class ClassifierEngine:
             print("Requesting GPUs. GPU list : " + str(train_config.gpu_list))
             self.devids = ["cuda:{0}".format(x) for x in train_config.gpu_list]
             print("Main GPU : " + self.devids[0])
-
             if torch.cuda.is_available():
                 self.device = torch.device(self.devids[0])
                 if len(self.devids) > 1:
@@ -114,8 +113,8 @@ class ClassifierEngine:
             softmax          = self.softmax(model_out)
             predicted_labels = torch.argmax(model_out,dim=-1)
             accuracy         = (predicted_labels == self.labels).sum().item() / float(predicted_labels.nelement())
-        
-        return {'loss'             : self.loss.detach().cpu().item(),
+        # TODO: fixed calls to cpu() and detach() in loss
+        return {'loss'             : self.loss.cpu().detach().item(),
                 'predicted_labels' : predicted_labels.cpu().numpy(),
                 'softmax'          : softmax.detach().cpu().numpy(),
                 'accuracy'         : accuracy,
@@ -123,6 +122,8 @@ class ClassifierEngine:
     
     def backward(self):
         self.optimizer.zero_grad()  # reset accumulated gradient
+        # TODO: added contiguous
+        self.loss.contiguous()
         self.loss.backward()        # compute new gradient
         self.optimizer.step()       # step params
     
@@ -222,7 +223,8 @@ class ClassifierEngine:
                                     
                     self.val_log.record(val_metrics)
                     self.val_log.write()
-                    self.val_log.flush()
+                    #TODO: Removed flush
+                    #self.val_log.flush()
 
                     # Save the latest model
                     self.save_state(best=False)
@@ -250,7 +252,8 @@ class ClassifierEngine:
                 # record the metrics for the mini-batch in the log
                 self.train_log.record(train_metrics)
                 self.train_log.write()
-                self.train_log.flush()
+                #TODO: Removed flush
+                #self.train_log.flush()
                 
                 # print the metrics at given intervals
                 if self.iteration % report_interval == 0:
@@ -474,7 +477,8 @@ class ClassifierEngine:
             # Log/Report
             self.log.record(vals)
             self.log.write()
-            self.log.flush()
+            #TODO: Removed flush
+            #self.log.flush()
             
             sys.stdout.write("val_iteration : " + str(iteration) + " val_loss : " + str(res["loss"]) + " val_accuracy : " + str(res["accuracy"]) + "\n")
             
