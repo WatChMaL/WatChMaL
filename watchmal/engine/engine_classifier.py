@@ -3,7 +3,8 @@ import torch
 from torch import optim
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.nn import DataParallel
+#from torch.nn import DataParallel
+from torch.nn.parallel import DistributedDataParallel as DDP
 
 # hydra imports
 from hydra.utils import instantiate
