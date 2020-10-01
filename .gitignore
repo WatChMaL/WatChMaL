@@ -121,6 +121,8 @@ multi_plotting_utils.py
 multi_run_plotting.py
 test_reloading.py
 test_example_config.yaml
+replication_plotting.ipynb
+repeating_classifier_training.py
 
 # editor, os cache directory
 .vscode/
