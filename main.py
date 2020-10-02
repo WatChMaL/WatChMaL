@@ -4,6 +4,7 @@ from omegaconf import OmegaConf
 from hydra.utils import instantiate
 
 import torch
+from torch.nn.parallel import DistributedDataParallel as DDP
 
 logger = logging.getLogger('train')
 
@@ -17,6 +18,9 @@ def main(config):
 
     if (len(config.gpu_list)) > 1:
         print("Using multiprocessing")
+        print("Requesting GPUs. GPU list : " + str(config.gpu_list))
+        devids = ["cuda:{0}".format(x) for x in config.gpu_list]
+        print("Using DistributedDataParallel on these devices: {}".format.devids)
     else:
         print("Only one gpu found")
         gpu = config.gpu_list[0]
@@ -28,7 +32,12 @@ def main_worker_function(gpu, ngpus_per_node, config):
     # Instantiate model and engine
     model = instantiate(config.model)
 
-    engine = instantiate(config.engine, model=model)
+    # configure the device to be used for model training and inference
+    if len(config.gpu_list) > 1:
+        # if more than one gpu given, then we must be using multiprocessing
+        model = DDP(model, device_ids=[gpu], output_device=gpu)
+    
+    engine = instantiate(config.engine, model=model, gpu=gpu)
 
     """
     # Configure optimizers and data loaders

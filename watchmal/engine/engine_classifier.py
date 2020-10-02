@@ -23,7 +23,7 @@ from watchmal.dataset.data_utils import get_data_loader
 from watchmal.utils.logging_utils import CSVData
 
 class ClassifierEngine:
-    def __init__(self, model, gpu_list, dump_path):
+    def __init__(self, model, gpu, dump_path):
 
         # create the directory for saving the log and dump files
         self.dirpath = dump_path
@@ -31,31 +31,14 @@ class ClassifierEngine:
 
         self.model = model
 
-        # configure the device to be used for model training and inference
-        if gpu_list is not None:
-            print("Requesting GPUs. GPU list : " + str(gpu_list))
-            self.devids = ["cuda:{0}".format(x) for x in gpu_list]
-            print("Main GPU : " + self.devids[0])
-            if torch.cuda.is_available():
-                self.device = torch.device(self.devids[0])
+        self.device = torch.device(gpu)
 
-                if len(self.devids) > 1:
-                    print("Using DataParallel on these devices: {}".format(self.devids))
-                    self.model = DataParallel(self.model, device_ids=gpu_list, dim=0)
-                
-                print("CUDA is available")
-            else:
-                self.device = torch.device("cpu")
-                print("CUDA is not available, using CPU")
-        else:
-            print("Using CPU")
-            self.device = torch.device("cpu")
-        
         # send model to device
         self.model.to(self.device)
         
         # Setup the parameters tp save given the model type
-        if isinstance(self.model, DataParallel):
+        #TODO: Fix saving/loading with parallel model
+        if isinstance(self.model, DDP):
             self.model_accs = self.model.module
         else:
             self.model_accs = self.model
