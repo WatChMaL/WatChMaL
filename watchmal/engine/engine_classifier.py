@@ -74,7 +74,9 @@ class ClassifierEngine:
         self.optimizer = instantiate(optimizer_config, params=self.model_accs.parameters())
 
     def configure_data_loaders(self, data_config, loaders_config):
+        print("Configuring dataloaders")
         for name, loader_config in loaders_config.items():
+            print(name)
             self.data_loaders[name] = get_data_loader(**data_config, **loader_config)
 
     # TODO: restore old forward method

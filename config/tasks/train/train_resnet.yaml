@@ -5,6 +5,8 @@ report_interval: 50
 val_interval: 100
 num_val_batches: 32
 
+num_workers: 4
+
 data_loaders:
   train:
     split_key: train_idxs

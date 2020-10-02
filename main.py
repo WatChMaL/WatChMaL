@@ -39,14 +39,17 @@ def main_worker_function(gpu, ngpus_per_node, config):
     
     engine = instantiate(config.engine, model=model, gpu=gpu)
 
-    """
     # Configure optimizers and data loaders
     for task, task_config in config.tasks.items():
-        if 'optimizer' in task_config:
-            engine.configure_optimizers(task_config.optimizer)
+        print(task)
         if 'data_loaders' in task_config:
             engine.configure_data_loaders(config.data, task_config.data_loaders)
+        """
+        if 'optimizer' in task_config:
+            engine.configure_optimizers(task_config.optimizer)
+        """
 
+    """
     # Reload previous state
     if 'load_state' in config:
         engine.reload(config.load_model)
