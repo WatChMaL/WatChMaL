@@ -1,13 +1,17 @@
+# hydra imports
 import logging
 import hydra
 from omegaconf import OmegaConf
 from hydra.utils import instantiate
 
+# torch imports
 import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
 
-logger = logging.getLogger('train')
+# WatChMaL imports
+from watchmal.dataset.data_utils import get_data_loader
 
+logger = logging.getLogger('train')
 
 @hydra.main(config_path='config/', config_name='resnet_train')
 def main(config):
@@ -36,20 +40,24 @@ def main_worker_function(gpu, ngpus_per_node, config):
     if len(config.gpu_list) > 1:
         # if more than one gpu given, then we must be using multiprocessing
         model = DDP(model, device_ids=[gpu], output_device=gpu)
-    
-    engine = instantiate(config.engine, model=model, gpu=gpu)
 
-    # Configure optimizers and data loaders
+    # Configure data loaders
+    data_loaders = {}
     for task, task_config in config.tasks.items():
-        print(task)
         if 'data_loaders' in task_config:
-            engine.configure_data_loaders(config.data, task_config.data_loaders)
-        """
-        if 'optimizer' in task_config:
-            engine.configure_optimizers(task_config.optimizer)
-        """
+            for name, loader_config in task_config.data_loaders.items():
+                data_loaders[name] = get_data_loader(**config.data, **loader_config)
 
-    """
+    # Instantiate the engine
+    engine = instantiate(config.engine, model=model, gpu=gpu, data_loaders=data_loaders)
+
+    # Configure optimizers
+    # TODO: optimizers should be refactored into a dict probably
+    for task, task_config in config.tasks.items():
+        if 'optimizer' in task_config:
+            # TODO: reconsider optimizer instantiation
+            engine.configure_optimizers(task_config.optimizer)
+
     # Reload previous state
     if 'load_state' in config:
         engine.reload(config.load_model)
@@ -57,7 +65,6 @@ def main_worker_function(gpu, ngpus_per_node, config):
     # Perform tasks
     for task, task_config in config.tasks.items():
         getattr(engine, task)(task_config)
-    """
 
 if __name__ == '__main__':
     # pylint: disable=no-value-for-parameter

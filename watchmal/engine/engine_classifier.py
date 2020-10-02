@@ -23,7 +23,7 @@ from watchmal.dataset.data_utils import get_data_loader
 from watchmal.utils.logging_utils import CSVData
 
 class ClassifierEngine:
-    def __init__(self, model, gpu, dump_path):
+    def __init__(self, model, gpu, data_loaders, dump_path):
 
         # create the directory for saving the log and dump files
         self.dirpath = dump_path
@@ -36,17 +36,17 @@ class ClassifierEngine:
         # send model to device
         self.model.to(self.device)
         
-        # Setup the parameters tp save given the model type
+        # Setup the parameters to save given the model type
         #TODO: Fix saving/loading with parallel model
         if isinstance(self.model, DDP):
             self.model_accs = self.model.module
         else:
             self.model_accs = self.model
         
+        self.data_loaders = data_loaders
+
         self.criterion = nn.CrossEntropyLoss()
         self.softmax = nn.Softmax(dim=1)
-
-        self.data_loaders = {}
 
         # define the placeholder attributes
         self.data      = None
@@ -75,9 +75,11 @@ class ClassifierEngine:
 
     def configure_data_loaders(self, data_config, loaders_config):
         print("Configuring dataloaders")
+        """
         for name, loader_config in loaders_config.items():
             print(name)
             self.data_loaders[name] = get_data_loader(**data_config, **loader_config)
+        """
 
     # TODO: restore old forward method
     def forward(self, train=True):
