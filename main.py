@@ -23,13 +23,15 @@ def main(config):
 
     #TODO: is this needed
     #ngpus_per_node = torch.cuda.device_count()
-    ngpus = len(config.gpu_list)
+
+    # TODO: reset this when dataloading debugged
+    ngpus = 1 #len(config.gpu_list)
     
     # TODO: initialize process group env variables
     os.environ['MASTER_ADDR'] = 'localhost'
     os.environ['MASTER_PORT'] = '12355'
 
-    if ngpus > 1:
+    if ngpus >= 1:
         print("Using multiprocessing")
         print("Requesting GPUs. GPU list : " + str(config.gpu_list))
         devids = ["cuda:{0}".format(x) for x in config.gpu_list]
@@ -57,10 +59,11 @@ def main_worker_function(gpu, ngpus_per_node, config):
     model = instantiate(config.model).to(gpu)
 
     # configure the device to be used for model training and inference
-    if ngpus_per_node > 1:
+    if ngpus_per_node >= 1:
         print("Using DistributedDataParallel model")
         # if more than one gpu given, then we must be using multiprocessing
-        model = DDP(model, device_ids=[gpu], output_device=gpu)
+        # TODO: remove find_unused_parameters=True
+        model = DDP(model, device_ids=[gpu], output_device=gpu, find_unused_parameters=True)
 
     # Configure data loaders
     data_loaders = {}
@@ -68,6 +71,14 @@ def main_worker_function(gpu, ngpus_per_node, config):
         if 'data_loaders' in task_config:
             for name, loader_config in task_config.data_loaders.items():
                 data_loaders[name] = get_data_loader(**config.data, **loader_config, gpu=gpu, ngpus=ngpus_per_node)
+
+    """
+    train_loader = data_loaders["train"]
+    print(type(train_loader))
+    iter(train_loader)
+
+    input("Press Enter to continue...")
+    """
 
     # Instantiate the engine
     engine = instantiate(config.engine, model=model, gpu=gpu, data_loaders=data_loaders)

@@ -161,7 +161,7 @@ class ClassifierEngine:
         best_val_loss = 1.0e6
 
         # initialize the iterator over the validation set
-        #val_iter = iter(self.data_loaders["validation"])
+        val_iter = iter(self.data_loaders["validation"])
 
         # global training loop for multiple epochs
         while (floor(epoch) < epochs):
@@ -173,13 +173,9 @@ class ClassifierEngine:
             start_time = time()
             print("Device: ", torch.device)
             train_loader = self.data_loaders["train"]
-            print(type(train_loader))
-            iter(train_loader)
             # local training loop for batches in a single epoch
-            #for i, train_data in enumerate(self.data_loaders["train"]):
-            #    print("test")
-        """
-
+            for i, train_data in enumerate(self.data_loaders["train"]):
+                
                 # run validation on given intervals
                 if self.iteration % val_interval == 0:
                     # set model to eval mode
@@ -265,7 +261,6 @@ class ClassifierEngine:
         
         self.val_log.close()
         self.train_log.close()
-        """
     
     def evaluate(self, test_config):
         """
