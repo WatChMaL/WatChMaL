@@ -41,7 +41,7 @@ def main(config):
         main_worker_function(gpu, ngpus, config)
 
 def main_worker_function(gpu, ngpus_per_node, config):
-    print("Main loop")
+    print("Running main worker on device: {}".format(gpu))
     # TODO: how should this interact with self.device
     torch.cuda.set_device(gpu)
 
@@ -57,7 +57,8 @@ def main_worker_function(gpu, ngpus_per_node, config):
     model = instantiate(config.model).to(gpu)
 
     # configure the device to be used for model training and inference
-    if len(config.gpu_list) > 1:
+    if ngpus_per_node > 1:
+        print("Using DistributedDataParallel model")
         # if more than one gpu given, then we must be using multiprocessing
         model = DDP(model, device_ids=[gpu], output_device=gpu)
 
@@ -66,11 +67,11 @@ def main_worker_function(gpu, ngpus_per_node, config):
     for task, task_config in config.tasks.items():
         if 'data_loaders' in task_config:
             for name, loader_config in task_config.data_loaders.items():
-                data_loaders[name] = get_data_loader(**config.data, **loader_config)
+                data_loaders[name] = get_data_loader(**config.data, **loader_config, gpu=gpu, ngpus=ngpus_per_node)
 
     # Instantiate the engine
     engine = instantiate(config.engine, model=model, gpu=gpu, data_loaders=data_loaders)
-
+    
     # Configure optimizers
     # TODO: optimizers should be refactored into a dict probably
     for task, task_config in config.tasks.items():
@@ -85,6 +86,8 @@ def main_worker_function(gpu, ngpus_per_node, config):
     # Perform tasks
     for task, task_config in config.tasks.items():
         getattr(engine, task)(task_config)
+        # TODO: remove
+        break
 
 if __name__ == '__main__':
     # pylint: disable=no-value-for-parameter

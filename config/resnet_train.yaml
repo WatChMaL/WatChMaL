@@ -1,6 +1,6 @@
 gpu_list:
     - 1
-    - 2
+    - 0
 defaults:
     - data: iwcd_postveto_nomichel
     - data/dataset: iwcd_cnn

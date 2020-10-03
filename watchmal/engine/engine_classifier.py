@@ -22,6 +22,8 @@ from sys import stdout
 from watchmal.dataset.data_utils import get_data_loader
 from watchmal.utils.logging_utils import CSVData
 
+#extraneous testing imports
+
 class ClassifierEngine:
     def __init__(self, model, gpu, data_loaders, dump_path):
 
@@ -34,7 +36,7 @@ class ClassifierEngine:
         self.device = torch.device(gpu)
 
         # send model to device
-        self.model.to(self.device)
+        # self.model.to(self.device)
         
         # Setup the parameters to save given the model type
         #TODO: Fix saving/loading with parallel model
@@ -159,7 +161,7 @@ class ClassifierEngine:
         best_val_loss = 1.0e6
 
         # initialize the iterator over the validation set
-        val_iter = iter(self.data_loaders["validation"])
+        #val_iter = iter(self.data_loaders["validation"])
 
         # global training loop for multiple epochs
         while (floor(epoch) < epochs):
@@ -169,9 +171,14 @@ class ClassifierEngine:
             times = []
 
             start_time = time()
-
+            print("Device: ", torch.device)
+            train_loader = self.data_loaders["train"]
+            print(type(train_loader))
+            iter(train_loader)
             # local training loop for batches in a single epoch
-            for i, train_data in enumerate(self.data_loaders["train"]):
+            #for i, train_data in enumerate(self.data_loaders["train"]):
+            #    print("test")
+        """
 
                 # run validation on given intervals
                 if self.iteration % val_interval == 0:
@@ -180,12 +187,13 @@ class ClassifierEngine:
 
                     val_metrics = {"iteration": self.iteration, "epoch": epoch, "loss": 0., "accuracy": 0., "saved_best": 0}
 
+                    # TODO: restore validation functionality
                     for val_batch in range(num_val_batches):
                         try:
                             val_data = next(val_iter)
                         except StopIteration:
                             val_iter = iter(self.data_loaders["validation"])
-
+                    #for i, val_batch in enumerate(num_val_batches):
                         # extract the event data from the input data tuple
                         self.data      = val_data['data'].float()
                         self.labels    = val_data['labels'].long()
@@ -257,6 +265,7 @@ class ClassifierEngine:
         
         self.val_log.close()
         self.train_log.close()
+        """
     
     def evaluate(self, test_config):
         """
