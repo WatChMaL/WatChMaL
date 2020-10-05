@@ -118,6 +118,8 @@ replication_run_analysis_new_framework.py
 multi_run_plotting.py
 multi_plotting_utils.py
 replication_plotting.ipynb
+replication_plotting_new_framework.ipynb
+replication_plotting_old_framework.ipynb
 repeating_classifier_training.py
 
 # editor, os cache directory
