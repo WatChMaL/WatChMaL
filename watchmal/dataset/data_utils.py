@@ -28,12 +28,9 @@ def get_data_loader(dataset, batch_size, sampler, num_workers=0, split_path=None
     loader = DataLoader(dataset,
                         batch_size=batch_size,
                         # TODO: setting num_workers = 0 seems to work
-                        num_workers=8,
+                        num_workers=1,
                         pin_memory=True,
                         sampler=sampler,
                         drop_last=True)
-    print(gpu)
-    print(ngpus)
-    print(type(dataset))
     return loader
     #DataLoader(dataset, sampler=sampler, batch_size=batch_size, num_workers=num_workers)
