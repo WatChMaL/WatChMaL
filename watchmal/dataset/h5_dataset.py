@@ -8,9 +8,14 @@ from abc import ABC, abstractmethod
 class H5Dataset(Dataset, ABC):
 
     def __init__(self, h5_path, transforms=None):
+        self.h5_path = h5_path
 
-        self.file_descriptor = open(h5_path, 'rb')
-        h5_file = h5py.File(self.file_descriptor, "r")
+    def open_hdf5(self):
+        """
+        # TODO: This is needed for multiprocessing
+        """
+        file_descriptor = open(h5_path, 'rb')
+        self.h5_file = h5py.File(file_descriptor, "r")
 
         # Create a memory map for event_data - loads event data into memory only on __getitem__()
         hdf5_hit_pmt = h5_file["hit_pmt"]
@@ -40,6 +45,9 @@ class H5Dataset(Dataset, ABC):
         return self.labels.shape[0]
 
     def __getitem__(self, item):
+        if not hasattr(self, 'h5_file'):
+            self.open_hdf5()
+        
         start = self.event_hits_index[item]
         stop = self.event_hits_index[item + 1]
         hit_pmts = self.hit_pmt[start:stop].astype(np.int16)
@@ -48,6 +56,7 @@ class H5Dataset(Dataset, ABC):
 
         data = self.get_data(hit_pmts, hit_charges, hit_times)
 
+        # TODO: undo lists
         data_dict = {
             "data": data,
             "labels": self.labels[item],

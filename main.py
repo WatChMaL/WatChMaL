@@ -73,7 +73,7 @@ def main_worker_function(gpu, ngpus_per_node, config):
             for name, loader_config in task_config.data_loaders.items():
                 data_loaders[name] = get_data_loader(**config.data, **loader_config, gpu=gpu, ngpus=ngpus_per_node)
 
-    """
+    
     train_loader = data_loaders["train"]
     print(type(train_loader))
     iter(train_loader)
@@ -100,6 +100,7 @@ def main_worker_function(gpu, ngpus_per_node, config):
         getattr(engine, task)(task_config)
         # TODO: remove
         break
+    """
 
 if __name__ == '__main__':
     # pylint: disable=no-value-for-parameter
