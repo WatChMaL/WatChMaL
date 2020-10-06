@@ -25,12 +25,13 @@ def main(config):
     #ngpus_per_node = torch.cuda.device_count()
 
     # TODO: reset this when dataloading debugged
-    ngpus = 1 #len(config.gpu_list)
+    ngpus = len(config.gpu_list)
     
     # TODO: initialize process group env variables
     os.environ['MASTER_ADDR'] = 'localhost'
     os.environ['MASTER_PORT'] = '12355'
 
+    # TODO: reset >= when dataloading debugged
     if ngpus >= 1:
         print("Using multiprocessing")
         print("Requesting GPUs. GPU list : " + str(config.gpu_list))

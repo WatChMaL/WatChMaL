@@ -16,6 +16,7 @@ def get_data_loader(dataset, batch_size, sampler, num_workers=0, split_path=None
     else:
         sampler = instantiate(sampler)
     # TODO: move DistributedSampler functionality elsewhere
+    # TODO: remove >= 1
     if ngpus >= 1:
         print("Using distributed sampler")
         sampler = DistributedSampler(dataset,
@@ -25,7 +26,7 @@ def get_data_loader(dataset, batch_size, sampler, num_workers=0, split_path=None
     return DataLoader(dataset,
                         batch_size=batch_size,
                         # TODO: setting num_workers = 0 seems to work
-                        num_workers=0,
+                        num_workers=1,
                         pin_memory=True,
                         sampler=sampler,
                         drop_last=True)
