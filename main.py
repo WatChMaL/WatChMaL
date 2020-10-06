@@ -29,10 +29,10 @@ def main(config):
     
     # TODO: initialize process group env variables
     os.environ['MASTER_ADDR'] = 'localhost'
-    os.environ['MASTER_PORT'] = '12355'
+    os.environ['MASTER_PORT'] = '12356'
 
     # TODO: reset >= when dataloading debugged
-    if ngpus >= 1:
+    if ngpus > 1:
         print("Using multiprocessing")
         print("Requesting GPUs. GPU list : " + str(config.gpu_list))
         devids = ["cuda:{0}".format(x) for x in config.gpu_list]
