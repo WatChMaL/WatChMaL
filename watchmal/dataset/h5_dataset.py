@@ -10,6 +10,11 @@ class H5Dataset(Dataset, ABC):
     def __init__(self, h5_path, transforms=None):
         self.h5_path = h5_path
 
+        file_descriptor = open(self.h5_path, 'rb')
+        init_h5_file = h5py.File(file_descriptor, "r")
+
+        self.dataset_length = np.array(init_h5_file["labels"]).shape[0]
+
     def open_hdf5(self):
         """
         # TODO: This is needed for multiprocessing
@@ -42,7 +47,7 @@ class H5Dataset(Dataset, ABC):
         pass
 
     def __len__(self):
-        return self.labels.shape[0]
+        return self.dataset_length
 
     def __getitem__(self, item):
         if not hasattr(self, 'h5_file'):
