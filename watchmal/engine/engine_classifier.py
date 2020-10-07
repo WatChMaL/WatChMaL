@@ -34,6 +34,9 @@ class ClassifierEngine:
         self.model = model
 
         self.device = torch.device(gpu)
+
+        # TODO: fix rank for different gpu inputs
+        self.rank = gpu
         
         # Setup the parameters to save given the model type
         #TODO: Fix saving/loading with parallel model
@@ -216,7 +219,9 @@ class ClassifierEngine:
                     val_metrics["accuracy"] /= num_val_batches
 
                     # save if this is the best model so far
-                    if val_metrics["loss"] < best_val_loss:
+                    # TODO: rework local_rank
+                    print("device: ", self.rank)
+                    if val_metrics["loss"] < best_val_loss and self.rank == 0:
                         self.save_state(best=True)
                         val_metrics["saved_best"] = 1
 

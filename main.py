@@ -57,7 +57,7 @@ def main_worker_function(gpu, ngpus_per_node, config):
     model = instantiate(config.model).to(gpu)
 
     # configure the device to be used for model training and inference
-    if ngpus_per_node >= 1:
+    if ngpus_per_node > 1:
         # if more than one gpu given, then we must be using multiprocessing
         print("Using DistributedDataParallel model")
         # TODO: converting model batch norms to synchbatchnorm
@@ -84,7 +84,7 @@ def main_worker_function(gpu, ngpus_per_node, config):
 
     # Reload previous state
     if 'load_state' in config:
-        engine.reload(config.load_model)
+        engine.restore_state(config.load_state)
 
     # Perform tasks
     for task, task_config in config.tasks.items():
