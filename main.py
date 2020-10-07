@@ -21,9 +21,6 @@ logger = logging.getLogger('train')
 def main(config):
     logger.info(f"Running with the following config:\n{OmegaConf.to_yaml(config)}")
 
-    #TODO: is this needed
-    #ngpus_per_node = torch.cuda.device_count()
-
     # TODO: reset this when dataloading debugged
     ngpus = len(config.gpu_list)
     
@@ -92,8 +89,6 @@ def main_worker_function(gpu, ngpus_per_node, config):
     # Perform tasks
     for task, task_config in config.tasks.items():
         getattr(engine, task)(task_config)
-        # TODO: remove
-        break
 
 if __name__ == '__main__':
     # pylint: disable=no-value-for-parameter

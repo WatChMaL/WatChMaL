@@ -34,15 +34,15 @@ class ClassifierEngine:
         self.model = model
 
         self.device = torch.device(gpu)
-
-        # send model to device
-        # self.model.to(self.device)
         
         # Setup the parameters to save given the model type
         #TODO: Fix saving/loading with parallel model
+        #TODO: check if is_distributed is sensible
         if isinstance(self.model, DDP):
+            self.is_distributed = True
             self.model_accs = self.model.module
         else:
+            self.is_distributed = False
             self.model_accs = self.model
         
         self.data_loaders = data_loaders
@@ -165,14 +165,19 @@ class ClassifierEngine:
 
         # global training loop for multiple epochs
         while (floor(epoch) < epochs):
-
-            print('Epoch',floor(epoch),
-                  'Starting @', strftime("%Y-%m-%d %H:%M:%S", localtime()))
+            
+            print('Epoch',floor(epoch), 'Starting @', strftime("%Y-%m-%d %H:%M:%S", localtime()))
             times = []
 
             start_time = time()
             print("Device: ", torch.device)
             train_loader = self.data_loaders["train"]
+
+            # TODO: kind of ugly control flow for distributed behaviour
+            if self.is_distributed:
+                # TODO: slightly ugly fix for setting sampler epoch
+                train_loader.sampler.set_epoch(floor(epoch))
+
             # local training loop for batches in a single epoch
             for i, train_data in enumerate(self.data_loaders["train"]):
                 
@@ -188,8 +193,9 @@ class ClassifierEngine:
                         try:
                             val_data = next(val_iter)
                         except StopIteration:
+                            # TODO: may need to call set_epoch on val_loader here
                             val_iter = iter(self.data_loaders["validation"])
-                    #for i, val_batch in enumerate(num_val_batches):
+                        
                         # extract the event data from the input data tuple
                         self.data      = val_data['data'].float()
                         self.labels    = val_data['labels'].long()
