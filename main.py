@@ -61,8 +61,10 @@ def main_worker_function(gpu, ngpus_per_node, config):
 
     # configure the device to be used for model training and inference
     if ngpus_per_node >= 1:
-        print("Using DistributedDataParallel model")
         # if more than one gpu given, then we must be using multiprocessing
+        print("Using DistributedDataParallel model")
+        # TODO: converting model batch norms to synchbatchnorm
+        model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
         # TODO: remove find_unused_parameters=True
         model = DDP(model, device_ids=[gpu], output_device=gpu, find_unused_parameters=True)
 
