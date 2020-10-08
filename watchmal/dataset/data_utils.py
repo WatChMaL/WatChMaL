@@ -21,4 +21,6 @@ def get_data_loader(dataset, batch_size, sampler, num_workers, split_path=None, 
         sampler = DistributedSampler(dataset,
                                         num_replicas=ngpus,
                                         rank=gpu)
+        #TODO: now have to update batch size based on number of gpus in use
+        batch_size = int(batch_size/ngpus)
     return DataLoader(dataset, sampler=sampler, batch_size=batch_size, num_workers=num_workers)

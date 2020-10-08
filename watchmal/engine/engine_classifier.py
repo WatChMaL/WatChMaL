@@ -141,7 +141,6 @@ class ClassifierEngine:
             
         Returns : None
         """
-        print("Training...")
 
         # initialize training params
         epochs          = train_config.epochs
@@ -150,7 +149,9 @@ class ClassifierEngine:
         num_val_batches = train_config.num_val_batches
 
         # set the iterations at which to dump the events and their metrics
-        print(f"Validation Interval: {val_interval}")
+        if self.rank == 0:
+            print("Training...")
+            print(f"Validation Interval: {val_interval}")
 
         # set model to training mode
         self.model.train()
@@ -168,12 +169,13 @@ class ClassifierEngine:
 
         # global training loop for multiple epochs
         while (floor(epoch) < epochs):
+            if self.rank == 0:
+                print('Epoch',floor(epoch), 'Starting @', strftime("%Y-%m-%d %H:%M:%S", localtime()))
             
-            print('Epoch',floor(epoch), 'Starting @', strftime("%Y-%m-%d %H:%M:%S", localtime()))
             times = []
 
             start_time = time()
-            print("Device: ", torch.device)
+
             train_loader = self.data_loaders["train"]
 
             # TODO: kind of ugly control flow for distributed behaviour
@@ -185,7 +187,8 @@ class ClassifierEngine:
             for i, train_data in enumerate(self.data_loaders["train"]):
                 
                 # run validation on given intervals
-                if self.iteration % val_interval == 0:
+                # TODO: verify that validation should only run on rank 0
+                if self.rank == 0 and self.iteration % val_interval == 0:
                     # set model to eval mode
                     self.model.eval()
 
@@ -220,20 +223,20 @@ class ClassifierEngine:
 
                     # save if this is the best model so far
                     # TODO: rework local_rank
-                    if val_metrics["loss"] < best_val_loss and self.rank == 0:
+                    if val_metrics["loss"] < best_val_loss:
+                        print('best validation loss so far!: {}'.format(best_val_loss))
                         self.save_state(best=True)
                         val_metrics["saved_best"] = 1
 
                         best_val_loss = val_metrics["loss"]
-                        print('best validation loss so far!: {}'.format(best_val_loss))
+
+                    # Save the latest model
+                    self.save_state(best=False)
                                     
                     self.val_log.record(val_metrics)
                     self.val_log.write()
                     #TODO: Removed flush
                     #self.val_log.flush()
-
-                    # Save the latest model
-                    self.save_state(best=False)
                 
                 # Train on batch
                 self.data      = train_data['data'].float()
@@ -262,7 +265,7 @@ class ClassifierEngine:
                 #self.train_log.flush()
                 
                 # print the metrics at given intervals
-                if self.iteration % report_interval == 0:
+                if self.rank == 0 and self.iteration % report_interval == 0:
                     print("... Iteration %d ... Epoch %1.2f ... Training Loss %1.3f ... Training Accuracy %1.3f" %
                           (self.iteration, epoch, res["loss"], res["accuracy"]))
                 
