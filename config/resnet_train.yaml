@@ -1,6 +1,6 @@
 gpu_list:
     - 0
-load_state: '/home/jtindall/WatChMaL/outputs/2020-10-07/16-14-22/outputs/DistributedDataParallelBEST.pth'
+    - 1
 defaults:
     - data: iwcd_postveto_nomichel
     - data/dataset: iwcd_cnn
@@ -10,7 +10,7 @@ defaults:
     - engine: classifier
     - tasks/train: train_resnet
     - optimizer@tasks.train.optimizer: adam
-    - sampler@tasks.train.data_loaders.train.sampler: subset_random
+    - sampler@tasks.train.data_loaders.train.sampler: subset_sequential
     - sampler@tasks.train.data_loaders.validation.sampler: subset_sequential
     - tasks/evaluate: test
     - sampler@tasks.evaluate.data_loaders.test.sampler: subset_sequential

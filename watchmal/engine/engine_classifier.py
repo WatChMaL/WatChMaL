@@ -103,6 +103,10 @@ class ClassifierEngine:
             self.data = self.data.to(self.device)
             self.labels = self.labels.to(self.device)
 
+            #TODO: remove debugging
+            print("Rank: ", self.rank)
+            print("labels: ", self.labels[0:5])
+
             model_out = self.model(self.data)
 
             self.loss = self.criterion(model_out, self.labels)
@@ -177,9 +181,9 @@ class ClassifierEngine:
             train_loader = self.data_loaders["train"]
 
             # TODO: kind of ugly control flow for distributed behaviour
-            if self.is_distributed:
+            #if self.is_distributed:
                 # TODO: slightly ugly fix for setting sampler epoch
-                train_loader.sampler.set_epoch(floor(epoch))
+                #train_loader.sampler.set_epoch(floor(epoch))
 
             # local training loop for batches in a single epoch
             for i, train_data in enumerate(self.data_loaders["train"]):
