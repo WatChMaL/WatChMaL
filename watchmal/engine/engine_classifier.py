@@ -26,10 +26,8 @@ from watchmal.utils.logging_utils import CSVData
 
 class ClassifierEngine:
     def __init__(self, model, rank, gpu, data_loaders, dump_path):
-
         # create the directory for saving the log and dump files
         self.dirpath = dump_path
-        print("Dump path: ", self.dirpath)
 
         self.rank = rank
 
@@ -61,12 +59,6 @@ class ClassifierEngine:
         self.rootfiles = None
         self.angles    = None
         self.event_ids = None
-
-        try:
-            os.stat(self.dirpath)
-        except:
-            print("Creating a directory for run dump at : {}".format(self.dirpath))
-            os.makedirs(self.dirpath, exist_ok=True)
         
         # logging attributes
         self.train_log = CSVData(self.dirpath + "log_train_{}.csv".format(self.rank))

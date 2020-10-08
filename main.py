@@ -28,6 +28,15 @@ def main(config):
     os.environ['MASTER_ADDR'] = 'localhost'
     os.environ['MASTER_PORT'] = '12356'
 
+    # create run directory
+    try:
+        os.stat(config.dump_path)
+    except:
+        print("Creating a directory for run dump at : {}".format(config.dump_path))
+        os.makedirs(config.dump_path)
+    
+    print("Dump path: ", config.dump_path)
+        
     # TODO: reset >= when dataloading debugged
     if ngpus > 1:
         print("Using multiprocessing")
@@ -76,7 +85,7 @@ def main_worker_function(rank, ngpus_per_node, config):
                 data_loaders[name] = get_data_loader(**config.data, **loader_config, rank=rank, ngpus=ngpus_per_node)
 
     # Instantiate the engine
-    engine = instantiate(config.engine, model=model, rank=rank, gpu=gpu, data_loaders=data_loaders)
+    engine = instantiate(config.engine, model=model, rank=rank, gpu=gpu, data_loaders=data_loaders, dump_path=config.dump_path)
     
     # Configure optimizers
     # TODO: optimizers should be refactored into a dict probably

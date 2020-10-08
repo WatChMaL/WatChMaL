@@ -17,10 +17,7 @@ def get_data_loader(dataset, batch_size, sampler, num_workers, split_path=None, 
         sampler = instantiate(sampler)
     # TODO: move DistributedSampler functionality elsewhere
     if ngpus > 1:
-        print("Using distributed sampler")
-        sampler = DistributedSampler(dataset)#,
-                                        #num_replicas=ngpus,
-                                        #rank=rank)
+        sampler = DistributedSampler(dataset)
         #TODO: now have to update batch size based on number of gpus in use
         batch_size = int(batch_size/ngpus)
     return DataLoader(dataset, sampler=sampler, batch_size=batch_size, num_workers=num_workers)
