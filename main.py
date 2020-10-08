@@ -100,7 +100,8 @@ def main_worker_function(rank, ngpus_per_node, config):
 
     # Perform tasks
     for task, task_config in config.tasks.items():
-        getattr(engine, task)(task_config)
+        if task == 'evaluate':
+            getattr(engine, task)(task_config)
 
 if __name__ == '__main__':
     # pylint: disable=no-value-for-parameter
