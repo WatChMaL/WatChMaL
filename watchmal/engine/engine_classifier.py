@@ -25,18 +25,18 @@ from watchmal.utils.logging_utils import CSVData
 #extraneous testing imports
 
 class ClassifierEngine:
-    def __init__(self, model, gpu, data_loaders, dump_path):
+    def __init__(self, model, rank, gpu, data_loaders, dump_path):
 
         # create the directory for saving the log and dump files
         self.dirpath = dump_path
         print("Dump path: ", self.dirpath)
+        
+        self.rank = rank
 
         self.model = model
 
         self.device = torch.device(gpu)
 
-        # TODO: fix rank for different gpu inputs
-        self.rank = gpu
         
         # Setup the parameters to save given the model type
         #TODO: Fix saving/loading with parallel model
@@ -70,7 +70,8 @@ class ClassifierEngine:
         
         # logging attributes
         self.train_log = CSVData(self.dirpath + "log_train.csv")
-        self.val_log = CSVData(self.dirpath + "log_val.csv")
+        if self.rank == 0:
+            self.val_log = CSVData(self.dirpath + "log_val.csv")
     
     def configure_optimizers(self, optimizer_config):
         """

@@ -37,11 +37,14 @@ def main(config):
         mp.spawn(main_worker_function, nprocs=ngpus, args=(ngpus, config))
     else:
         print("Only one gpu found")
-        gpu = config.gpu_list[0]
-        main_worker_function(gpu, ngpus, config)
+        main_worker_function(0, ngpus, config)
 
-def main_worker_function(gpu, ngpus_per_node, config):
+def main_worker_function(rank, ngpus_per_node, config):
+    # infer rank from gpu and ngpus, rank is position in gpu list
+    gpu = config.gpu_list[rank]
+
     print("Running main worker on device: {}".format(gpu))
+
     # TODO: how should this interact with self.device
     torch.cuda.set_device(gpu)
 
@@ -50,7 +53,7 @@ def main_worker_function(gpu, ngpus_per_node, config):
         'nccl',
         init_method='env://',
         world_size=world_size,
-        rank=gpu,
+        rank=rank,
     )
 
     # Instantiate model and engine
@@ -63,17 +66,17 @@ def main_worker_function(gpu, ngpus_per_node, config):
         # TODO: converting model batch norms to synchbatchnorm
         model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
         # TODO: remove find_unused_parameters=True
-        model = DDP(model, device_ids=[gpu], output_device=gpu, find_unused_parameters=True)
+        model = DDP(model, device_ids=[gpu], find_unused_parameters=True)
 
     # Configure data loaders
     data_loaders = {}
     for task, task_config in config.tasks.items():
         if 'data_loaders' in task_config:
             for name, loader_config in task_config.data_loaders.items():
-                data_loaders[name] = get_data_loader(**config.data, **loader_config, gpu=gpu, ngpus=ngpus_per_node)
+                data_loaders[name] = get_data_loader(**config.data, **loader_config, rank=rank, ngpus=ngpus_per_node)
 
     # Instantiate the engine
-    engine = instantiate(config.engine, model=model, gpu=gpu, data_loaders=data_loaders)
+    engine = instantiate(config.engine, model=model, rank=rank, gpu=gpu, data_loaders=data_loaders)
     
     # Configure optimizers
     # TODO: optimizers should be refactored into a dict probably

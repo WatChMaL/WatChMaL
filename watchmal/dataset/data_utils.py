@@ -8,7 +8,7 @@ def subset_sequential_sampler(indices):
     return indices
 
 # TODO: remove gpu args
-def get_data_loader(dataset, batch_size, sampler, num_workers, split_path=None, split_key=None, transforms=None, gpu=None, ngpus=1):
+def get_data_loader(dataset, batch_size, sampler, num_workers, split_path=None, split_key=None, transforms=None, rank=None, ngpus=1):
     dataset = instantiate(dataset, transforms=transforms)
     if split_path is not None and split_key is not None:
         split_indices = np.load(split_path, allow_pickle=True)[split_key]
@@ -18,9 +18,9 @@ def get_data_loader(dataset, batch_size, sampler, num_workers, split_path=None, 
     # TODO: move DistributedSampler functionality elsewhere
     if ngpus > 1:
         print("Using distributed sampler")
-        sampler = DistributedSampler(dataset,
-                                        num_replicas=ngpus,
-                                        rank=gpu)
+        sampler = DistributedSampler(dataset)#,
+                                        #num_replicas=ngpus,
+                                        #rank=rank)
         #TODO: now have to update batch size based on number of gpus in use
         batch_size = int(batch_size/ngpus)
     return DataLoader(dataset, sampler=sampler, batch_size=batch_size, num_workers=num_workers)
