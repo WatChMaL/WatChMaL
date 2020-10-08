@@ -30,7 +30,7 @@ class ClassifierEngine:
         # create the directory for saving the log and dump files
         self.dirpath = dump_path
         print("Dump path: ", self.dirpath)
-        
+
         self.rank = rank
 
         self.model = model
@@ -69,7 +69,8 @@ class ClassifierEngine:
             os.makedirs(self.dirpath, exist_ok=True)
         
         # logging attributes
-        self.train_log = CSVData(self.dirpath + "log_train.csv")
+        self.train_log = CSVData(self.dirpath + "log_train_{}.csv".format(self.rank))
+
         if self.rank == 0:
             self.val_log = CSVData(self.dirpath + "log_val.csv")
     
@@ -151,8 +152,7 @@ class ClassifierEngine:
 
         # set the iterations at which to dump the events and their metrics
         if self.rank == 0:
-            print("Training...")
-            print(f"Validation Interval: {val_interval}")
+            print(f"Training... Validation Interval: {val_interval}")
 
         # set model to training mode
         self.model.train()
@@ -257,7 +257,7 @@ class ClassifierEngine:
                 self.iteration += 1
 
                 # get relevant attributes of result for logging
-                train_metrics = {"iteration": self.iteration, "epoch": epoch, "loss": res["loss"], "accuracy": res["accuracy"]}
+                train_metrics = {"device": self.rank, "iteration": self.iteration, "epoch": epoch, "loss": res["loss"], "accuracy": res["accuracy"]}
                 
                 # record the metrics for the mini-batch in the log
                 self.train_log.record(train_metrics)
