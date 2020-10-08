@@ -16,11 +16,9 @@ def get_data_loader(dataset, batch_size, sampler, num_workers, split_path=None, 
     else:
         sampler = instantiate(sampler)
     # TODO: move DistributedSampler functionality elsewhere
-    """
     if ngpus > 1:
         print("Using distributed sampler")
         sampler = DistributedSampler(dataset,
                                         num_replicas=ngpus,
                                         rank=gpu)
-    """
     return DataLoader(dataset, sampler=sampler, batch_size=batch_size, num_workers=num_workers)
