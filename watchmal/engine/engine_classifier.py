@@ -140,6 +140,7 @@ class ClassifierEngine:
         report_interval = train_config.report_interval
         val_interval    = train_config.val_interval
         num_val_batches = train_config.num_val_batches
+        checkpointing   = train_config.checkpointing
 
         # set the iterations at which to dump the events and their metrics
         if self.rank == 0:
@@ -223,7 +224,8 @@ class ClassifierEngine:
                         best_val_loss = val_metrics["loss"]
 
                     # Save the latest model
-                    self.save_state(best=False)
+                    if checkpointing:
+                        self.save_state(best=False)
                                     
                     self.val_log.record(val_metrics)
                     self.val_log.write()
