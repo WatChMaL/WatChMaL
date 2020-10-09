@@ -38,7 +38,7 @@ def main(config):
     print("Dump path: ", config.dump_path)
         
     # TODO: reset >= when dataloading debugged
-    if ngpus >= 1:
+    if ngpus > 1:
         print("Using multiprocessing")
         print("Requesting GPUs. GPU list : " + str(config.gpu_list))
         devids = ["cuda:{0}".format(x) for x in config.gpu_list]
@@ -100,8 +100,8 @@ def main_worker_function(rank, ngpus_per_node, config):
 
     # Perform tasks
     for task, task_config in config.tasks.items():
-        if task == 'evaluate':
-            getattr(engine, task)(task_config)
+        #if task == 'evaluate':
+        getattr(engine, task)(task_config)
 
 if __name__ == '__main__':
     # pylint: disable=no-value-for-parameter
