@@ -123,6 +123,7 @@ test_reloading.py
 test_example_config.yaml
 replication_plotting.ipynb
 repeating_classifier_training.py
+samplers.py
 
 # editor, os cache directory
 .vscode/
