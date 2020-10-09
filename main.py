@@ -73,7 +73,7 @@ def main_worker_function(rank, ngpus_per_node, config):
         # if more than one gpu given, then we must be using multiprocessing
         print("Using DistributedDataParallel model")
         # TODO: converting model batch norms to synchbatchnorm
-        model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
+        #model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
         # TODO: remove find_unused_parameters=True
         model = DDP(model, device_ids=[gpu], find_unused_parameters=True)
 

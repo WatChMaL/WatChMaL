@@ -103,9 +103,11 @@ class ClassifierEngine:
             softmax          = self.softmax(model_out)
             predicted_labels = torch.argmax(model_out,dim=-1)
             accuracy         = (predicted_labels == self.labels).sum().item() / float(predicted_labels.nelement())
+            
+
         # TODO: fixed calls to cpu() and detach() in loss
         return {'loss'             : self.loss.cpu().detach().item(),
-                'predicted_labels' : predicted_labels.cpu().numpy(),
+                'predicted_labels' : predicted_labels.detach().cpu().numpy(),
                 'softmax'          : softmax.detach().cpu().numpy(),
                 'accuracy'         : accuracy,
                 'raw_pred_labels'  : model_out}
@@ -113,7 +115,7 @@ class ClassifierEngine:
     def backward(self):
         self.optimizer.zero_grad()  # reset accumulated gradient
         # TODO: added contiguous
-        self.loss.contiguous()
+        #self.loss.contiguous()
         self.loss.backward()        # compute new gradient
         self.optimizer.step()       # step params
     
@@ -207,6 +209,7 @@ class ClassifierEngine:
                         val_metrics["loss"] += val_res["loss"]
                         val_metrics["accuracy"] += val_res["accuracy"]
                     
+                    
                     # return model to training mode
                     self.model.train()
 
@@ -262,7 +265,6 @@ class ClassifierEngine:
                 if self.rank == 0 and self.iteration % report_interval == 0:
                     print("... Iteration %d ... Epoch %1.2f ... Training Loss %1.3f ... Training Accuracy %1.3f" %
                           (self.iteration, epoch, res["loss"], res["accuracy"]))
-                
                 if epoch >= epochs:
                     break
         self.train_log.close()
