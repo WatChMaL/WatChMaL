@@ -23,6 +23,8 @@ def main(config):
 
     # TODO: reset this when dataloading debugged
     ngpus = len(config.gpu_list)
+
+    is_distributed = ngpus >= 1
     
     # TODO: initialize process group env variables
     os.environ['MASTER_ADDR'] = 'localhost'
@@ -38,21 +40,20 @@ def main(config):
     print("Dump path: ", config.dump_path)
         
     # TODO: reset >= when dataloading debugged
-    if ngpus > 1:
-        print("Using multiprocessing")
-        print("Requesting GPUs. GPU list : " + str(config.gpu_list))
+    if is_distributed:
+        print("Using multiprocessing...")
         devids = ["cuda:{0}".format(x) for x in config.gpu_list]
         print("Using DistributedDataParallel on these devices: {}".format(devids))
-        mp.spawn(main_worker_function, nprocs=ngpus, args=(ngpus, config))
+        mp.spawn(main_worker_function, nprocs=ngpus, args=(ngpus, is_distributed, config))
     else:
         print("Only one gpu found")
-        main_worker_function(0, ngpus, config)
+        main_worker_function(0, ngpus, is_distributed, config)
 
-def main_worker_function(rank, ngpus_per_node, config):
+def main_worker_function(rank, ngpus_per_node, is_distributed, config):
     # infer rank from gpu and ngpus, rank is position in gpu list
     gpu = config.gpu_list[rank]
 
-    print("Running main worker on device: {}".format(gpu))
+    print("Running main worker function on device: {}".format(gpu))
 
     # TODO: how should this interact with self.device
     torch.cuda.set_device(gpu)
@@ -69,11 +70,9 @@ def main_worker_function(rank, ngpus_per_node, config):
     model = instantiate(config.model).to(gpu)
 
     # configure the device to be used for model training and inference
-    if ngpus_per_node > 1:
-        # if more than one gpu given, then we must be using multiprocessing
-        print("Using DistributedDataParallel model")
+    if is_distributed:
         # TODO: converting model batch norms to synchbatchnorm
-        #model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
+        model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
         # TODO: remove find_unused_parameters=True
         model = DDP(model, device_ids=[gpu], find_unused_parameters=True)
 
@@ -82,7 +81,7 @@ def main_worker_function(rank, ngpus_per_node, config):
     for task, task_config in config.tasks.items():
         if 'data_loaders' in task_config:
             for name, loader_config in task_config.data_loaders.items():
-                data_loaders[name] = get_data_loader(**config.data, **loader_config, rank=rank, ngpus=ngpus_per_node)
+                data_loaders[name] = get_data_loader(**config.data, **loader_config, is_distributed=is_distributed)
 
     # Instantiate the engine
     engine = instantiate(config.engine, model=model, rank=rank, gpu=gpu, data_loaders=data_loaders, dump_path=config.dump_path)
@@ -100,8 +99,8 @@ def main_worker_function(rank, ngpus_per_node, config):
 
     # Perform tasks
     for task, task_config in config.tasks.items():
-        #if task == 'evaluate':
-        getattr(engine, task)(task_config)
+        if task == 'evaluate':
+            getattr(engine, task)(task_config)
 
 if __name__ == '__main__':
     # pylint: disable=no-value-for-parameter

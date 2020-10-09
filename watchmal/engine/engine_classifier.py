@@ -96,8 +96,6 @@ class ClassifierEngine:
             self.data = self.data.to(self.device)
             self.labels = self.labels.to(self.device)
 
-            print(self.labels[0:20])
-
             model_out = self.model(self.data)
 
             self.loss = self.criterion(model_out, self.labels)
@@ -358,7 +356,7 @@ class ClassifierEngine:
             checkpoint = torch.load(f)
             
             # load network weights
-            self.model_accs.load_state_dict(checkpoint['state_dict'], strict=False)
+            self.model_accs.load_state_dict(checkpoint['state_dict'])
             
             # if optim is provided, load the state of the optim
             if self.optimizer is not None:

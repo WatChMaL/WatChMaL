@@ -6,7 +6,7 @@ import numpy as np
 from watchmal.dataset.samplers import DistributedSamplerWrapper
 
 # TODO: remove gpu args
-def get_data_loader(dataset, batch_size, sampler, num_workers, split_path=None, split_key=None, transforms=None, rank=None, ngpus=1):
+def get_data_loader(dataset, batch_size, sampler, num_workers, is_distributed, split_path=None, split_key=None, transforms=None):
     dataset = instantiate(dataset, transforms=transforms)
     
     if split_path is not None and split_key is not None:
@@ -16,7 +16,7 @@ def get_data_loader(dataset, batch_size, sampler, num_workers, split_path=None, 
         sampler = instantiate(sampler)
     
     # TODO: move DistributedSampler functionality elsewhere
-    if ngpus > 1:
+    if is_distributed:
         sampler = DistributedSamplerWrapper(sampler=sampler)
     
     return DataLoader(dataset, sampler=sampler, batch_size=batch_size, num_workers=num_workers)
