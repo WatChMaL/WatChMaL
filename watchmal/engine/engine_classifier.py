@@ -261,8 +261,10 @@ class ClassifierEngine:
                 if self.rank == 0 and self.iteration % report_interval == 0:
                     print("... Iteration %d ... Epoch %1.2f ... Training Loss %1.3f ... Training Accuracy %1.3f" %
                           (self.iteration, epoch, res["loss"], res["accuracy"]))
+                
                 if epoch >= epochs:
                     break
+        
         self.train_log.close()
         if self.rank == 0:
             self.val_log.close()
@@ -304,7 +306,6 @@ class ClassifierEngine:
                 self.data = val_data['data'].float()
                 self.labels = val_data['labels'].long()
 
-                """
                 # Run the forward procedure and output the result
                 result = self.forward(False)
 
@@ -313,44 +314,62 @@ class ClassifierEngine:
                 
                 # Copy the tensors back to the CPU
                 self.labels = self.labels.to("cpu")
-                """
                 
                 # Add the local result to the final result
                 labels.extend(self.labels)
-                """
+
                 predictions.extend(result['predicted_labels'])
                 softmaxes.extend(result["softmax"])
 
                 print("val_iteration : " + str(it) + " val_loss : " + str(result["loss"]) + " val_accuracy : " + str(result["accuracy"]))
-                """
+
                 val_iterations += 1
                 print("val_iteration : " + str(it))
-                # TODO: remove to run full validation loop
-                #break
+                # TODO: remove when debugging finished
+                break
         
-        print(val_iterations)
-        labels_array = np.array(labels)
+        # convert arrays to numpy
+        local_val_metrics = torch.tensor([val_loss, val_acc, val_iterations]).to(self.device)
+        local_labels = torch.tensor(np.array(labels)).to(self.device)
+        local_predictions = torch.tensor(np.array(predictions)).to(self.device)
+        local_softmaxes = torch.tensor(np.array(softmaxes)).to(self.device)
 
-        test_tensor = torch.tensor(labels_array).to(self.device)
-        outputs = [torch.zeros_like(test_tensor).to(self.device) for i in range(3)]
+        if self.is_distributed:
+            ngpus = torch.distributed.get_world_size()
 
-        torch.distributed.all_gather(outputs, test_tensor)
+            # initialize all distributed outputs
+            # TODO: this assumes that all processes return arrays of the same shape - not sure if this is fair
+            all_val_metrics = [torch.zeros_like(local_val_metrics).to(self.device) for i in range(ngpus)]
+            all_labels = [torch.zeros_like(local_labels).to(self.device) for i in range(ngpus)]
+            all_predictions = [torch.zeros_like(local_predictions).to(self.device) for i in range(ngpus)]
+            all_softmaxes = [torch.zeros_like(local_softmaxes).to(self.device) for i in range(ngpus)]
+
+            # add data to distributed outputs
+            torch.distributed.all_gather(all_val_metrics, local_val_metrics)
+            torch.distributed.all_gather(all_labels, local_labels)
+            torch.distributed.all_gather(all_predictions, local_predictions)
+            torch.distributed.all_gather(all_softmaxes, local_softmaxes)
 
         if self.rank == 0:
-            print(outputs)
 
+            labels = np.array(torch.cat(all_labels).cpu())
+            predictions = np.array(torch.cat(all_labels).cpu())
+            softmaxes = np.array(torch.cat(all_labels).cpu())
 
-        print("\nTotal val loss : ", val_loss,
-            "\nTotal val acc : ", val_acc,
-            "\nAvg val loss : ", val_loss/val_iterations,
-            "\nAvg val acc : ", val_acc/val_iterations)
+            np.save(self.dirpath + "labels.npy", labels)
+            np.save(self.dirpath + "predictions.npy", np.array(predictions))
+            np.save(self.dirpath + "softmax.npy", np.array(softmaxes))
+
+            val_metrics = np.array(torch.stack(all_val_metrics).cpu())
+            print(val_metrics)
+
+            val_loss = np.sum(val_metrics[:, 0])
+            val_acc = np.sum(val_metrics[:, 1])
+            val_iterations = np.sum(val_metrics[:, 2])
+
+            print("\nAvg val loss : ", val_loss/val_iterations,
+                "\nAvg val acc : ", val_acc/val_iterations)
         
-        np.save(self.dirpath + "labels.npy", np.array(labels))
-        """
-        np.save(self.dirpath + "predictions.npy", np.array(predictions))
-        np.save(self.dirpath + "softmax.npy", np.array(softmaxes))
-        """
-    
     # ========================================================================
 
     def restore_state(self, weight_file):
