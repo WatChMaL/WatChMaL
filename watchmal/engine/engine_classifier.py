@@ -330,6 +330,7 @@ class ClassifierEngine:
         
         # convert arrays to numpy
         local_val_metrics = torch.tensor([val_loss, val_acc, val_iterations]).to(self.device)
+
         local_labels = torch.tensor(np.array(labels)).to(self.device)
         local_predictions = torch.tensor(np.array(predictions)).to(self.device)
         local_softmaxes = torch.tensor(np.array(softmaxes)).to(self.device)
@@ -338,11 +339,11 @@ class ClassifierEngine:
             ngpus = torch.distributed.get_world_size()
 
             # initialize all distributed outputs
-            # TODO: this assumes that all processes return arrays of the same shape - not sure if this is fair
+            # TODO: this assumes that all processes return arrays of the same shape - not sure if this is a fair assumption
             all_val_metrics = [torch.zeros_like(local_val_metrics).to(self.device) for i in range(ngpus)]
-            all_labels = [torch.zeros_like(local_labels).to(self.device) for i in range(ngpus)]
+            all_labels      = [torch.zeros_like(local_labels).to(self.device) for i in range(ngpus)]
             all_predictions = [torch.zeros_like(local_predictions).to(self.device) for i in range(ngpus)]
-            all_softmaxes = [torch.zeros_like(local_softmaxes).to(self.device) for i in range(ngpus)]
+            all_softmaxes   = [torch.zeros_like(local_softmaxes).to(self.device) for i in range(ngpus)]
 
             # add data to distributed outputs
             torch.distributed.all_gather(all_val_metrics, local_val_metrics)
@@ -350,18 +351,23 @@ class ClassifierEngine:
             torch.distributed.all_gather(all_predictions, local_predictions)
             torch.distributed.all_gather(all_softmaxes, local_softmaxes)
 
+            if self.rank == 0:
+                val_metrics = np.array(torch.stack(all_val_metrics).cpu())
+                
+                labels      = np.array(torch.cat(all_labels).cpu())
+                predictions = np.array(torch.cat(all_labels).cpu())
+                softmaxes   = np.array(torch.cat(all_labels).cpu())
+        else:
+            val_metrics = np.array(torch.stack([local_val_metrics]).cpu())
+            
+            labels      = np.array(local_labels.cpu())
+            predictions = np.array(local_predictions.cpu())
+            softmaxes   = np.array(local_softmaxes.cpu())
+
         if self.rank == 0:
-
-            labels = np.array(torch.cat(all_labels).cpu())
-            predictions = np.array(torch.cat(all_labels).cpu())
-            softmaxes = np.array(torch.cat(all_labels).cpu())
-
             np.save(self.dirpath + "labels.npy", labels)
-            np.save(self.dirpath + "predictions.npy", np.array(predictions))
-            np.save(self.dirpath + "softmax.npy", np.array(softmaxes))
-
-            val_metrics = np.array(torch.stack(all_val_metrics).cpu())
-            print(val_metrics)
+            np.save(self.dirpath + "predictions.npy", predictions)
+            np.save(self.dirpath + "softmax.npy", softmaxes)
 
             val_loss = np.sum(val_metrics[:, 0])
             val_acc = np.sum(val_metrics[:, 1])
