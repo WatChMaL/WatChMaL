@@ -24,11 +24,11 @@ def main(config):
     # TODO: reset this when dataloading debugged
     ngpus = len(config.gpu_list)
 
-    is_distributed = ngpus >= 1
+    is_distributed = ngpus > 1
     
     # TODO: initialize process group env variables
     os.environ['MASTER_ADDR'] = 'localhost'
-    os.environ['MASTER_PORT'] = '12356'
+    os.environ['MASTER_PORT'] = '12357'
 
     # create run directory
     try:

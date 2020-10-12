@@ -282,59 +282,74 @@ class ClassifierEngine:
         Returns : None
         """
         # TODO: fix control flow for evaluation
+        print("evaluating in directory: ", self.dirpath)
+        
+        # Variables to output at the end
+        val_loss = 0.0
+        val_acc = 0.0
+        val_iterations = 0
+        
+        # Iterate over the validation set to calculate val_loss and val_acc
+        with torch.no_grad():
+            
+            # Set the model to evaluation mode
+            self.model.eval()
+            
+            # Variables for the confusion matrix
+            loss, accuracy, labels, predictions, softmaxes= [],[],[],[],[]
+            
+            # Extract the event data and label from the DataLoader iterator
+            for it, val_data in enumerate(self.data_loaders["test"]):
+                
+                self.data = val_data['data'].float()
+                self.labels = val_data['labels'].long()
+
+                """
+                # Run the forward procedure and output the result
+                result = self.forward(False)
+
+                val_loss += result['loss']
+                val_acc += result['accuracy']
+                
+                # Copy the tensors back to the CPU
+                self.labels = self.labels.to("cpu")
+                """
+                
+                # Add the local result to the final result
+                labels.extend(self.labels)
+                """
+                predictions.extend(result['predicted_labels'])
+                softmaxes.extend(result["softmax"])
+
+                print("val_iteration : " + str(it) + " val_loss : " + str(result["loss"]) + " val_accuracy : " + str(result["accuracy"]))
+                """
+                val_iterations += 1
+                print("val_iteration : " + str(it))
+                # TODO: remove to run full validation loop
+                #break
+        
+        print(val_iterations)
+        labels_array = np.array(labels)
+
+        test_tensor = torch.tensor(labels_array).to(self.device)
+        outputs = [torch.zeros_like(test_tensor).to(self.device) for i in range(3)]
+
+        torch.distributed.all_gather(outputs, test_tensor)
+
         if self.rank == 0:
-            print("evaluating in directory: ", self.dirpath)
-            
-            # Variables to output at the end
-            val_loss = 0.0
-            val_acc = 0.0
-            val_iterations = 0
-            
-            # Iterate over the validation set to calculate val_loss and val_acc
-            with torch.no_grad():
-                
-                # Set the model to evaluation mode
-                self.model.eval()
-                
-                # Variables for the confusion matrix
-                loss, accuracy, labels, predictions, softmaxes= [],[],[],[],[]
-                
-                # Extract the event data and label from the DataLoader iterator
-                for it, val_data in enumerate(self.data_loaders["test"]):
-                    
-                    self.data = val_data['data'].float()
-                    self.labels = val_data['labels'].long()
+            print(outputs)
 
-                    # Run the forward procedure and output the result
-                    result = self.forward(False)
 
-                    val_loss += result['loss']
-                    val_acc += result['accuracy']
-                    
-                    # Copy the tensors back to the CPU
-                    self.labels = self.labels.to("cpu")
-                    
-                    # Add the local result to the final result
-                    labels.extend(self.labels)
-                    predictions.extend(result['predicted_labels'])
-                    softmaxes.extend(result["softmax"])
-
-                    print("val_iteration : " + str(it) + " val_loss : " + str(result["loss"]) + " val_accuracy : " + str(result["accuracy"]))
-                    
-                    val_iterations += 1
-                    # TODO: remove to run full validation loop
-                    break
-                    
-            print(val_iterations)
-
-            print("\nTotal val loss : ", val_loss,
-                "\nTotal val acc : ", val_acc,
-                "\nAvg val loss : ", val_loss/val_iterations,
-                "\nAvg val acc : ", val_acc/val_iterations)
-            
-            np.save(self.dirpath + "labels.npy", np.array(labels))
-            np.save(self.dirpath + "predictions.npy", np.array(predictions))
-            np.save(self.dirpath + "softmax.npy", np.array(softmaxes))
+        print("\nTotal val loss : ", val_loss,
+            "\nTotal val acc : ", val_acc,
+            "\nAvg val loss : ", val_loss/val_iterations,
+            "\nAvg val acc : ", val_acc/val_iterations)
+        
+        np.save(self.dirpath + "labels.npy", np.array(labels))
+        """
+        np.save(self.dirpath + "predictions.npy", np.array(predictions))
+        np.save(self.dirpath + "softmax.npy", np.array(softmaxes))
+        """
     
     # ========================================================================
 
