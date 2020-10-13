@@ -1,5 +1,6 @@
 gpu_list:
     - 1
+    - 2
 dump_path: './outputs/'
 load_state: '/home/jtindall/WatChMaL/outputs/2020-10-09/single_test/outputs/ClassifierBEST.pth'
 defaults:

@@ -71,7 +71,8 @@ class H5Dataset(Dataset, ABC):
             "angles": self.angles[item],
             "positions": self.positions[item],
             "event_ids": self.event_ids[item],
-            "root_files": self.root_files[item]
+            "root_files": self.root_files[item],
+            "indices": item
         }
 
         return data_dict
