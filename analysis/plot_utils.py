@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import glob
 import matplotlib.pyplot as plt
 from functools import reduce
 
@@ -76,22 +77,21 @@ def disp_learn_hist(location,losslim=None,show=True):
           losslim      ... sets bound on y axis of loss
           show         ... if true then display figure, otherwise return figure
     """
-    train_log=location + '/log_train.csv'
     val_log=location + '/log_val.csv'
+    val_log_df  = pd.read_csv(val_log)
 
-    train_log_csv = pd.read_csv(train_log)
-    val_log_csv  = pd.read_csv(val_log)
+    train_log_df = get_aggregated_train_data(location)
 
     fig, ax1 = plt.subplots(figsize=(12,8),facecolor='w')
-    line11 = ax1.plot(train_log_csv.epoch, train_log_csv.loss, linewidth=2, label='Train loss', color='b', alpha=0.3)
-    line12 = ax1.plot(val_log_csv.epoch, val_log_csv.loss, marker='o', markersize=3, linestyle='', label='Validation loss', color='blue')
+    line11 = ax1.plot(train_log_df.epoch, train_log_df.loss, linewidth=2, label='Train loss', color='b', alpha=0.3)
+    line12 = ax1.plot(val_log_df.epoch, val_log_df.loss, marker='o', markersize=3, linestyle='', label='Validation loss', color='blue')
 
     if losslim is not None:
         ax1.set_ylim(0.,losslim)
     
     ax2 = ax1.twinx()
-    line21 = ax2.plot(train_log_csv.epoch, train_log_csv.accuracy, linewidth=2, label='Train accuracy', color='r', alpha=0.3)
-    line22 = ax2.plot(val_log_csv.epoch, val_log_csv.accuracy, marker='o', markersize=3, linestyle='', label='Validation accuracy', color='red')
+    line21 = ax2.plot(train_log_df.epoch, train_log_df.accuracy, linewidth=2, label='Train accuracy', color='r', alpha=0.3)
+    line22 = ax2.plot(val_log_df.epoch, val_log_df.accuracy, marker='o', markersize=3, linestyle='', label='Validation accuracy', color='red')
 
     ax1.set_xlabel('Epoch',fontweight='bold',fontsize=24,color='black')
     ax1.tick_params('x',colors='black',labelsize=18)
@@ -115,6 +115,29 @@ def disp_learn_hist(location,losslim=None,show=True):
         return
     
     return fig
+
+def get_aggregated_train_data(location):
+    # get all training data files
+    base_log_path = location + '/log_train_[0-9]*.csv'
+    log_paths = glob.glob(base_log_path)
+    print("Found training logs: ", log_paths)
+    log_dfs = []
+    for log_path in log_paths:
+        log_dfs.append(pd.read_csv(log_path))
+        log_dfs.append(pd.read_csv(log_path))
+    
+    # combine all files into one dataframe
+    train_log_df = pd.DataFrame(0, index=np.arange(len(log_dfs[0])), columns=log_dfs[0].columns)
+    for idx, df_vals in enumerate(zip(*[log_df.values for log_df in log_dfs])):
+        iteration = df_vals[0][0]
+        epoch = df_vals[0][1]
+        loss = sum([df_val[2] for df_val in df_vals]) / len(df_vals)
+        accuracy = sum([df_val[3] for df_val in df_vals]) / len(df_vals)
+
+        output_df_vals = (iteration, epoch, loss, accuracy)
+        train_log_df.iloc[idx] = output_df_vals
+
+    return train_log_df
 
 def disp_learn_hist_smoothed(location, losslim=None, window_train=400,window_val=40,show=True):
     
