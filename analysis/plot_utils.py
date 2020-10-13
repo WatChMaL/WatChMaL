@@ -148,25 +148,24 @@ def disp_learn_hist_smoothed(location, losslim=None, window_train=400,window_val
           losslim      ... sets bound on y axis of loss
           show         ... if true then display figure, otherwise return figure
     """
-    train_log=location + '/log_train.csv'
     val_log=location + '/log_val.csv'
+    val_log_df   = pd.read_csv(val_log)
+
+    train_log_df = get_aggregated_train_data(location)
+
+    epoch_train    = moving_average(np.array(train_log_df.epoch),window_train)
+    accuracy_train = moving_average(np.array(train_log_df.accuracy),window_train)
+    loss_train     = moving_average(np.array(train_log_df.loss),window_train)
     
-    train_log_csv = pd.read_csv(train_log)
-    val_log_csv   = pd.read_csv(val_log)
+    epoch_val    = moving_average(np.array(val_log_df.epoch),window_val)
+    accuracy_val = moving_average(np.array(val_log_df.accuracy),window_val)
+    loss_val     = moving_average(np.array(val_log_df.loss),window_val)
 
-    epoch_train    = moving_average(np.array(train_log_csv.epoch),window_train)
-    accuracy_train = moving_average(np.array(train_log_csv.accuracy),window_train)
-    loss_train     = moving_average(np.array(train_log_csv.loss),window_train)
-    
-    epoch_val    = moving_average(np.array(val_log_csv.epoch),window_val)
-    accuracy_val = moving_average(np.array(val_log_csv.accuracy),window_val)
-    loss_val     = moving_average(np.array(val_log_csv.loss),window_val)
+    epoch_val_uns    = np.array(val_log_df.epoch)
+    accuracy_val_uns = np.array(val_log_df.accuracy)
+    loss_val_uns     = np.array(val_log_df.loss)
 
-    epoch_val_uns    = np.array(val_log_csv.epoch)
-    accuracy_val_uns = np.array(val_log_csv.accuracy)
-    loss_val_uns     = np.array(val_log_csv.loss)
-
-    saved_best      = np.array(val_log_csv.saved_best)
+    saved_best      = np.array(val_log_df.saved_best)
     stored_indices  = np.where(saved_best>1.0e-3)
     epoch_val_st    = epoch_val_uns[stored_indices]
     accuracy_val_st = accuracy_val_uns[stored_indices]
