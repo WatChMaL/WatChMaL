@@ -283,13 +283,12 @@ class ClassifierEngine:
             
         Returns : None
         """
-        # TODO: fix control flow for evaluation
         print("evaluating in directory: ", self.dirpath)
         
         # Variables to output at the end
-        val_loss = 0.0
-        val_acc = 0.0
-        val_iterations = 0
+        eval_loss = 0.0
+        eval_acc = 0.0
+        eval_iterations = 0
         
         # Iterate over the validation set to calculate val_loss and val_acc
         with torch.no_grad():
@@ -301,35 +300,35 @@ class ClassifierEngine:
             loss, accuracy, indices, labels, predictions, softmaxes= [],[],[],[],[],[]
             
             # Extract the event data and label from the DataLoader iterator
-            for it, val_data in enumerate(self.data_loaders["test"]):
+            for it, eval_data in enumerate(self.data_loaders["test"]):
 
-                self.data = val_data['data'].float()
-                self.labels = val_data['labels'].long()
+                self.data = eval_data['data'].float()
+                self.labels = eval_data['labels'].long()
 
                 # Run the forward procedure and output the result
                 result = self.forward(False)
 
-                val_loss += result['loss']
-                val_acc += result['accuracy']
+                eval_loss += result['loss']
+                eval_acc += result['accuracy']
                 
                 # Copy the tensors back to the CPU
                 self.labels = self.labels.to("cpu")
-                #val_indices = val_data['indices'].long().to("cpu")
+                eval_indices = eval_data['indices'].long().to("cpu")
                 
                 # Add the local result to the final result
-                #indices.extend(val_indices)
+                indices.extend(eval_indices)
                 labels.extend(self.labels)
                 predictions.extend(result['predicted_labels'])
                 softmaxes.extend(result["softmax"])
 
-                print("val_iteration : " + str(it) + " val_loss : " + str(result["loss"]) + " val_accuracy : " + str(result["accuracy"]))
+                print("eval_iteration : " + str(it) + " eval_loss : " + str(result["loss"]) + " eval_accuracy : " + str(result["accuracy"]))
 
-                val_iterations += 1
+                eval_iterations += 1
                 # TODO: remove when debugging finished
                 #break
         
         # convert arrays to torch tensors
-        local_val_metrics = torch.tensor([val_loss, val_acc, val_iterations]).to(self.device)
+        local_val_metrics = torch.tensor([eval_loss, eval_acc, eval_iterations]).to(self.device)
 
         local_indices = torch.tensor(np.array(indices)).to(self.device)
         local_labels = torch.tensor(np.array(labels)).to(self.device)
@@ -359,7 +358,7 @@ class ClassifierEngine:
                 
                 indices     = np.array(torch.cat(all_indices).cpu())
                 labels      = np.array(torch.cat(all_labels).cpu())
-                predictions = np.array(torch.cat(all_labels).cpu())
+                predictions = np.array(torch.cat(all_predictions).cpu())
                 softmaxes   = np.array(torch.cat(all_labels).cpu())
         else:
             val_metrics = np.array(torch.stack([local_val_metrics]).cpu())
@@ -370,9 +369,14 @@ class ClassifierEngine:
             softmaxes   = np.array(local_softmaxes.cpu())
 
         if self.rank == 0:
+            print("Sorting Outputs...")
+            print("Indices shape: ", indices.shape)
             sorted_indices = np.argsort(indices)
             print(indices[sorted_indices][0:100])
 
+            np.save(self.dirpath + "indices.npy", sorted_indices)
+
+            print("Saving Data...")
             np.save(self.dirpath + "labels.npy", labels[sorted_indices])
             np.save(self.dirpath + "predictions.npy", predictions[sorted_indices])
             np.save(self.dirpath + "softmax.npy", softmaxes[sorted_indices])
@@ -381,8 +385,8 @@ class ClassifierEngine:
             val_acc = np.sum(val_metrics[:, 1])
             val_iterations = np.sum(val_metrics[:, 2])
 
-            print("\nAvg val loss : ", val_loss/val_iterations,
-                "\nAvg val acc : ", val_acc/val_iterations)
+            print("\nAvg eval loss : ", val_loss/val_iterations,
+                "\nAvg eval acc : ", val_acc/val_iterations)
         
     # ========================================================================
 
