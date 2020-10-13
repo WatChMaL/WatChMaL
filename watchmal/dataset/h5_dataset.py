@@ -53,7 +53,9 @@ class H5Dataset(Dataset, ABC):
 
     def __getitem__(self, item):
         if not hasattr(self, 'h5_file'):
+            print("Initializing hdf5...")
             self.open_hdf5()
+            print("Finished Initializing...")
         
         start = self.event_hits_index[item]
         stop = self.event_hits_index[item + 1]

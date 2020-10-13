@@ -314,10 +314,10 @@ class ClassifierEngine:
                 
                 # Copy the tensors back to the CPU
                 self.labels = self.labels.to("cpu")
-                val_indices = val_data['indices'].long().cpu()
+                #val_indices = val_data['indices'].long().to("cpu")
                 
                 # Add the local result to the final result
-                indices.extend(val_indices)
+                #indices.extend(val_indices)
                 labels.extend(self.labels)
                 predictions.extend(result['predicted_labels'])
                 softmaxes.extend(result["softmax"])
