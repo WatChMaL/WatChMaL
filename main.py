@@ -21,13 +21,10 @@ logger = logging.getLogger('train')
 def main(config):
     logger.info(f"Running with the following config:\n{OmegaConf.to_yaml(config)}")
 
-    # TODO: reset this when dataloading debugged
     ngpus = len(config.gpu_list)
-
-    #TODO: This should be >
     is_distributed = ngpus > 1
     
-    # TODO: initialize process group env variables
+    # Initialize process group env variables
     os.environ['MASTER_ADDR'] = 'localhost'
     os.environ['MASTER_PORT'] = '12355'
 
@@ -39,15 +36,14 @@ def main(config):
         os.makedirs(config.dump_path)
     
     print("Dump path: ", config.dump_path)
-        
-    # TODO: reset >= when dataloading debugged
+    
     if is_distributed:
         print("Using multiprocessing...")
         devids = ["cuda:{0}".format(x) for x in config.gpu_list]
         print("Using DistributedDataParallel on these devices: {}".format(devids))
         mp.spawn(main_worker_function, nprocs=ngpus, args=(ngpus, is_distributed, config))
     else:
-        print("Only one gpu found")
+        print("Only one gpu found, not using multiprocessing...")
         main_worker_function(0, ngpus, is_distributed, config)
 
 def main_worker_function(rank, ngpus_per_node, is_distributed, config):
@@ -74,9 +70,8 @@ def main_worker_function(rank, ngpus_per_node, is_distributed, config):
 
     # configure the device to be used for model training and inference
     if is_distributed:
-        # TODO: converting model batch norms to synchbatchnorm
+        # Convert model batch norms to synchbatchnorm
         model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
-        # TODO: remove find_unused_parameters=True
         model = DDP(model, device_ids=[gpu], find_unused_parameters=True)
 
     # Instantiate the engine
