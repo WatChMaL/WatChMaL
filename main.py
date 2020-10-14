@@ -95,9 +95,8 @@ def main_worker_function(rank, ngpus_per_node, is_distributed, config):
     # Configure optimizers
     # TODO: optimizers should be refactored into a dict probably
     for task, task_config in config.tasks.items():
-        if 'optimizer' in task_config:
-            # TODO: reconsider optimizer instantiation
-            engine.configure_optimizers(task_config.optimizer)
+        if 'optimizers' in task_config:
+            engine.configure_optimizers(task_config.optimizers)
 
     # Reload previous state
     if 'load_state' in config:
@@ -105,8 +104,8 @@ def main_worker_function(rank, ngpus_per_node, is_distributed, config):
 
     # Perform tasks
     for task, task_config in config.tasks.items():
-        #if task == 'evaluate':
-        getattr(engine, task)(task_config)
+        if task == 'evaluate':
+            getattr(engine, task)(task_config)
 
 if __name__ == '__main__':
     # pylint: disable=no-value-for-parameter

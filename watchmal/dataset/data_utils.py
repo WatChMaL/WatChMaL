@@ -1,3 +1,4 @@
+import torch
 from torch.utils.data import DataLoader
 from torch.utils.data import SubsetRandomSampler
 from torch.utils.data.distributed import DistributedSampler
@@ -15,8 +16,10 @@ def get_data_loader(dataset, batch_size, sampler, num_workers, is_distributed, s
     else:
         sampler = instantiate(sampler)
     
-    # TODO: move DistributedSampler functionality elsewhere
     if is_distributed:
+        ngpus = torch.distributed.get_world_size()
+        batch_size = int(batch_size/ngpus)
+
         sampler = DistributedSamplerWrapper(sampler=sampler)
     
     return DataLoader(dataset, sampler=sampler, batch_size=batch_size, num_workers=num_workers)

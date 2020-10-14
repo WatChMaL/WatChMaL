@@ -2,6 +2,7 @@ gpu_list:
     - 0
     - 1
 dump_path: './outputs/'
+load_state: '/home/jtindall/new_frame_single_gpu_replication/1_gpu_run_10/outputs/ClassifierBEST.pth'
 defaults:
     - data: iwcd_postveto_nomichel
     - data/dataset: iwcd_cnn
@@ -10,8 +11,8 @@ defaults:
     - model/classification_network: resnet_fc
     - engine: classifier
     - tasks/train: train_resnet
-    - optimizer@tasks.train.optimizer: adam
-    - sampler@tasks.train.data_loaders.train.sampler: subset_sequential
+    - optimizers@tasks.train.optimizers: adam
+    - sampler@tasks.train.data_loaders.train.sampler: subset_random
     - sampler@tasks.train.data_loaders.validation.sampler: subset_sequential
     - tasks/evaluate: test
     - sampler@tasks.evaluate.data_loaders.test.sampler: subset_sequential

@@ -15,7 +15,7 @@ class H5Dataset(Dataset, ABC):
 
     def open_hdf5(self):
         """
-        # TODO: This is needed for multiprocessing
+        hdf5 files must be instantiated this way for multiprocessing
         """
         file_descriptor = open(self.h5_path, 'rb')
         h5_file = h5py.File(file_descriptor, "r")
@@ -65,7 +65,6 @@ class H5Dataset(Dataset, ABC):
 
         data = self.get_data(hit_pmts, hit_charges, hit_times)
 
-        # TODO: undo lists
         data_dict = {
             "data": data,
             "labels": self.labels[item],
