@@ -45,6 +45,8 @@ class ClassifierEngine:
             self.is_distributed = False
             self.model_accs = self.model
 
+        self.data_loaders = {}
+
         self.criterion = nn.CrossEntropyLoss()
         self.softmax = nn.Softmax(dim=1)
 
@@ -70,10 +72,11 @@ class ClassifierEngine:
         self.optimizer = instantiate(optimizer_config, params=self.model_accs.parameters())
 
     def configure_data_loaders(self, data_config, loaders_config, is_distributed):
-        data_loaders = {}
+        """
+        Set up data loaders from loaders config
+        """
         for name, loader_config in loaders_config.items():
-            data_loaders[name] = get_data_loader(**data_config, **loader_config, is_distributed=is_distributed)
-        self.data_loaders = data_loaders
+            self.data_loaders[name] = get_data_loader(**data_config, **loader_config, is_distributed=is_distributed)
     
     def get_synchronized_metrics(self, metric_dict):
         global_metric_dict = {}
@@ -108,10 +111,8 @@ class ClassifierEngine:
             softmax          = self.softmax(model_out)
             predicted_labels = torch.argmax(model_out,dim=-1)
             accuracy         = (predicted_labels == self.labels).sum().item() / float(predicted_labels.nelement())
-            
-
-        # TODO: fixed calls to cpu() and detach() in loss
-        return {'loss'             : self.loss.cpu().detach().item(),
+        
+        return {'loss'             : self.loss.detach().cpu().item(),
                 'predicted_labels' : predicted_labels.detach().cpu().numpy(),
                 'softmax'          : softmax.detach().cpu().numpy(),
                 'accuracy'         : accuracy,
