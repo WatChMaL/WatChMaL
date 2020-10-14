@@ -77,6 +77,16 @@ class ClassifierEngine:
             print(name)
             self.data_loaders[name] = get_data_loader(**data_config, **loader_config)
         """
+    
+    def get_synchronized_metrics(self, metric_dict):
+        global_metric_dict = {}
+        for name, array in zip(metric_dict.keys(), metric_dict.values()):
+            tensor = torch.tensor(array).to(self.device)
+            global_tensor = [torch.zeros_like(tensor).to(self.device) for i in range(self.ngpus)]
+            torch.distributed.all_gather(global_tensor, tensor)
+            global_metric_dict[name] = torch.cat(global_tensor)
+        
+        return global_metric_dict
 
     def forward(self, train=True):
         """
@@ -280,17 +290,7 @@ class ClassifierEngine:
         self.train_log.close()
         if self.rank == 0:
             self.val_log.close()
-    
-    def get_synchronized_metrics(self, metric_dict):
-        global_metric_dict = {}
-        for name, array in zip(metric_dict.keys(), metric_dict.values()):
-            tensor = torch.tensor(array).to(self.device)
-            global_tensor = [torch.zeros_like(tensor).to(self.device) for i in range(self.ngpus)]
-            torch.distributed.all_gather(global_tensor, tensor)
-            global_metric_dict[name] = torch.cat(global_tensor)
-        
-        return global_metric_dict
-    
+
     def evaluate(self, test_config):
         """
         Evaluate the performance of the trained model on the validation set.
@@ -359,7 +359,7 @@ class ClassifierEngine:
 
                 eval_iterations += 1
                 # TODO: remove when debugging finished
-                break
+                #break
         
         # convert arrays to torch tensors
         print("loss : " + str(eval_loss/eval_iterations) + " accuracy : " + str(eval_acc/eval_iterations))

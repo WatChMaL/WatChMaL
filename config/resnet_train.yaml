@@ -1,6 +1,7 @@
 gpu_list:
     - 0
     - 1
+    - 2
 dump_path: './outputs/'
 load_state: '/home/jtindall/new_frame_single_gpu_replication/1_gpu_run_10/outputs/ClassifierBEST.pth'
 defaults:
