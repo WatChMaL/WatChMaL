@@ -65,7 +65,7 @@ class ClassifierEngine:
     
     def configure_optimizers(self, optimizer_config):
         """
-        Inspired by pytorch lightning approach
+        Set up optimizers from optimizer config
         """
         self.optimizer = instantiate(optimizer_config, params=self.model_accs.parameters())
 
@@ -78,7 +78,6 @@ class ClassifierEngine:
     def get_synchronized_metrics(self, metric_dict):
         global_metric_dict = {}
         for name, array in zip(metric_dict.keys(), metric_dict.values()):
-            # TODO: check if long
             tensor = torch.as_tensor(array).to(self.device)
             global_tensor = [torch.zeros_like(tensor).to(self.device) for i in range(self.ngpus)]
             torch.distributed.all_gather(global_tensor, tensor)
@@ -131,8 +130,7 @@ class ClassifierEngine:
         
         Parameters : None
         
-        Outputs : 
-        TODO: fix training outputs
+        Outputs :
             total_val_loss = accumulated validation loss
             avg_val_loss = average validation loss
             total_val_acc = accumulated validation accuracy
@@ -177,24 +175,20 @@ class ClassifierEngine:
 
             train_loader = self.data_loaders["train"]
 
-            # TODO: kind of ugly control flow for distributed behaviour
             # local training loop for batches in a single epoch
             for i, train_data in enumerate(self.data_loaders["train"]):
                 
                 # run validation on given intervals
-                # TODO: verify that validation should only run on rank 0
                 if self.iteration % val_interval == 0:
                     # set model to eval mode
                     self.model.eval()
 
                     val_metrics = {"iteration": self.iteration, "epoch": epoch, "loss": 0., "accuracy": 0., "saved_best": 0}
 
-                    # TODO: restore validation functionality
                     for val_batch in range(num_val_batches):
                         try:
                             val_data = next(val_iter)
                         except StopIteration:
-                            # TODO: may need to call set_epoch on val_loader here
                             val_iter = iter(self.data_loaders["validation"])
                         
                         # extract the event data from the input data tuple
@@ -220,7 +214,6 @@ class ClassifierEngine:
                         local_val_metrics = {"loss": np.array([val_metrics["loss"]]), "accuracy": np.array([val_metrics["accuracy"]])}
                         global_val_metrics = self.get_synchronized_metrics(local_val_metrics)
 
-                    # TODO: rework local_rank
                     if self.rank == 0:
                         # Save if this is the best model so far
                         global_val_loss = np.mean(np.array(global_val_metrics["loss"].cpu()))
@@ -336,8 +329,6 @@ class ClassifierEngine:
                 print("eval_iteration : " + str(it) + " eval_loss : " + str(result["loss"]) + " eval_accuracy : " + str(result["accuracy"]))
 
                 eval_iterations += 1
-                # TODO: remove when debugging finished
-                #break
         
         # convert arrays to torch tensors
         print("loss : " + str(eval_loss/eval_iterations) + " accuracy : " + str(eval_acc/eval_iterations))

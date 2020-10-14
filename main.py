@@ -51,8 +51,6 @@ def main_worker_function(rank, ngpus_per_node, is_distributed, config):
     gpu = config.gpu_list[rank]
 
     print("Running main worker function on device: {}".format(gpu))
-
-    # TODO: how should this interact with self.device
     torch.cuda.set_device(gpu)
 
     world_size = ngpus_per_node
