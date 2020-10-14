@@ -384,6 +384,7 @@ class ClassifierEngine:
             
             if self.rank == 0:
                 for name, tensor in zip(global_eval_metrics_dict.keys(), global_eval_metrics_dict.values()):
+                    print("name: ", tensor)
                     local_eval_metrics_dict[name] = np.array(tensor.cpu())
                 
                 indices     = np.array(global_eval_results_dict["indices"].cpu())
@@ -403,19 +404,15 @@ class ClassifierEngine:
             np.save(self.dirpath + "predictions.npy", predictions[sorted_indices])
             np.save(self.dirpath + "softmax.npy", softmaxes[sorted_indices])
 
-            ######################################
-            print(indices[sorted_indices][0:50])
-            print(predictions[sorted_indices][0:50])
-            ######################################
-
             # Compute overall evaluation metrics
             val_iterations = np.sum(local_eval_metrics_dict["eval_iterations"])
             val_loss = np.sum(local_eval_metrics_dict["eval_loss"])
             val_acc = np.sum(local_eval_metrics_dict["eval_acc"])
 
+            print("iterations: ", val_iterations)
+
             print("\nAvg eval loss : " + str(val_loss/val_iterations),
                 "\nAvg eval acc : " + str(val_acc/val_iterations))
-        
         
     # ========================================================================
 
