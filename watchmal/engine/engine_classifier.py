@@ -213,7 +213,6 @@ class ClassifierEngine:
                         val_metrics["loss"] += val_res["loss"]
                         val_metrics["accuracy"] += val_res["accuracy"]
                     
-                    
                     # return model to training mode
                     self.model.train()
 
@@ -363,6 +362,8 @@ class ClassifierEngine:
         
         # convert arrays to torch tensors
         print("loss : " + str(eval_loss/eval_iterations) + " accuracy : " + str(eval_acc/eval_iterations))
+        print("Avg eval loss : ", eval_loss)
+        print("Avg eval acc : ", eval_acc)
 
         iterations = np.array([eval_iterations])
         loss = np.array([eval_loss])
