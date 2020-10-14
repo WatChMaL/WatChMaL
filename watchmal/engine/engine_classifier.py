@@ -298,18 +298,6 @@ class ClassifierEngine:
             
         Returns : None
         """
-        """
-        test_dict = {"test_0":torch.ones(1).to(self.device), "test_1":torch.zeros(1).to(self.device)}
-        if self.rank == 1:
-            test_dict["test_0"] *= 2
-            test_dict["test_1"] += self.rank
-        
-        global_dict = self.get_synchronized_metrics(test_dict)
-
-        if self.rank == 0:
-            print(global_dict["test_0"])
-            print(global_dict["test_1"])
-        """
         print("evaluating in directory: ", self.dirpath)
         
         # Variables to output at the end
