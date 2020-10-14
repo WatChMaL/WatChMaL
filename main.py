@@ -27,6 +27,7 @@ def main(config):
     # TODO: reset this when dataloading debugged
     ngpus = len(config.gpu_list)
 
+    #TODO: This should be >
     is_distributed = ngpus > 1
     
     # TODO: initialize process group env variables
@@ -62,12 +63,14 @@ def main_worker_function(rank, ngpus_per_node, is_distributed, config):
     torch.cuda.set_device(gpu)
 
     world_size = ngpus_per_node
-    torch.distributed.init_process_group(
-        'nccl',
-        init_method='env://',
-        world_size=world_size,
-        rank=rank,
-    )
+    
+    if is_distributed:
+        torch.distributed.init_process_group(
+            'nccl',
+            init_method='env://',
+            world_size=world_size,
+            rank=rank,
+        )
 
     # Instantiate model and engine
     model = instantiate(config.model).to(gpu)

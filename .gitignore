@@ -127,6 +127,7 @@ replication_plotting.ipynb
 repeating_classifier_training.py
 overlaid_roc.png
 ddp_run_analysis.py
+ddp_run_output_comparison.py
 
 # editor, os cache directory
 .vscode/

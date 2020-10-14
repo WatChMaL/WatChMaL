@@ -328,6 +328,7 @@ class ClassifierEngine:
                 #break
         
         # convert arrays to torch tensors
+        print("loss : " + str(eval_loss/eval_iterations) + " accuracy : " + str(eval_acc/eval_iterations))
         local_val_metrics = torch.tensor([eval_loss, eval_acc, eval_iterations]).to(self.device)
 
         local_indices = torch.tensor(np.array(indices)).to(self.device)
@@ -359,7 +360,7 @@ class ClassifierEngine:
                 indices     = np.array(torch.cat(all_indices).cpu())
                 labels      = np.array(torch.cat(all_labels).cpu())
                 predictions = np.array(torch.cat(all_predictions).cpu())
-                softmaxes   = np.array(torch.cat(all_labels).cpu())
+                softmaxes   = np.array(torch.cat(all_softmaxes).cpu())
         else:
             val_metrics = np.array(torch.stack([local_val_metrics]).cpu())
             
@@ -372,7 +373,6 @@ class ClassifierEngine:
             print("Sorting Outputs...")
             print("Indices shape: ", indices.shape)
             sorted_indices = np.argsort(indices)
-            print(indices[sorted_indices][0:100])
 
             np.save(self.dirpath + "indices.npy", sorted_indices)
 
@@ -381,12 +381,17 @@ class ClassifierEngine:
             np.save(self.dirpath + "predictions.npy", predictions[sorted_indices])
             np.save(self.dirpath + "softmax.npy", softmaxes[sorted_indices])
 
+            ######################################
+            print(indices[sorted_indices][0:50])
+            print(predictions[sorted_indices][0:50])
+            ######################################
+
             val_loss = np.sum(val_metrics[:, 0])
             val_acc = np.sum(val_metrics[:, 1])
             val_iterations = np.sum(val_metrics[:, 2])
 
-            print("\nAvg eval loss : ", val_loss/val_iterations,
-                "\nAvg eval acc : ", val_acc/val_iterations)
+            print("\nAvg eval loss : " + str(val_loss/val_iterations),
+                "\nAvg eval acc : " + str(val_acc/val_iterations))
         
     # ========================================================================
 
