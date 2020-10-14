@@ -220,17 +220,14 @@ class ClassifierEngine:
                     val_metrics["accuracy"] /= num_val_batches
 
                     if self.is_distributed:
-                        local_val_metrics = {"loss": 0., "accuracy": 0.} torch.tensor([val_metrics["loss"], val_metrics["accuracy"]]).to(self.device)
-                        global_val_metrics = [torch.zeros_like(local_val_metrics).to(self.device) for i in range(self.ngpus)]
-                        torch.distributed.all_gather(global_val_metrics, local_val_metrics)
+                        local_val_metrics = {"loss": np.array([val_metrics["loss"]]), "accuracy": np.array([val_metrics["accuracy"]])}
+                        global_val_metrics = self.get_synchronized_metrics(local_val_metrics)
 
                     # TODO: rework local_rank
                     if self.rank == 0:
                         # Save if this is the best model so far
-                        combined_val_metrics = np.array(torch.stack(global_val_metrics).cpu())
-
-                        global_val_loss = np.mean(combined_val_metrics[:, 0])
-                        global_val_accuracy = np.mean(combined_val_metrics[:, 1])
+                        global_val_loss = np.mean(np.array(global_val_metrics["loss"].cpu()))
+                        global_val_accuracy = np.mean(np.array(global_val_metrics["accuracy"].cpu()))
 
                         val_metrics["loss"] = global_val_loss
                         val_metrics["accuracy"] = global_val_accuracy
