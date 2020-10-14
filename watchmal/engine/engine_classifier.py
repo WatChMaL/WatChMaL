@@ -36,8 +36,6 @@ class ClassifierEngine:
         self.device = torch.device(gpu)
 
         # Setup the parameters to save given the model type
-        #TODO: Fix saving/loading with parallel model
-        #TODO: check if is_distributed is sensible
         if isinstance(self.model, DDP):
             self.is_distributed = True
             self.model_accs = self.model.module
@@ -80,7 +78,6 @@ class ClassifierEngine:
             self.data_loaders[name] = get_data_loader(**data_config, **loader_config)
         """
 
-    # TODO: restore old forward method
     def forward(self, train=True):
         """
         Compute predictions and metrics for a batch of data.
@@ -284,6 +281,16 @@ class ClassifierEngine:
         if self.rank == 0:
             self.val_log.close()
     
+    def get_synchronized_metrics(self, metric_dict):
+        global_metric_dict = {}
+        for tensor_name, tensor in zip(metric_dict.keys(), metric_dict.values()):
+            print(tensor_name)
+            global_tensor = [torch.zeros_like(tensor).to(self.device) for i in range(self.ngpus)]
+            torch.distributed.all_gather(global_tensor, tensor)
+            global_metric_dict[tensor_name] = torch.cat(global_tensor)
+        
+        return global_metric_dict
+    
     def evaluate(self, test_config):
         """
         Evaluate the performance of the trained model on the validation set.
@@ -297,6 +304,18 @@ class ClassifierEngine:
             avg_val_acc = accumulated validation accuracy
             
         Returns : None
+        """
+        """
+        test_dict = {"test_0":torch.ones(1).to(self.device), "test_1":torch.zeros(1).to(self.device)}
+        if self.rank == 1:
+            test_dict["test_0"] *= 2
+            test_dict["test_1"] += self.rank
+        
+        global_dict = self.get_synchronized_metrics(test_dict)
+
+        if self.rank == 0:
+            print(global_dict["test_0"])
+            print(global_dict["test_1"])
         """
         print("evaluating in directory: ", self.dirpath)
         
@@ -340,35 +359,28 @@ class ClassifierEngine:
 
                 eval_iterations += 1
                 # TODO: remove when debugging finished
-                #break
+                break
         
         # convert arrays to torch tensors
         print("loss : " + str(eval_loss/eval_iterations) + " accuracy : " + str(eval_acc/eval_iterations))
-        local_val_metrics = torch.tensor([eval_loss, eval_acc, eval_iterations]).to(self.device)
 
-        local_indices = torch.tensor(np.array(indices)).to(self.device)
-        local_labels = torch.tensor(np.array(labels)).to(self.device)
-        local_predictions = torch.tensor(np.array(predictions)).to(self.device)
-        local_softmaxes = torch.tensor(np.array(softmaxes)).to(self.device)
+        local_eval_metrics_dict = {"iterations": torch.tensor([eval_iterations]).to(self.device),
+                                "loss": torch.tensor([eval_loss]).to(self.device),
+                                "eval_acc": torch.tensor([eval_acc]).to(self.device)}
+        
+        local_eval_results_dict = {"indices":torch.tensor(np.array(indices)).to(self.device),
+                                "labels":torch.tensor(np.array(labels)).to(self.device),
+                                "predictions":torch.tensor(np.array(predictions)).to(self.device),
+                                "softmaxes":torch.tensor(np.array(softmaxes)).to(self.device)}
 
         if self.is_distributed:
-            ngpus = self.ngpus
 
-            # initialize all distributed outputs
-            # TODO: this assumes that all processes return arrays of the same shape - not sure if this is a fair assumption
-            all_val_metrics = [torch.zeros_like(local_val_metrics).to(self.device) for i in range(ngpus)]
-            all_indices     = [torch.zeros_like(local_indices).to(self.device) for i in range(ngpus)]
-            all_labels      = [torch.zeros_like(local_labels).to(self.device) for i in range(ngpus)]
-            all_predictions = [torch.zeros_like(local_predictions).to(self.device) for i in range(ngpus)]
-            all_softmaxes   = [torch.zeros_like(local_softmaxes).to(self.device) for i in range(ngpus)]
-
-            # add data to distributed outputs
-            torch.distributed.all_gather(all_val_metrics, local_val_metrics)
-            torch.distributed.all_gather(all_indices, local_indices)
-            torch.distributed.all_gather(all_labels, local_labels)
-            torch.distributed.all_gather(all_predictions, local_predictions)
-            torch.distributed.all_gather(all_softmaxes, local_softmaxes)
-
+            global_eval_metrics_dict = self.get_synchronized_metrics(local_eval_metrics_dict)
+            global_eval_results_dict = self.get_synchronized_metrics(local_eval_results_dict)
+            
+            if self.rank == 0:
+                print(global_eval_metrics_dict)
+        """
             if self.rank == 0:
                 val_metrics = np.array(torch.stack(all_val_metrics).cpu())
                 
@@ -407,6 +419,8 @@ class ClassifierEngine:
 
             print("\nAvg eval loss : " + str(val_loss/val_iterations),
                 "\nAvg eval acc : " + str(val_acc/val_iterations))
+        """
+        
         
     # ========================================================================
 
