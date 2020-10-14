@@ -41,6 +41,7 @@ class ClassifierEngine:
         if isinstance(self.model, DDP):
             self.is_distributed = True
             self.model_accs = self.model.module
+            self.ngpus = torch.distributed.get_world_size()
         else:
             self.is_distributed = False
             self.model_accs = self.model
@@ -179,7 +180,7 @@ class ClassifierEngine:
                 
                 # run validation on given intervals
                 # TODO: verify that validation should only run on rank 0
-                if self.rank == 0 and self.iteration % val_interval == 0:
+                if self.iteration % val_interval == 0:
                     # set model to eval mode
                     self.model.eval()
 
@@ -213,23 +214,37 @@ class ClassifierEngine:
                     val_metrics["loss"] /= num_val_batches
                     val_metrics["accuracy"] /= num_val_batches
 
-                    # save if this is the best model so far
+                    if self.is_distributed:
+                        local_val_metrics = torch.tensor([val_metrics["loss"], val_metrics["accuracy"]]).to(self.device)
+                        global_val_metrics = [torch.zeros_like(local_val_metrics).to(self.device) for i in range(self.ngpus)]
+                        torch.distributed.all_gather(global_val_metrics, local_val_metrics)
+
                     # TODO: rework local_rank
-                    if val_metrics["loss"] < best_val_loss:
-                        print('best validation loss so far!: {}'.format(best_val_loss))
-                        self.save_state(best=True)
-                        val_metrics["saved_best"] = 1
+                    if self.rank == 0:
+                        # Save if this is the best model so far
+                        combined_val_metrics = np.array(torch.stack(global_val_metrics).cpu())
 
-                        best_val_loss = val_metrics["loss"]
+                        global_val_loss = np.mean(combined_val_metrics[:, 0])
+                        global_val_accuracy = np.mean(combined_val_metrics[:, 1])
 
-                    # Save the latest model
-                    if checkpointing:
-                        self.save_state(best=False)
-                                    
-                    self.val_log.record(val_metrics)
-                    self.val_log.write()
-                    #TODO: Removed flush
-                    #self.val_log.flush()
+                        val_metrics["loss"] = global_val_loss
+                        val_metrics["accuracy"] = global_val_accuracy
+
+                        if val_metrics["loss"] < best_val_loss:
+                            print('best validation loss so far!: {}'.format(best_val_loss))
+                            self.save_state(best=True)
+                            val_metrics["saved_best"] = 1
+
+                            best_val_loss = val_metrics["loss"]
+
+                        # Save the latest model
+                        if checkpointing:
+                            self.save_state(best=False)
+                                        
+                        self.val_log.record(val_metrics)
+                        self.val_log.write()
+                        #TODO: Removed flush
+                        #self.val_log.flush()
                 
                 # Train on batch
                 self.data      = train_data['data'].float()
@@ -337,7 +352,7 @@ class ClassifierEngine:
         local_softmaxes = torch.tensor(np.array(softmaxes)).to(self.device)
 
         if self.is_distributed:
-            ngpus = torch.distributed.get_world_size()
+            ngpus = self.ngpus
 
             # initialize all distributed outputs
             # TODO: this assumes that all processes return arrays of the same shape - not sure if this is a fair assumption
