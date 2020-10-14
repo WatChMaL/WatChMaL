@@ -377,7 +377,6 @@ class ClassifierEngine:
         
         if self.rank == 0:
             print("Sorting Outputs...")
-            print("Indices shape: ", indices.shape)
             sorted_indices = np.argsort(indices)
 
             # Save overall evaluation results
@@ -391,8 +390,6 @@ class ClassifierEngine:
             val_iterations = np.sum(local_eval_metrics_dict["eval_iterations"])
             val_loss = np.sum(local_eval_metrics_dict["eval_loss"])
             val_acc = np.sum(local_eval_metrics_dict["eval_acc"])
-
-            print("iterations: ", val_iterations)
 
             print("\nAvg eval loss : " + str(val_loss/val_iterations),
                 "\nAvg eval acc : " + str(val_acc/val_iterations))

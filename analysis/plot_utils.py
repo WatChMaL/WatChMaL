@@ -308,6 +308,7 @@ def plot_classifier_response(softmaxes, labels, particle_names, label_dict,lines
 
     # generate single particle plots
     for independent_particle_label, ax in enumerate(axes[:softmaxes.shape[1]]):
+        print(label_dict)
         dependent_particle_labels = [label_dict[particle_name] for particle_name in particle_names[independent_particle_label]]
         for dependent_particle_label in dependent_particle_labels:
             ax.hist(softmaxes_list[dependent_particle_label][:,independent_particle_label],

@@ -28,7 +28,7 @@ def main(config):
     ngpus = len(config.gpu_list)
 
     #TODO: This should be >
-    is_distributed = ngpus >= 1
+    is_distributed = ngpus > 1
     
     # TODO: initialize process group env variables
     os.environ['MASTER_ADDR'] = 'localhost'
