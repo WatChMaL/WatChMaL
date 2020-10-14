@@ -123,8 +123,6 @@ class ClassifierEngine:
     
     def backward(self):
         self.optimizer.zero_grad()  # reset accumulated gradient
-        # TODO: added contiguous
-        #self.loss.contiguous()
         self.loss.backward()        # compute new gradient
         self.optimizer.step()       # step params
     
@@ -222,7 +220,7 @@ class ClassifierEngine:
                     val_metrics["accuracy"] /= num_val_batches
 
                     if self.is_distributed:
-                        local_val_metrics = torch.tensor([val_metrics["loss"], val_metrics["accuracy"]]).to(self.device)
+                        local_val_metrics = {"loss": 0., "accuracy": 0.} torch.tensor([val_metrics["loss"], val_metrics["accuracy"]]).to(self.device)
                         global_val_metrics = [torch.zeros_like(local_val_metrics).to(self.device) for i in range(self.ngpus)]
                         torch.distributed.all_gather(global_val_metrics, local_val_metrics)
 
@@ -244,14 +242,13 @@ class ClassifierEngine:
 
                             best_val_loss = val_metrics["loss"]
 
-                        # Save the latest model
+                        # Save the latest model if checkpointing
                         if checkpointing:
                             self.save_state(best=False)
                                         
                         self.val_log.record(val_metrics)
                         self.val_log.write()
-                        #TODO: Removed flush
-                        #self.val_log.flush()
+                        self.val_log.flush()
                 
                 # Train on batch
                 self.data      = train_data['data'].float()
@@ -276,8 +273,7 @@ class ClassifierEngine:
                 # record the metrics for the mini-batch in the log
                 self.train_log.record(train_metrics)
                 self.train_log.write()
-                #TODO: Removed flush
-                #self.train_log.flush()
+                self.train_log.flush()
                 
                 # print the metrics at given intervals
                 if self.rank == 0 and self.iteration % report_interval == 0:
