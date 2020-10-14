@@ -12,9 +12,6 @@ import torch.multiprocessing as mp
 # TODO: see if this can be removed
 torch.multiprocessing.set_sharing_strategy('file_system')
 
-# WatChMaL imports
-from watchmal.dataset.data_utils import get_data_loader
-
 # generic imports
 import os
 
@@ -82,18 +79,15 @@ def main_worker_function(rank, ngpus_per_node, is_distributed, config):
         # TODO: remove find_unused_parameters=True
         model = DDP(model, device_ids=[gpu], find_unused_parameters=True)
 
+    # Instantiate the engine
+    engine = instantiate(config.engine, model=model, rank=rank, gpu=gpu, dump_path=config.dump_path)
+    
     # Configure data loaders
-    data_loaders = {}
     for task, task_config in config.tasks.items():
         if 'data_loaders' in task_config:
-            for name, loader_config in task_config.data_loaders.items():
-                data_loaders[name] = get_data_loader(**config.data, **loader_config, is_distributed=is_distributed)
-
-    # Instantiate the engine
-    engine = instantiate(config.engine, model=model, rank=rank, gpu=gpu, data_loaders=data_loaders, dump_path=config.dump_path)
+            engine.configure_data_loaders(config.data, task_config.data_loaders, is_distributed)
     
     # Configure optimizers
-    # TODO: optimizers should be refactored into a dict probably
     for task, task_config in config.tasks.items():
         if 'optimizers' in task_config:
             engine.configure_optimizers(task_config.optimizers)
