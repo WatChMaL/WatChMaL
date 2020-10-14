@@ -81,7 +81,8 @@ class ClassifierEngine:
     def get_synchronized_metrics(self, metric_dict):
         global_metric_dict = {}
         for name, array in zip(metric_dict.keys(), metric_dict.values()):
-            tensor = torch.tensor(array).to(self.device)
+            # TODO: check if long
+            tensor = torch.as_tensor(array).to(self.device)
             global_tensor = [torch.zeros_like(tensor).to(self.device) for i in range(self.ngpus)]
             torch.distributed.all_gather(global_tensor, tensor)
             global_metric_dict[name] = torch.cat(global_tensor)
