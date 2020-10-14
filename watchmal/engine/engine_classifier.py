@@ -100,7 +100,7 @@ class ClassifierEngine:
         """
 
         with torch.set_grad_enabled(train):
-            # move the data and the labels to the GPU (if using CPU this has no effect)
+            # Move the data and the labels to the GPU (if using CPU this has no effect)
             self.data = self.data.to(self.device)
             self.labels = self.labels.to(self.device)
 
