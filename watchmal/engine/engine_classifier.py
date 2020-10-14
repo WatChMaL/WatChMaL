@@ -283,11 +283,11 @@ class ClassifierEngine:
     
     def get_synchronized_metrics(self, metric_dict):
         global_metric_dict = {}
-        for tensor_name, tensor in zip(metric_dict.keys(), metric_dict.values()):
-            print(tensor_name)
+        for name, array in zip(metric_dict.keys(), metric_dict.values()):
+            tensor = torch.tensor(array).to(self.device)
             global_tensor = [torch.zeros_like(tensor).to(self.device) for i in range(self.ngpus)]
             torch.distributed.all_gather(global_tensor, tensor)
-            global_metric_dict[tensor_name] = torch.cat(global_tensor)
+            global_metric_dict[name] = torch.cat(global_tensor)
         
         return global_metric_dict
     
@@ -364,46 +364,41 @@ class ClassifierEngine:
         # convert arrays to torch tensors
         print("loss : " + str(eval_loss/eval_iterations) + " accuracy : " + str(eval_acc/eval_iterations))
 
-        local_eval_metrics_dict = {"iterations": torch.tensor([eval_iterations]).to(self.device),
-                                "loss": torch.tensor([eval_loss]).to(self.device),
-                                "eval_acc": torch.tensor([eval_acc]).to(self.device)}
+        iterations = np.array([eval_iterations])
+        loss = np.array([eval_loss])
+        accuracy = np.array([eval_acc])
+
+        local_eval_metrics_dict = {"eval_iterations":iterations, "eval_loss":loss, "eval_acc":accuracy}
         
-        local_eval_results_dict = {"indices":torch.tensor(np.array(indices)).to(self.device),
-                                "labels":torch.tensor(np.array(labels)).to(self.device),
-                                "predictions":torch.tensor(np.array(predictions)).to(self.device),
-                                "softmaxes":torch.tensor(np.array(softmaxes)).to(self.device)}
+        indices     = np.array(indices)
+        labels      = np.array(labels)
+        predictions = np.array(predictions)
+        softmaxes   = np.array(softmaxes)
+        
+        local_eval_results_dict = {"indices":indices, "labels":labels, "predictions":predictions, "softmaxes":softmaxes}
 
         if self.is_distributed:
-
+            # Gather results from all processes
             global_eval_metrics_dict = self.get_synchronized_metrics(local_eval_metrics_dict)
             global_eval_results_dict = self.get_synchronized_metrics(local_eval_results_dict)
             
             if self.rank == 0:
-                print(global_eval_metrics_dict)
-        """
-            if self.rank == 0:
-                val_metrics = np.array(torch.stack(all_val_metrics).cpu())
+                for name, tensor in zip(global_eval_metrics_dict.keys(), global_eval_metrics_dict.values()):
+                    local_eval_metrics_dict[name] = np.array(tensor.cpu())
                 
-                indices     = np.array(torch.cat(all_indices).cpu())
-                labels      = np.array(torch.cat(all_labels).cpu())
-                predictions = np.array(torch.cat(all_predictions).cpu())
-                softmaxes   = np.array(torch.cat(all_softmaxes).cpu())
-        else:
-            val_metrics = np.array(torch.stack([local_val_metrics]).cpu())
-            
-            indices     = np.array(local_indices.cpu())
-            labels      = np.array(local_labels.cpu())
-            predictions = np.array(local_predictions.cpu())
-            softmaxes   = np.array(local_softmaxes.cpu())
-
+                indices     = np.array(global_eval_results_dict["indices"].cpu())
+                labels      = np.array(global_eval_results_dict["labels"].cpu())
+                predictions = np.array(global_eval_results_dict["predictions"].cpu())
+                softmaxes   = np.array(global_eval_results_dict["softmaxes"].cpu())
+        
         if self.rank == 0:
             print("Sorting Outputs...")
             print("Indices shape: ", indices.shape)
             sorted_indices = np.argsort(indices)
 
-            np.save(self.dirpath + "indices.npy", sorted_indices)
-
+            # Save overall evaluation results
             print("Saving Data...")
+            np.save(self.dirpath + "indices.npy", sorted_indices)
             np.save(self.dirpath + "labels.npy", labels[sorted_indices])
             np.save(self.dirpath + "predictions.npy", predictions[sorted_indices])
             np.save(self.dirpath + "softmax.npy", softmaxes[sorted_indices])
@@ -413,13 +408,13 @@ class ClassifierEngine:
             print(predictions[sorted_indices][0:50])
             ######################################
 
-            val_loss = np.sum(val_metrics[:, 0])
-            val_acc = np.sum(val_metrics[:, 1])
-            val_iterations = np.sum(val_metrics[:, 2])
+            # Compute overall evaluation metrics
+            val_iterations = np.sum(local_eval_metrics_dict["eval_iterations"])
+            val_loss = np.sum(local_eval_metrics_dict["eval_loss"])
+            val_acc = np.sum(local_eval_metrics_dict["eval_acc"])
 
             print("\nAvg eval loss : " + str(val_loss/val_iterations),
                 "\nAvg eval acc : " + str(val_acc/val_iterations))
-        """
         
         
     # ========================================================================
