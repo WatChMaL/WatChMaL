@@ -6,7 +6,6 @@ from hydra.utils import instantiate
 import numpy as np
 from watchmal.dataset.samplers import DistributedSamplerWrapper
 
-# TODO: remove gpu args
 def get_data_loader(dataset, batch_size, sampler, num_workers, is_distributed, split_path=None, split_key=None, transforms=None):
     dataset = instantiate(dataset, transforms=transforms)
     
