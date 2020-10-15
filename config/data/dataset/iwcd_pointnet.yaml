@@ -1,0 +1,5 @@
+# @package _group_
+_target_: watchmal.dataset.cnn_mpmt.pointnet_dataset.PointNetDataset
+geometry_file: /fast_scratch/WatChMaL/data/mPMT_full_geo.npz
+use_orientations: False
+n_points: 4000

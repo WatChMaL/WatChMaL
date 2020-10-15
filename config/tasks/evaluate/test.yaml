@@ -1,0 +1,6 @@
+# @package _group_
+data_loaders:
+  test:
+    split_key: test_idxs
+    batch_size: 512
+    num_workers: 4

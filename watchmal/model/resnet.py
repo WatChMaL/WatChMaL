@@ -109,14 +109,11 @@ class Bottleneck(nn.Module):
 
 class ResNet(nn.Module):
 
-    def __init__(self, block, layers, num_input_channels, num_encoder_outputs, zero_init_residual=False):
+    def __init__(self, block, layers, num_input_channels, num_output_channels, zero_init_residual=False):
 
         super(ResNet, self).__init__()
 
         self.inplanes = 64
-
-        # self.conv1 = Conv2d(num_input_channels, 64, kernel_size=1, stride=1, padding=0, bias=False)
-        # self.bn1   = BatchNorm2d(64)
 
         self.conv1 = nn.Conv2d(num_input_channels, 16, kernel_size=1, stride=1, padding=0, bias=False)
         self.bn1 = nn.BatchNorm2d(16)
@@ -141,12 +138,12 @@ class ResNet(nn.Module):
         for m in self.modules():
             if isinstance(m, Bottleneck):
                 self.fc1 = nn.Linear(self.unroll_size, int(self.unroll_size / 2))
-                self.fc2 = nn.Linear(int(self.unroll_size / 2), num_encoder_outputs)
+                self.fc2 = nn.Linear(int(self.unroll_size / 2), num_output_channels)
                 self.bool_deep = True
                 break
 
         if not self.bool_deep:
-            self.fc1 = nn.Linear(self.unroll_size, num_encoder_outputs)
+            self.fc1 = nn.Linear(self.unroll_size, num_output_channels)
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -206,7 +203,8 @@ class ResNet(nn.Module):
             x = self.conv3b(x)
         elif x.size()[-2:] == (2, 2):
             x = self.conv3c(x)
-
+        
+        x = self.bn3(x)
         x = self.relu(x)
         x = x.view(x.size(0), -1)
         x = self.relu(self.fc1(x))

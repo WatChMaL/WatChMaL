@@ -1,0 +1,13 @@
+defaults:
+    - data: iwcd_postveto_nomichel
+    - data/dataset: iwcd_cnn
+    - model: classifier
+    - model/feature_extractor: pointnet
+    - model/classification_network: pointnet_fc
+    - engine: classifier
+    - tasks/train: train_pointnet
+    - optimizer@tasks.train.optimizer: adam
+    - sampler@tasks.train.data_loaders.train.sampler: subset_random
+    - sampler@tasks.train.data_loaders.validation.sampler: subset_sequential
+    - tasks/evaluate: test
+    - sampler@tasks.evaluate.data_loaders.test.sampler: subset_sequential

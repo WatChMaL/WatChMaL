@@ -1,0 +1,4 @@
+# @package _group_
+_target_: watchmal.dataset.cnn_mpmt.cnn_mpmt_dataset.CNNmPMTDataset
+mpmt_positions_file: /data/WatChMaL/data/IWCD_mPMT_image_positions.npz
+collapse_arrays: False

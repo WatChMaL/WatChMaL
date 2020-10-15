@@ -1,0 +1,4 @@
+# @package _group_
+split_path: /fast_scratch/WatChMaL/data/IWCD_fulltank_300_post_veto_nomichel_pe_idxs.npz
+dataset:
+  h5file: /fast_scratch/WatChMaL/data/IWCDmPMT_4pi_full_tank_pointnet.h5
