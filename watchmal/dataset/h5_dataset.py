@@ -41,7 +41,7 @@ class H5Dataset(Dataset, ABC):
         self.event_ids = np.array(h5_file["event_ids"])
         self.root_files = np.array(h5_file["root_files"])
 
-        # create attribute so that method won't be invoked again
+        # Create attribute so that method won't be invoked again
         self.h5_file = h5_file
 
     @abstractmethod
@@ -53,9 +53,7 @@ class H5Dataset(Dataset, ABC):
 
     def __getitem__(self, item):
         if not hasattr(self, 'h5_file'):
-            print("Initializing hdf5...")
             self.open_hdf5()
-            print("Finished Initializing...")
         
         start = self.event_hits_index[item]
         stop = self.event_hits_index[item + 1]
