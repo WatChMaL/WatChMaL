@@ -333,8 +333,6 @@ class ClassifierEngine:
         
         # convert arrays to torch tensors
         print("loss : " + str(eval_loss/eval_iterations) + " accuracy : " + str(eval_acc/eval_iterations))
-        print("Avg eval loss : ", eval_loss)
-        print("Avg eval acc : ", eval_acc)
 
         iterations = np.array([eval_iterations])
         loss = np.array([eval_loss])
@@ -356,7 +354,6 @@ class ClassifierEngine:
             
             if self.rank == 0:
                 for name, tensor in zip(global_eval_metrics_dict.keys(), global_eval_metrics_dict.values()):
-                    print("name: ", tensor)
                     local_eval_metrics_dict[name] = np.array(tensor.cpu())
                 
                 indices     = np.array(global_eval_results_dict["indices"].cpu())
