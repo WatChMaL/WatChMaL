@@ -115,9 +115,6 @@ class ResNet(nn.Module):
 
         self.inplanes = 64
 
-        # self.conv1 = Conv2d(num_input_channels, 64, kernel_size=1, stride=1, padding=0, bias=False)
-        # self.bn1   = BatchNorm2d(64)
-
         self.conv1 = nn.Conv2d(num_input_channels, 16, kernel_size=1, stride=1, padding=0, bias=False)
         self.bn1 = nn.BatchNorm2d(16)
         self.relu = nn.ReLU(inplace=True)

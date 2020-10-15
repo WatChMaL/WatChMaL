@@ -100,10 +100,12 @@ ENV/
 # mypy
 .mypy_cache/
 
-# input data, saved log, checkpoints, testing
+# input data, saved log, checkpoints
 input/
 saved/
 datasets/
+
+# testing
 testing/
 test.py
 test_load.py
@@ -115,12 +117,20 @@ best_run_reloading_analysis.py
 replication_run_reloading.py
 replication_run_analysis_old_framework.py
 replication_run_analysis_new_framework.py
-multi_run_plotting.py
-multi_plotting_utils.py
-replication_plotting.ipynb
 replication_plotting_new_framework.ipynb
 replication_plotting_old_framework.ipynb
+replication_plotting_test.ipynb
+multi_plotting_utils.py
+multi_run_plotting.py
+test_reloading.py
+test_example_config.yaml
+replication_plotting.ipynb
 repeating_classifier_training.py
+overlaid_roc.png
+ddp_run_analysis.py
+ddp_run_output_comparison.py
+test_reloading.py
+ip.txt
 
 # editor, os cache directory
 .vscode/

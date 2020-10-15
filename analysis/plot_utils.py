@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import glob
 import matplotlib.pyplot as plt
 from functools import reduce
 
@@ -76,22 +77,21 @@ def disp_learn_hist(location,losslim=None,show=True):
           losslim      ... sets bound on y axis of loss
           show         ... if true then display figure, otherwise return figure
     """
-    train_log=location + '/log_train.csv'
     val_log=location + '/log_val.csv'
+    val_log_df  = pd.read_csv(val_log)
 
-    train_log_csv = pd.read_csv(train_log)
-    val_log_csv  = pd.read_csv(val_log)
+    train_log_df = get_aggregated_train_data(location)
 
     fig, ax1 = plt.subplots(figsize=(12,8),facecolor='w')
-    line11 = ax1.plot(train_log_csv.epoch, train_log_csv.loss, linewidth=2, label='Train loss', color='b', alpha=0.3)
-    line12 = ax1.plot(val_log_csv.epoch, val_log_csv.loss, marker='o', markersize=3, linestyle='', label='Validation loss', color='blue')
+    line11 = ax1.plot(train_log_df.epoch, train_log_df.loss, linewidth=2, label='Train loss', color='b', alpha=0.3)
+    line12 = ax1.plot(val_log_df.epoch, val_log_df.loss, marker='o', markersize=3, linestyle='', label='Validation loss', color='blue')
 
     if losslim is not None:
         ax1.set_ylim(0.,losslim)
     
     ax2 = ax1.twinx()
-    line21 = ax2.plot(train_log_csv.epoch, train_log_csv.accuracy, linewidth=2, label='Train accuracy', color='r', alpha=0.3)
-    line22 = ax2.plot(val_log_csv.epoch, val_log_csv.accuracy, marker='o', markersize=3, linestyle='', label='Validation accuracy', color='red')
+    line21 = ax2.plot(train_log_df.epoch, train_log_df.accuracy, linewidth=2, label='Train accuracy', color='r', alpha=0.3)
+    line22 = ax2.plot(val_log_df.epoch, val_log_df.accuracy, marker='o', markersize=3, linestyle='', label='Validation accuracy', color='red')
 
     ax1.set_xlabel('Epoch',fontweight='bold',fontsize=24,color='black')
     ax1.tick_params('x',colors='black',labelsize=18)
@@ -116,6 +116,29 @@ def disp_learn_hist(location,losslim=None,show=True):
     
     return fig
 
+def get_aggregated_train_data(location):
+    # get all training data files
+    base_log_path = location + '/log_train_[0-9]*.csv'
+    log_paths = glob.glob(base_log_path)
+    print("Found training logs: ", log_paths)
+    log_dfs = []
+    for log_path in log_paths:
+        log_dfs.append(pd.read_csv(log_path))
+        log_dfs.append(pd.read_csv(log_path))
+    
+    # combine all files into one dataframe
+    train_log_df = pd.DataFrame(0, index=np.arange(len(log_dfs[0])), columns=log_dfs[0].columns)
+    for idx, df_vals in enumerate(zip(*[log_df.values for log_df in log_dfs])):
+        iteration = df_vals[0][0]
+        epoch = df_vals[0][1]
+        loss = sum([df_val[2] for df_val in df_vals]) / len(df_vals)
+        accuracy = sum([df_val[3] for df_val in df_vals]) / len(df_vals)
+
+        output_df_vals = (iteration, epoch, loss, accuracy)
+        train_log_df.iloc[idx] = output_df_vals
+
+    return train_log_df
+
 def disp_learn_hist_smoothed(location, losslim=None, window_train=400,window_val=40,show=True):
     
     """
@@ -125,25 +148,24 @@ def disp_learn_hist_smoothed(location, losslim=None, window_train=400,window_val
           losslim      ... sets bound on y axis of loss
           show         ... if true then display figure, otherwise return figure
     """
-    train_log=location + '/log_train.csv'
     val_log=location + '/log_val.csv'
+    val_log_df   = pd.read_csv(val_log)
+
+    train_log_df = get_aggregated_train_data(location)
+
+    epoch_train    = moving_average(np.array(train_log_df.epoch),window_train)
+    accuracy_train = moving_average(np.array(train_log_df.accuracy),window_train)
+    loss_train     = moving_average(np.array(train_log_df.loss),window_train)
     
-    train_log_csv = pd.read_csv(train_log)
-    val_log_csv   = pd.read_csv(val_log)
+    epoch_val    = moving_average(np.array(val_log_df.epoch),window_val)
+    accuracy_val = moving_average(np.array(val_log_df.accuracy),window_val)
+    loss_val     = moving_average(np.array(val_log_df.loss),window_val)
 
-    epoch_train    = moving_average(np.array(train_log_csv.epoch),window_train)
-    accuracy_train = moving_average(np.array(train_log_csv.accuracy),window_train)
-    loss_train     = moving_average(np.array(train_log_csv.loss),window_train)
-    
-    epoch_val    = moving_average(np.array(val_log_csv.epoch),window_val)
-    accuracy_val = moving_average(np.array(val_log_csv.accuracy),window_val)
-    loss_val     = moving_average(np.array(val_log_csv.loss),window_val)
+    epoch_val_uns    = np.array(val_log_df.epoch)
+    accuracy_val_uns = np.array(val_log_df.accuracy)
+    loss_val_uns     = np.array(val_log_df.loss)
 
-    epoch_val_uns    = np.array(val_log_csv.epoch)
-    accuracy_val_uns = np.array(val_log_csv.accuracy)
-    loss_val_uns     = np.array(val_log_csv.loss)
-
-    saved_best      = np.array(val_log_csv.saved_best)
+    saved_best      = np.array(val_log_df.saved_best)
     stored_indices  = np.where(saved_best>1.0e-3)
     epoch_val_st    = epoch_val_uns[stored_indices]
     accuracy_val_st = accuracy_val_uns[stored_indices]
@@ -286,6 +308,7 @@ def plot_classifier_response(softmaxes, labels, particle_names, label_dict,lines
 
     # generate single particle plots
     for independent_particle_label, ax in enumerate(axes[:softmaxes.shape[1]]):
+        print(label_dict)
         dependent_particle_labels = [label_dict[particle_name] for particle_name in particle_names[independent_particle_label]]
         for dependent_particle_label in dependent_particle_labels:
             ax.hist(softmaxes_list[dependent_particle_label][:,independent_particle_label],
