@@ -1,5 +1,6 @@
 gpu_list:
-    - 0
+    - 4
+    - 5
 dump_path: './outputs/'
 defaults:
     - data: iwcd_postveto_nomichel

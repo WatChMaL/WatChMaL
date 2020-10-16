@@ -216,7 +216,7 @@ class ClassifierEngine:
                     if self.is_distributed:
                         global_val_metrics = self.get_synchronized_metrics(local_val_metrics)
                         for name, tensor in zip(global_val_metrics.keys(), global_val_metrics.values()):
-                            local_eval_metrics_dict[name] = np.array(tensor.cpu())
+                            global_val_metrics[name] = np.array(tensor.cpu())
                     else:
                         global_val_metrics = local_val_metrics
 
