@@ -211,14 +211,19 @@ class ClassifierEngine:
                     val_metrics["loss"] /= num_val_batches
                     val_metrics["accuracy"] /= num_val_batches
 
+                    local_val_metrics = {"loss": np.array([val_metrics["loss"]]), "accuracy": np.array([val_metrics["accuracy"]])}
+
                     if self.is_distributed:
-                        local_val_metrics = {"loss": np.array([val_metrics["loss"]]), "accuracy": np.array([val_metrics["accuracy"]])}
                         global_val_metrics = self.get_synchronized_metrics(local_val_metrics)
+                        for name, tensor in zip(global_val_metrics.keys(), global_val_metrics.values()):
+                            local_eval_metrics_dict[name] = np.array(tensor.cpu())
+                    else:
+                        global_val_metrics = local_val_metrics
 
                     if self.rank == 0:
                         # Save if this is the best model so far
-                        global_val_loss = np.mean(np.array(global_val_metrics["loss"].cpu()))
-                        global_val_accuracy = np.mean(np.array(global_val_metrics["accuracy"].cpu()))
+                        global_val_loss = np.mean(global_val_metrics["loss"])
+                        global_val_accuracy = np.mean(global_val_metrics["accuracy"])
 
                         val_metrics["loss"] = global_val_loss
                         val_metrics["accuracy"] = global_val_accuracy

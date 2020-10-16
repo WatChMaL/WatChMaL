@@ -1,8 +1,8 @@
 # @package _group_
 epochs: 1
 
-report_interval: 50
-val_interval: 100
+report_interval: 10
+val_interval: 10
 num_val_batches: 32
 
 checkpointing: False
