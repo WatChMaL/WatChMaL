@@ -25,8 +25,10 @@ def main(config):
     is_distributed = ngpus > 1
     
     # Initialize process group env variables
-    os.environ['MASTER_ADDR'] = 'localhost'
-    os.environ['MASTER_PORT'] = '12355'
+    # TODO: see if this is needed
+    if is_distributed:
+        os.environ['MASTER_ADDR'] = 'localhost'
+        os.environ['MASTER_PORT'] = '12355'
 
     # create run directory
     try:
