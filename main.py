@@ -28,7 +28,7 @@ def main(config):
     # TODO: see if this is needed
     if is_distributed:
         os.environ['MASTER_ADDR'] = 'localhost'
-        os.environ['MASTER_PORT'] = '12355'
+        os.environ['MASTER_PORT'] = '12357'
 
     # create run directory
     try:

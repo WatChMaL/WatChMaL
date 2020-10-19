@@ -12,25 +12,35 @@ class H5Dataset(Dataset, ABC):
 
         with h5py.File(self.h5_path, 'r') as init_h5_file:
             self.dataset_length = init_h5_file["labels"].shape[0]
+        
+        # TODO: remove when done debugging
+        self.open_hdf5()
 
     def open_hdf5(self):
         """
         hdf5 files must be instantiated this way for multiprocessing
         """
-        file_descriptor = open(self.h5_path, 'rb')
-        h5_file = h5py.File(file_descriptor, "r")
+        # TODO: see if this helps
+        self.file_descriptor = open(self.h5_path, 'rb')
+        #with h5py.File(self.file_descriptor, 'r') as h5_file:
+        h5_file = h5py.File(self.file_descriptor, "r")
 
         # Create a memory map for event_data - loads event data into memory only on __getitem__()
         hdf5_hit_pmt = h5_file["hit_pmt"]
         hdf5_hit_charge = h5_file["hit_charge"]
 
-        self.hit_pmt = np.memmap(self.h5_path, mode="r", shape=hdf5_hit_pmt.shape, offset=hdf5_hit_pmt.id.get_offset(),
-                                 dtype=hdf5_hit_pmt.dtype)
-        self.time = np.memmap(self.h5_path, mode="r", shape=h5_file["hit_time"].shape,
-                              offset=h5_file["hit_time"].id.get_offset(),
-                              dtype=h5_file["hit_time"].dtype)
-        self.charge = np.memmap(self.h5_path, mode="r", shape=hdf5_hit_charge.shape,
-                                offset=hdf5_hit_charge.id.get_offset(), dtype=hdf5_hit_charge.dtype)
+        self.hit_pmt = np.memmap(self.h5_path, mode="r",
+                                shape=hdf5_hit_pmt.shape,
+                                offset=hdf5_hit_pmt.id.get_offset(),
+                                dtype=hdf5_hit_pmt.dtype)
+        self.time = np.memmap(self.h5_path, mode="r",
+                                shape=h5_file["hit_time"].shape,
+                                offset=h5_file["hit_time"].id.get_offset(),
+                                dtype=h5_file["hit_time"].dtype)
+        self.charge = np.memmap(self.h5_path, mode="r",
+                                shape=hdf5_hit_charge.shape,
+                                offset=hdf5_hit_charge.id.get_offset(),
+                                dtype=hdf5_hit_charge.dtype)
 
         # Load the contents which could fit easily into memory
         self.labels = np.array(h5_file["labels"])
@@ -42,7 +52,9 @@ class H5Dataset(Dataset, ABC):
         self.root_files = np.array(h5_file["root_files"])
 
         # Create attribute so that method won't be invoked again
-        self.h5_file = h5_file
+        # TODO: check if this works
+        #self.h5_file = True
+        #self.h5_file = h5_file
 
     @abstractmethod
     def get_data(self, hit_pmts, hit_charges, hit_times):
@@ -52,8 +64,11 @@ class H5Dataset(Dataset, ABC):
         return self.dataset_length
 
     def __getitem__(self, item):
+        """
+        # TODO: uncomment when done debugging
         if not hasattr(self, 'h5_file'):
             self.open_hdf5()
+        """
         
         start = self.event_hits_index[item]
         stop = self.event_hits_index[item + 1]
