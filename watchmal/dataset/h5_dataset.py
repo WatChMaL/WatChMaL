@@ -4,12 +4,6 @@ import h5py
 import numpy as np
 from abc import ABC, abstractmethod
 
-
-import torch.multiprocessing as mp
-# TODO: see if this can be removed
-mp.set_sharing_strategy('file_system')
-
-
 class H5Dataset(Dataset, ABC):
 
     def __init__(self, h5_path, transforms=None):
@@ -32,21 +26,16 @@ class H5Dataset(Dataset, ABC):
             self.energies = np.array(h5_file["energies"])
             self.positions = np.array(h5_file["positions"])
             self.angles = np.array(h5_file["angles"])
-            # TODO: fix this
             self.event_hits_index = np.append(h5_file["event_hits_index"], hdf5_hit_pmt.shape[0]).astype(np.int64)
             self.event_ids = np.array(h5_file["event_ids"])
             self.root_files = np.array(h5_file["root_files"])
 
 
-    def open_hdf5(self):
-        print("Opening hdf5 file")
+    def initialize(self):
         """
-        hdf5 files must be instantiated this way for multiprocessing
+        memmaps must be instantiated this way for multiprocessing (memmaps can't be pickled)
         """
-        # TODO: see if this helps
-        #with h5py.File(self.h5_path, "r") as h5_file:
         # Create a memory map for event_data - loads event data into memory only on __getitem__()
-
         self.hit_pmt = np.memmap(self.h5_path, mode="r",
                                 shape=self.pmt_dict['shape'],
                                 offset=self.pmt_dict['offset'],
@@ -61,9 +50,7 @@ class H5Dataset(Dataset, ABC):
                                 dtype=self.charge_dict['dtype'])
 
         # Create attribute so that method won't be invoked again
-        # TODO: check if this works
         self.initialized = True
-        #self.h5_file = h5_file
 
     @abstractmethod
     def get_data(self, hit_pmts, hit_charges, hit_times):
@@ -73,9 +60,8 @@ class H5Dataset(Dataset, ABC):
         return self.dataset_length
 
     def __getitem__(self, item):
-        # TODO: uncomment when done debugging
         if not hasattr(self, 'initialized'):
-            self.open_hdf5()
+            self.initialize()
         
         start = self.event_hits_index[item]
         stop = self.event_hits_index[item + 1]
