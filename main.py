@@ -25,7 +25,7 @@ def main(config):
     is_distributed = ngpus > 1
     
     # Initialize process group env variables
-    # TODO: see if this is needed
+    # TODO: fix port assignment to run automatically
     if is_distributed:
         os.environ['MASTER_ADDR'] = 'localhost'
         os.environ['MASTER_PORT'] = '12357'
