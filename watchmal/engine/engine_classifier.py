@@ -190,7 +190,9 @@ class ClassifierEngine:
                         try:
                             val_data = next(val_iter)
                         except StopIteration:
+                            del val_iter
                             val_iter = iter(self.data_loaders["validation"])
+                            val_data = next(val_iter)
                         
                         # extract the event data from the input data tuple
                         self.data      = val_data['data'].float()
