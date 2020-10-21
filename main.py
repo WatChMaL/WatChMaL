@@ -25,10 +25,16 @@ def main(config):
     is_distributed = ngpus > 1
     
     # Initialize process group env variables
-    # TODO: fix port assignment to run automatically
     if is_distributed:
         os.environ['MASTER_ADDR'] = 'localhost'
-        os.environ['MASTER_PORT'] = '12357'
+
+        if 'MASTER_PORT' in config:
+            master_port = config.MASTER_PORT
+        else:
+            master_port = 12355
+        
+        master_port += config.gpu_list[0]
+        os.environ['MASTER_PORT'] = str(master_port)
 
     # create run directory
     try:

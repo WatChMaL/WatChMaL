@@ -372,6 +372,72 @@ def separate_particles(input_array_list,labels,index_dict,desired_labels=['gamma
 
     return separated_arrays
 
+def compute_roc(softmax_out_val, labels_val, true_label, false_label):
+    # Compute ROC metrics
+    labels_val_for_comp = labels_val[np.where( (labels_val==false_label) | (labels_val==true_label)  )]
+    softmax_out_for_comp = softmax_out_val[np.where(  (labels_val==false_label) | (labels_val==true_label)  )][:,true_label]
+
+    fpr, tpr, thr = roc_curve(labels_val_for_comp, softmax_out_for_comp, pos_label=true_label)
+    
+    rejection=1.0/(fpr+1e-10)
+    
+    roc_AUC = auc(fpr,tpr)
+    return fpr, tpr, thr, rejection, roc_AUC
+
+def plot_roc(softmax_out_val, labels_val, true_label_name, true_label, false_label_name, false_label, axes=None, show=False):
+    
+    """
+    Purpose : Plot ROC curves for a classifier that has been evaluated on a validation set with respect to given labels
+    
+    Args: location     ... output directory containing log files
+          losslim      ... sets bound on y axis of loss
+          show         ... if true then display figure, otherwise return figure
+    """
+    fpr, tpr, thr, rejection, roc_AUC = compute_roc(softmax_out_val, labels_val, true_label, false_label)
+
+    # Plot results
+    if axes is None:
+        fig1, ax1 = plt.subplots(figsize=(12,8),facecolor="w")
+        fig2, ax2 = plt.subplots(figsize=(12,8),facecolor="w")
+        fig3, ax3 = plt.subplots(figsize=(12,8),facecolor="w")
+    else:
+        ax1 = axes[0]
+        ax2 = axes[1]
+        ax3 = axes[2]
+
+    ax1.tick_params(axis="both", labelsize=20)
+    ax1.plot(fpr,tpr,label=r'{} VS {} ROC, AUC={:.3f}'.format(true_label_name, false_label_name, roc_AUC))
+    ax1.set_xlabel('FPR',fontweight='bold',fontsize=24,color='black')
+    ax1.set_ylabel('TPR',fontweight='bold',fontsize=24,color='black')
+    ax1.legend(loc="lower right",prop={'size': 16})
+    
+    ax2.tick_params(axis="both", labelsize=20)
+    ax2.set_yscale('log')
+    ax2.set_ylim(0.2,1.2e6)
+    ax2.grid(b=True, which='major', color='gray', linestyle='-')
+    ax2.grid(b=True, which='minor', color='gray', linestyle='--')
+    ax2.plot(tpr, rejection, label=r'{} VS {} ROC, AUC={:.3f}'.format(true_label_name, false_label_name, roc_AUC))
+    ax2.set_xlabel('efficiency',fontweight='bold',fontsize=24,color='black')
+    ax2.set_ylabel('Rejection',fontweight='bold',fontsize=24,color='black')
+    ax2.legend(loc="upper right",prop={'size': 16})
+    
+    ax3.tick_params(axis="both", labelsize=20)
+    #plt.yscale('log')
+    #plt.ylim(1.0,1)
+    ax3.grid(b=True, which='major', color='gray', linestyle='-')
+    ax3.grid(b=True, which='minor', color='gray', linestyle='--')
+    ax3.plot(tpr, tpr/np.sqrt(fpr), label=r'{} VS {} ROC, AUC={:.3f}'.format(true_label_name, false_label_name, roc_AUC))
+    ax3.set_xlabel('efficiency',fontweight='bold',fontsize=24,color='black')
+    ax3.set_ylabel('~significance',fontweight='bold',fontsize=24,color='black')
+    ax3.legend(loc="upper right",prop={'size': 16})
+
+    if show:
+        plt.show()
+        return
+    
+    if axes is None:
+        return fig1, fig2, fig3
+
 def plot_rocs(softmax_out_val, labels_val, labels_dict, plot_list=None, vs_list = None, show=True):
     
     """
@@ -411,65 +477,3 @@ def plot_rocs(softmax_out_val, labels_val, labels_dict, plot_list=None, vs_list 
         return
     
     return figs
-
-def plot_roc(softmax_out_val, labels_val, true_label_name, true_label, false_label_name, false_label, axes=None, show=False):
-    
-    """
-    Purpose : Plot ROC curves for a classifier that has been evaluated on a validation set with respect to given labels
-    
-    Args: location     ... output directory containing log files
-          losslim      ... sets bound on y axis of loss
-          show         ... if true then display figure, otherwise return figure
-    """
-    # Compute ROC metrics
-    labels_val_for_comp = labels_val[np.where( (labels_val==false_label) | (labels_val==true_label)  )]
-    softmax_out_for_comp = softmax_out_val[np.where(  (labels_val==false_label) | (labels_val==true_label)  )][:,true_label]
-
-    fpr, tpr, thr = roc_curve(labels_val_for_comp, softmax_out_for_comp, pos_label=true_label)
-    
-    roc_AUC = auc(fpr,tpr)
-
-    # Plot results
-    if axes is None:
-        fig1, ax1 = plt.subplots(figsize=(12,8),facecolor="w")
-        fig2, ax2 = plt.subplots(figsize=(12,8),facecolor="w")
-        fig3, ax3 = plt.subplots(figsize=(12,8),facecolor="w")
-    else:
-        ax1 = axes[0]
-        ax2 = axes[1]
-        ax3 = axes[2]
-
-    ax1.tick_params(axis="both", labelsize=20)
-    ax1.plot(fpr,tpr,label=r'{} VS {} ROC, AUC={:.3f}'.format(true_label_name, false_label_name, roc_AUC))
-    ax1.set_xlabel('FPR',fontweight='bold',fontsize=24,color='black')
-    ax1.set_ylabel('TPR',fontweight='bold',fontsize=24,color='black')
-    ax1.legend(loc="lower right",prop={'size': 16})
-
-    rejection=1.0/(fpr+1e-10)
-    
-    ax2.tick_params(axis="both", labelsize=20)
-    ax2.set_yscale('log')
-    ax2.set_ylim(0.2,1.2e6)
-    ax2.grid(b=True, which='major', color='gray', linestyle='-')
-    ax2.grid(b=True, which='minor', color='gray', linestyle='--')
-    ax2.plot(tpr, rejection, label=r'{} VS {} ROC, AUC={:.3f}'.format(true_label_name, false_label_name, roc_AUC))
-    ax2.set_xlabel('efficiency',fontweight='bold',fontsize=24,color='black')
-    ax2.set_ylabel('Rejection',fontweight='bold',fontsize=24,color='black')
-    ax2.legend(loc="upper right",prop={'size': 16})
-    
-    ax3.tick_params(axis="both", labelsize=20)
-    #plt.yscale('log')
-    #plt.ylim(1.0,1)
-    ax3.grid(b=True, which='major', color='gray', linestyle='-')
-    ax3.grid(b=True, which='minor', color='gray', linestyle='--')
-    ax3.plot(tpr, tpr/np.sqrt(fpr), label=r'{} VS {} ROC, AUC={:.3f}'.format(true_label_name, false_label_name, roc_AUC))
-    ax3.set_xlabel('efficiency',fontweight='bold',fontsize=24,color='black')
-    ax3.set_ylabel('~significance',fontweight='bold',fontsize=24,color='black')
-    ax3.legend(loc="upper right",prop={'size': 16})
-
-    if show:
-        plt.show()
-        return
-    
-    if axes is None:
-        return fig1, fig2, fig3
