@@ -32,7 +32,7 @@ def main(config):
             master_port = config.MASTER_PORT
         else:
             master_port = 12355
-        
+        # Automatically select port based on base gpu
         master_port += config.gpu_list[0]
         os.environ['MASTER_PORT'] = str(master_port)
 
@@ -43,7 +43,7 @@ def main(config):
         print("Creating a directory for run dump at : {}".format(config.dump_path))
         os.makedirs(config.dump_path)
     
-    print("Dump path: ", config.dump_path)
+    print("Dump path: {}".format(config.dump_path))
     
     if is_distributed:
         print("Using multiprocessing...")

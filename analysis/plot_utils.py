@@ -384,7 +384,7 @@ def compute_roc(softmax_out_val, labels_val, true_label, false_label):
     roc_AUC = auc(fpr,tpr)
     return fpr, tpr, thr, rejection, roc_AUC
 
-def plot_roc(softmax_out_val, labels_val, true_label_name, true_label, false_label_name, false_label, axes=None, show=False):
+def plot_roc(softmax_out_val, labels_val, true_label_name, true_label, false_label_name, false_label, fig_list=None, axes=None, show=False):
     
     """
     Purpose : Plot ROC curves for a classifier that has been evaluated on a validation set with respect to given labels
@@ -395,48 +395,61 @@ def plot_roc(softmax_out_val, labels_val, true_label_name, true_label, false_lab
     """
     fpr, tpr, thr, rejection, roc_AUC = compute_roc(softmax_out_val, labels_val, true_label, false_label)
 
+    if fig_list is None:
+        fig_list = list(range(3))
+    
+    figs = []
     # Plot results
     if axes is None:
-        fig1, ax1 = plt.subplots(figsize=(12,8),facecolor="w")
-        fig2, ax2 = plt.subplots(figsize=(12,8),facecolor="w")
-        fig3, ax3 = plt.subplots(figsize=(12,8),facecolor="w")
+        if 0 in fig_list:
+            fig0, ax0 = plt.subplots(figsize=(12,8),facecolor="w")
+            figs.append(fig0)
+        if 1 in fig_list: 
+            fig1, ax1 = plt.subplots(figsize=(12,8),facecolor="w")
+            figs.append(fig1)
+        if 2 in fig_list: 
+            fig2, ax2 = plt.subplots(figsize=(12,8),facecolor="w")
+            figs.append(fig2)
     else:
-        ax1 = axes[0]
-        ax2 = axes[1]
-        ax3 = axes[2]
+        ax0 = axes[0]
+        ax1 = axes[1]
+        ax2 = axes[2]
 
-    ax1.tick_params(axis="both", labelsize=20)
-    ax1.plot(fpr,tpr,label=r'{} VS {} ROC, AUC={:.3f}'.format(true_label_name, false_label_name, roc_AUC))
-    ax1.set_xlabel('FPR',fontweight='bold',fontsize=24,color='black')
-    ax1.set_ylabel('TPR',fontweight='bold',fontsize=24,color='black')
-    ax1.legend(loc="lower right",prop={'size': 16})
+    if 0 in fig_list: 
+        ax0.tick_params(axis="both", labelsize=20)
+        ax0.plot(fpr,tpr,label=r'{} VS {} ROC, AUC={:.3f}'.format(true_label_name, false_label_name, roc_AUC))
+        ax0.set_xlabel('FPR',fontweight='bold',fontsize=24,color='black')
+        ax0.set_ylabel('TPR',fontweight='bold',fontsize=24,color='black')
+        ax0.legend(loc="lower right",prop={'size': 16})
     
-    ax2.tick_params(axis="both", labelsize=20)
-    ax2.set_yscale('log')
-    ax2.set_ylim(0.2,1.2e6)
-    ax2.grid(b=True, which='major', color='gray', linestyle='-')
-    ax2.grid(b=True, which='minor', color='gray', linestyle='--')
-    ax2.plot(tpr, rejection, label=r'{} VS {} ROC, AUC={:.3f}'.format(true_label_name, false_label_name, roc_AUC))
-    ax2.set_xlabel('efficiency',fontweight='bold',fontsize=24,color='black')
-    ax2.set_ylabel('Rejection',fontweight='bold',fontsize=24,color='black')
-    ax2.legend(loc="upper right",prop={'size': 16})
+    if 1 in fig_list: 
+        ax1.tick_params(axis="both", labelsize=20)
+        ax1.set_yscale('log')
+        ax1.set_ylim(0.2,1.2e6)
+        ax1.grid(b=True, which='major', color='gray', linestyle='-')
+        ax1.grid(b=True, which='minor', color='gray', linestyle='--')
+        ax1.plot(tpr, rejection, label=r'{} VS {} ROC, AUC={:.3f}'.format(true_label_name, false_label_name, roc_AUC))
+        ax1.set_xlabel('efficiency',fontweight='bold',fontsize=24,color='black')
+        ax1.set_ylabel('Rejection',fontweight='bold',fontsize=24,color='black')
+        ax1.legend(loc="upper right",prop={'size': 16})
     
-    ax3.tick_params(axis="both", labelsize=20)
-    #plt.yscale('log')
-    #plt.ylim(1.0,1)
-    ax3.grid(b=True, which='major', color='gray', linestyle='-')
-    ax3.grid(b=True, which='minor', color='gray', linestyle='--')
-    ax3.plot(tpr, tpr/np.sqrt(fpr), label=r'{} VS {} ROC, AUC={:.3f}'.format(true_label_name, false_label_name, roc_AUC))
-    ax3.set_xlabel('efficiency',fontweight='bold',fontsize=24,color='black')
-    ax3.set_ylabel('~significance',fontweight='bold',fontsize=24,color='black')
-    ax3.legend(loc="upper right",prop={'size': 16})
+    if 2 in fig_list: 
+        ax2.tick_params(axis="both", labelsize=20)
+        #plt.yscale('log')
+        #plt.ylim(1.0,1)
+        ax2.grid(b=True, which='major', color='gray', linestyle='-')
+        ax2.grid(b=True, which='minor', color='gray', linestyle='--')
+        ax2.plot(tpr, tpr/np.sqrt(fpr), label=r'{} VS {} ROC, AUC={:.3f}'.format(true_label_name, false_label_name, roc_AUC))
+        ax2.set_xlabel('efficiency',fontweight='bold',fontsize=24,color='black')
+        ax2.set_ylabel('~significance',fontweight='bold',fontsize=24,color='black')
+        ax2.legend(loc="upper right",prop={'size': 16})
 
     if show:
         plt.show()
         return
     
     if axes is None:
-        return fig1, fig2, fig3
+        return tuple(figs)
 
 def plot_rocs(softmax_out_val, labels_val, labels_dict, plot_list=None, vs_list = None, show=True):
     
