@@ -372,9 +372,6 @@ class ClassifierEngine:
             print("Sorting Outputs...")
             sorted_indices = np.argsort(indices)
 
-            #TODO: debugging
-            print(softmaxes.shape)
-
             # Save overall evaluation results
             print("Saving Data...")
             np.save(self.dirpath + "indices.npy", sorted_indices)
@@ -388,7 +385,7 @@ class ClassifierEngine:
             val_acc = np.sum(local_eval_metrics_dict["eval_acc"])
 
             print("\nAvg eval loss : " + str(val_loss/val_iterations),
-                "\nAvg eval acc : " + str(val_acc/val_iterations))
+                  "\nAvg eval acc : "  + str(val_acc/val_iterations))
         
     # ========================================================================
 

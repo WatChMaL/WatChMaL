@@ -118,9 +118,12 @@ def multi_plot_roc(fprs, tprs, thrs, true_label_name, false_label_name, fig_list
     rejections = [1.0/(fpr+1e-10) for fpr in fprs]
     AUCs = [auc(fpr,tpr) for fpr, tpr in zip(fprs, tprs)]
 
-    num_panes = 1
-    fig, axes = plt.subplots(1, num_panes, figsize=(12,8)) #(8*num_panes,12))
+    num_panes = len(fig_list)
+    fig, axes = plt.subplots(num_panes, 1, figsize=(12,8*num_panes))
     fig.suptitle("ROC for {} vs {}".format(true_label_name, false_label_name), fontweight='bold',fontsize=32)
+
+    # Needed for 1 plot case
+    axes = np.array(axes).reshape(-1)
 
     for fpr, tpr, thr in zip(fprs, tprs, thrs):
         figs = plot_roc(fpr, tpr, thr, true_label_name, false_label_name, axes=axes, fig_list=fig_list, show=False)
