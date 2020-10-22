@@ -372,6 +372,9 @@ class ClassifierEngine:
             print("Sorting Outputs...")
             sorted_indices = np.argsort(indices)
 
+            #TODO: debugging
+            print(softmaxes.shape)
+
             # Save overall evaluation results
             print("Saving Data...")
             np.save(self.dirpath + "indices.npy", sorted_indices)
@@ -410,7 +413,7 @@ class ClassifierEngine:
             self.model_accs.load_state_dict(checkpoint['state_dict'])
             
             # if optim is provided, load the state of the optim
-            if self.optimizer is not None:
+            if hasattr(self, 'optimizer'):
                 self.optimizer.load_state_dict(checkpoint['optimizer'])
             
             # load iteration count

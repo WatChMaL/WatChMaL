@@ -1,0 +1,13 @@
+gpu_list:
+    - 4
+dump_path: './outputs/'
+load_state: '/home/jtindall/WatChMaL/outputs/2020-10-21/23-47-11/outputs/ClassifierBEST.pth'
+defaults:
+    - data: iwcd_postveto_nomichel
+    - data/dataset: iwcd_cnn
+    - model: classifier
+    - model/feature_extractor: resnet18
+    - model/classification_network: resnet_fc
+    - engine: classifier
+    - tasks/evaluate: test
+    - sampler@tasks.evaluate.data_loaders.test.sampler: subset_sequential
