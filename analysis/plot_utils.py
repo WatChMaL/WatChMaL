@@ -410,9 +410,18 @@ def plot_roc(fpr, tpr, thr, true_label_name, false_label_name, fig_list=None, ax
             fig2, ax2 = plt.subplots(figsize=(12,8),facecolor="w")
             figs.append(fig2)
     else:
-        ax0 = axes[0]
-        ax1 = axes[1]
-        ax2 = axes[2]
+        ax1 = axes
+        """
+        if 0 in fig_list:
+            ax0 = axes[0]
+            figs.append(fig0)
+        if 1 in fig_list: 
+            ax1 = axes[1]
+            figs.append(fig1)
+        if 2 in fig_list: 
+            ax2 = axes[2]
+            figs.append(fig2)
+        """
 
     if 0 in fig_list: 
         ax0.tick_params(axis="both", labelsize=20)

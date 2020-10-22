@@ -64,3 +64,14 @@ def collapse_test_output(softmaxes, labels, index_dict,predictions=None,ignore_t
     if predictions is not None: return new_softmaxes, new_labels, new_predictions
     
     return new_softmaxes, new_labels
+
+
+def multi_collapse_test_output(output_softmax_list, actual_labels_list, label_dict):
+    collapsed_class_scores_list, collapsed_class_labels_list = [],[]
+
+    for softmaxes, labels in zip(output_softmax_list, actual_labels_list):
+        collapsed_class_scores, collapsed_class_labels = collapse_test_output(softmaxes, labels, label_dict)
+        collapsed_class_scores_list.append(collapsed_class_scores)
+        collapsed_class_labels_list.append(collapsed_class_labels)
+
+    return collapsed_class_scores_list, collapsed_class_labels_list

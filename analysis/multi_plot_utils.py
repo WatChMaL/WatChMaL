@@ -4,6 +4,10 @@ import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import math
 
+from sklearn.metrics import auc
+
+from analysis.plot_utils import compute_roc, plot_roc
+
 def multi_disp_learn_hist(locations,losslim=None,show=True,titles=None,best_only=False,leg_font=10,title_font=10,xmax=None):
     '''
     Plots a grid of learning histories.
@@ -79,7 +83,18 @@ def multi_disp_learn_hist(locations,losslim=None,show=True,titles=None,best_only
     gs.tight_layout(fig)
     return fig
 
-def multi_plot_roc(data, metric, pos_neg_labels, plot_labels = None, png_name=None,title='ROC Curve', annotate=True,ax=None, linestyle=None, leg_loc=None, xlabel=None,ylabel=None,legend_label_dict=None):
+def multi_compute_roc(softmax_out_val_list, labels_val_list, true_label, false_label):
+    # Compute ROC metrics
+    fprs, tprs, thrs = [], [], []
+    for softmax_out_val, labels_val in zip(softmax_out_val_list, labels_val_list):
+        fpr, tpr, thr = compute_roc(softmax_out_val, labels_val, true_label, false_label)
+        fprs.append(fpr)
+        tprs.append(tpr)
+        thrs.append(thr)
+
+    return fprs, tprs, thrs
+
+def multi_plot_roc(fprs, tprs, thrs, true_label_name, false_label_name, fig_list=None, axes=None, show=False):
     '''
     plot_multiple_ROC(data, metric, pos_neg_labels, plot_labels = None, png_name=None,title='ROC Curve', annotate=True,ax=None, linestyle=None, leg_loc=None, xlabel=None,ylabel=None,legend_label_dict=None)
     Plot multiple ROC curves of background rejection vs signal efficiency. Can plot 'rejection' (1/fpr) or 'fraction' (tpr).
@@ -100,4 +115,14 @@ def multi_plot_roc(data, metric, pos_neg_labels, plot_labels = None, png_name=No
     author: Calum Macdonald
     June 2020
     '''
-    return
+    rejections = [1.0/(fpr+1e-10) for fpr in fprs]
+    AUCs = [auc(fpr,tpr) for fpr, tpr in zip(fprs, tprs)]
+
+    num_panes = 1
+    fig, axes = plt.subplots(1, num_panes, figsize=(12,8)) #(8*num_panes,12))
+    fig.suptitle("ROC for {} vs {}".format(true_label_name, false_label_name), fontweight='bold',fontsize=32)
+
+    for fpr, tpr, thr in zip(fprs, tprs, thrs):
+        figs = plot_roc(fpr, tpr, thr, true_label_name, false_label_name, axes=axes, fig_list=fig_list, show=False)
+
+    return figs
