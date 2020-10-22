@@ -379,12 +379,9 @@ def compute_roc(softmax_out_val, labels_val, true_label, false_label):
 
     fpr, tpr, thr = roc_curve(labels_val_for_comp, softmax_out_for_comp, pos_label=true_label)
     
-    rejection=1.0/(fpr+1e-10)
-    
-    roc_AUC = auc(fpr,tpr)
-    return fpr, tpr, thr, rejection, roc_AUC
+    return fpr, tpr, thr
 
-def plot_roc(softmax_out_val, labels_val, true_label_name, true_label, false_label_name, false_label, fig_list=None, axes=None, show=False):
+def plot_roc(fpr, tpr, thr, true_label_name, false_label_name, fig_list=None, axes=None, show=False):
     
     """
     Purpose : Plot ROC curves for a classifier that has been evaluated on a validation set with respect to given labels
@@ -393,7 +390,9 @@ def plot_roc(softmax_out_val, labels_val, true_label_name, true_label, false_lab
           losslim      ... sets bound on y axis of loss
           show         ... if true then display figure, otherwise return figure
     """
-    fpr, tpr, thr, rejection, roc_AUC = compute_roc(softmax_out_val, labels_val, true_label, false_label)
+    # Compute additional parameters
+    rejection=1.0/(fpr+1e-10)
+    roc_AUC = auc(fpr,tpr)
 
     if fig_list is None:
         fig_list = list(range(3))
