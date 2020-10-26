@@ -17,6 +17,7 @@ import os
 from time import strftime, localtime, time
 import sys
 from sys import stdout
+import copy
 
 # WatChMaL imports
 from watchmal.dataset.data_utils import get_data_loader
@@ -261,7 +262,7 @@ class ClassifierEngine:
                 # update the epoch and iteration
                 epoch          += 1./len(self.data_loaders["train"])
                 self.iteration += 1
-
+                
                 # get relevant attributes of result for logging
                 train_metrics = {"iteration": self.iteration, "epoch": epoch, "loss": res["loss"], "accuracy": res["accuracy"]}
                 
@@ -269,6 +270,7 @@ class ClassifierEngine:
                 self.train_log.record(train_metrics)
                 self.train_log.write()
                 self.train_log.flush()
+                
                 
                 # print the metrics at given intervals
                 if self.rank == 0 and self.iteration % report_interval == 0:
@@ -314,9 +316,12 @@ class ClassifierEngine:
             
             # Extract the event data and label from the DataLoader iterator
             for it, eval_data in enumerate(self.data_loaders["test"]):
-
-                self.data = eval_data['data'].float()
-                self.labels = eval_data['labels'].long()
+                
+                # TODO: see if copying helps
+                self.data = copy.deepcopy(eval_data['data'].float())
+                self.labels = copy.deepcopy(eval_data['labels'].long())
+                
+                eval_indices = copy.deepcopy(eval_data['indices'].long().to("cpu"))
 
                 # Run the forward procedure and output the result
                 result = self.forward(False)
@@ -326,7 +331,6 @@ class ClassifierEngine:
                 
                 # Copy the tensors back to the CPU
                 self.labels = self.labels.to("cpu")
-                eval_indices = eval_data['indices'].long().to("cpu")
                 
                 # Add the local result to the final result
                 indices.extend(eval_indices)

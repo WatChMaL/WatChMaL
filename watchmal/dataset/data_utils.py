@@ -7,7 +7,7 @@ import numpy as np
 from watchmal.dataset.samplers import DistributedSamplerWrapper
 
 def get_data_loader(dataset, batch_size, sampler, num_workers, is_distributed, split_path=None, split_key=None, transforms=None):
-    dataset = instantiate(dataset, transforms=transforms)
+    dataset = instantiate(dataset, transforms=transforms, is_distributed=is_distributed)
     
     if split_path is not None and split_key is not None:
         split_indices = np.load(split_path, allow_pickle=True)[split_key]

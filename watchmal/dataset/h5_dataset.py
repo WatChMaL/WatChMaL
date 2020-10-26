@@ -3,10 +3,11 @@ from torch.utils.data import Dataset
 import h5py
 import numpy as np
 from abc import ABC, abstractmethod
+import copy
 
 class H5Dataset(Dataset, ABC):
 
-    def __init__(self, h5_path, transforms=None):
+    def __init__(self, h5_path, is_distributed, transforms=None):
         self.h5_path = h5_path
 
         with h5py.File(self.h5_path, 'r') as h5_file:
@@ -29,7 +30,10 @@ class H5Dataset(Dataset, ABC):
             self.event_hits_index = np.append(h5_file["event_hits_index"], hdf5_hit_pmt.shape[0]).astype(np.int64)
             self.event_ids = np.array(h5_file["event_ids"])
             self.root_files = np.array(h5_file["root_files"])
-
+        
+        # TODO: fix hanging
+        if not is_distributed:
+            self.initialize()
 
     def initialize(self):
         """
@@ -44,6 +48,7 @@ class H5Dataset(Dataset, ABC):
                                 shape=self.time_dict['shape'],
                                 offset=self.time_dict['offset'],
                                 dtype=self.time_dict['dtype'])
+
         self.charge = np.memmap(self.h5_path, mode="r",
                                 shape=self.charge_dict['shape'],
                                 offset=self.charge_dict['offset'],
