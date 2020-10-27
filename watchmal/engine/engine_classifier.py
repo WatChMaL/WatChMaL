@@ -22,7 +22,6 @@ import copy
 # WatChMaL imports
 from watchmal.dataset.data_utils import get_data_loader
 from watchmal.utils.logging_utils import CSVData
-from watchmal.dataset.data_utils import get_data_loader
 
 #extraneous testing imports
 

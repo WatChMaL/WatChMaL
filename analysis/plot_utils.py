@@ -68,7 +68,7 @@ def tile(canvas, ul, pmts):
         for col in range(10):
             canvas[row+ul[0]][col+ul[1]] = mpmt[row][col]
 
-def disp_learn_hist(location,losslim=None,show=True):
+def disp_learn_hist(location, losslim=None, axis=None, show=True):
     
     """
     Purpose : Plot the loss and accuracy history for a training session
@@ -82,7 +82,11 @@ def disp_learn_hist(location,losslim=None,show=True):
 
     train_log_df = get_aggregated_train_data(location)
 
-    fig, ax1 = plt.subplots(figsize=(12,8),facecolor='w')
+    if axis is None:
+        fig, ax1 = plt.subplots(figsize=(12,8),facecolor='w')
+    else:
+        ax1 = axis
+    
     line11 = ax1.plot(train_log_df.epoch, train_log_df.loss, linewidth=2, label='Train loss', color='b', alpha=0.3)
     line12 = ax1.plot(val_log_df.epoch, val_log_df.loss, marker='o', markersize=3, linestyle='', label='Validation loss', color='blue')
 
@@ -114,13 +118,16 @@ def disp_learn_hist(location,losslim=None,show=True):
         plt.show()
         return
     
-    return fig
+    if axis is None:
+        return fig
 
 def get_aggregated_train_data(location):
     # get all training data files
     base_log_path = location + '/log_train_[0-9]*.csv'
     log_paths = glob.glob(base_log_path)
+
     print("Found training logs: ", log_paths)
+    
     log_dfs = []
     for log_path in log_paths:
         log_dfs.append(pd.read_csv(log_path))
@@ -139,8 +146,7 @@ def get_aggregated_train_data(location):
 
     return train_log_df
 
-def disp_learn_hist_smoothed(location, losslim=None, window_train=400,window_val=40,show=True):
-    
+def disp_learn_hist_smoothed(location, losslim=None, window_train=400, window_val=40, show=True):
     """
     Purpose : Plot the loss and accuracy history for a training session with averaging to clean up noise
     
@@ -381,8 +387,7 @@ def compute_roc(softmax_out_val, labels_val, true_label, false_label):
     
     return fpr, tpr, thr
 
-def plot_roc(fpr, tpr, thr, true_label_name, false_label_name, fig_list=None, axes=None, show=False):
-    
+def plot_roc(fpr, tpr, thr, true_label_name, false_label_name, fig_list=None, xlims=None, ylims=None, axes=None, show=False):
     """
     Purpose : Plot ROC curves for a classifier that has been evaluated on a validation set with respect to given labels
     
@@ -419,23 +424,47 @@ def plot_roc(fpr, tpr, thr, true_label_name, false_label_name, fig_list=None, ax
         if 2 in fig_list: 
             ax2 = next(axes_iter)
 
+    if xlims is not None:
+        xlim_iter = iter(xlims)
+    if ylims is not None:
+        ylim_iter = iter(ylims)
+
     if 0 in fig_list: 
         ax0.tick_params(axis="both", labelsize=20)
         ax0.plot(fpr,tpr,label=r'{} VS {} ROC, AUC={:.3f}'.format(true_label_name, false_label_name, roc_AUC))
-        ax0.set_xlabel('FPR',fontweight='bold',fontsize=24,color='black')
-        ax0.set_ylabel('TPR',fontweight='bold',fontsize=24,color='black')
+        ax0.set_xlabel('FPR', fontsize=20)
+        ax0.set_ylabel('TPR', fontsize=20)
         ax0.legend(loc="lower right",prop={'size': 16})
+
+        if xlims is not None:
+            xlim = next(xlim_iter)
+            ax0.set_xlim(xlim[0],xlim[1])
+        if ylims is not None:
+            ylim = next(ylim_iter)
+            ax0.set_ylim(ylim[0],ylim[1])
     
     if 1 in fig_list: 
         ax1.tick_params(axis="both", labelsize=20)
         ax1.set_yscale('log')
-        ax1.set_ylim(0.2,1.2e6)
         ax1.grid(b=True, which='major', color='gray', linestyle='-')
         ax1.grid(b=True, which='minor', color='gray', linestyle='--')
         ax1.plot(tpr, rejection, label=r'{} VS {} ROC, AUC={:.3f}'.format(true_label_name, false_label_name, roc_AUC))
-        ax1.set_xlabel('efficiency',fontweight='bold',fontsize=24,color='black')
-        ax1.set_ylabel('Rejection',fontweight='bold',fontsize=24,color='black')
+
+        xlabel = f'{true_label_name} Signal Efficiency'
+        ylabel = f'{false_label_name} Background Rejection'
+        title = '{} vs {} Rejection'.format(true_label_name, false_label_name)
+
+        ax1.set_xlabel(xlabel, fontsize=20)
+        ax1.set_ylabel(ylabel, fontsize=20)
+        ax1.set_title(title, fontsize=24)
         ax1.legend(loc="upper right",prop={'size': 16})
+
+        if xlims is not None:
+            xlim = next(xlim_iter)
+            ax1.set_xlim(xlim[0],xlim[1])
+        if ylims is not None:
+            ylim = next(ylim_iter)
+            ax1.set_ylim(ylim[0],ylim[1])
     
     if 2 in fig_list: 
         ax2.tick_params(axis="both", labelsize=20)
@@ -444,9 +473,16 @@ def plot_roc(fpr, tpr, thr, true_label_name, false_label_name, fig_list=None, ax
         ax2.grid(b=True, which='major', color='gray', linestyle='-')
         ax2.grid(b=True, which='minor', color='gray', linestyle='--')
         ax2.plot(tpr, tpr/np.sqrt(fpr), label=r'{} VS {} ROC, AUC={:.3f}'.format(true_label_name, false_label_name, roc_AUC))
-        ax2.set_xlabel('efficiency',fontweight='bold',fontsize=24,color='black')
-        ax2.set_ylabel('~significance',fontweight='bold',fontsize=24,color='black')
+        ax2.set_xlabel('efficiency', fontsize=20)
+        ax2.set_ylabel('~significance', fontsize=20)
         ax2.legend(loc="upper right",prop={'size': 16})
+
+        if xlims is not None:
+            xlim = next(xlim_iter)
+            ax2.set_xlim(xlim[0],xlim[1])
+        if ylims is not None:
+            ylim = next(ylim_iter)
+            ax2.set_ylim(ylim[0],ylim[1])
 
     if show:
         plt.show()
