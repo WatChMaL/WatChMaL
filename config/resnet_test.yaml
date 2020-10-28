@@ -1,8 +1,8 @@
 gpu_list:
-    - 4
+    - 0
+    - 1
 dump_path: './outputs/'
-load_state: '/home/jtindall/new_framework_replication/new_frame_single_gpu_replication/1_gpu_run_2/outputs/ClassifierBEST.pth'
-
+load_state: '/home/jtindall/WatChMaL/outputs/2020-10-27/single_gpu_run_6/outputs/ClassifierBEST.pth'
 defaults:
     - data: iwcd_postveto_nomichel
     - data/dataset: iwcd_cnn

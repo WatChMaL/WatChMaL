@@ -387,7 +387,7 @@ def compute_roc(softmax_out_val, labels_val, true_label, false_label):
     
     return fpr, tpr, thr
 
-def plot_roc(fpr, tpr, thr, true_label_name, false_label_name, fig_list=None, xlims=None, ylims=None, axes=None, show=False):
+def plot_roc(fpr, tpr, thr, true_label_name, false_label_name, fig_list=None, xlims=None, ylims=None, axes=None, linestyle=None, linecolor=None, plot_label=None, show=False):
     """
     Purpose : Plot ROC curves for a classifier that has been evaluated on a validation set with respect to given labels
     
@@ -431,7 +431,10 @@ def plot_roc(fpr, tpr, thr, true_label_name, false_label_name, fig_list=None, xl
 
     if 0 in fig_list: 
         ax0.tick_params(axis="both", labelsize=20)
-        ax0.plot(fpr,tpr,label=r'{} VS {} ROC, AUC={:.3f}'.format(true_label_name, false_label_name, roc_AUC))
+        ax0.plot(fpr, tpr,
+                    label=plot_label if plot_label + ', AUC={:.3f}'.format(roc_AUC)  is not None else r'{} VS {} ROC, AUC={:.3f}'.format(true_label_name, false_label_name, roc_AUC),
+                    linestyle=linestyle  if linestyle is not None else None,
+                    color=linecolor if linecolor is not None else None)
         ax0.set_xlabel('FPR', fontsize=20)
         ax0.set_ylabel('TPR', fontsize=20)
         ax0.legend(loc="lower right",prop={'size': 16})
@@ -448,7 +451,10 @@ def plot_roc(fpr, tpr, thr, true_label_name, false_label_name, fig_list=None, xl
         ax1.set_yscale('log')
         ax1.grid(b=True, which='major', color='gray', linestyle='-')
         ax1.grid(b=True, which='minor', color='gray', linestyle='--')
-        ax1.plot(tpr, rejection, label=r'{} VS {} ROC, AUC={:.3f}'.format(true_label_name, false_label_name, roc_AUC))
+        ax1.plot(tpr, rejection, 
+                    label=plot_label + ', AUC={:.3f}'.format(roc_AUC)  if plot_label is not None else r'{} VS {} ROC, AUC={:.3f}'.format(true_label_name, false_label_name, roc_AUC),
+                    linestyle=linestyle  if linestyle is not None else None,
+                    color=linecolor if linecolor is not None else None)
 
         xlabel = f'{true_label_name} Signal Efficiency'
         ylabel = f'{false_label_name} Background Rejection'
@@ -457,7 +463,7 @@ def plot_roc(fpr, tpr, thr, true_label_name, false_label_name, fig_list=None, xl
         ax1.set_xlabel(xlabel, fontsize=20)
         ax1.set_ylabel(ylabel, fontsize=20)
         ax1.set_title(title, fontsize=24)
-        ax1.legend(loc="upper right",prop={'size': 16})
+        ax1.legend(bbox_to_anchor=(1.05, 1), loc='upper left') #loc="upper right",prop={'size': 16})
 
         if xlims is not None:
             xlim = next(xlim_iter)
@@ -472,7 +478,10 @@ def plot_roc(fpr, tpr, thr, true_label_name, false_label_name, fig_list=None, xl
         #plt.ylim(1.0,1)
         ax2.grid(b=True, which='major', color='gray', linestyle='-')
         ax2.grid(b=True, which='minor', color='gray', linestyle='--')
-        ax2.plot(tpr, tpr/np.sqrt(fpr), label=r'{} VS {} ROC, AUC={:.3f}'.format(true_label_name, false_label_name, roc_AUC))
+        ax2.plot(tpr, tpr/np.sqrt(fpr), 
+                    label= plot_label + ', AUC={:.3f}'.format(roc_AUC) if plot_label is not None else r'{} VS {} ROC, AUC={:.3f}'.format(true_label_name, false_label_name, roc_AUC),
+                    linestyle=linestyle  if linestyle is not None else None,
+                    color=linecolor if linecolor is not None else None)
         ax2.set_xlabel('efficiency', fontsize=20)
         ax2.set_ylabel('~significance', fontsize=20)
         ax2.legend(loc="upper right",prop={'size': 16})
