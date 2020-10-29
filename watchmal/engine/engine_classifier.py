@@ -400,9 +400,12 @@ class ClassifierEngine:
                                      "BEST",
                                      ".pth")
 
-        self.restore_state(best_validation_path)
+        self.restore_state_from_file(best_validation_path)
+    
+    def restore_state(self, restore_config):
+        self.restore_state_from_file(restore_config.weight_file)
 
-    def restore_state(self, weight_file):
+    def restore_state_from_file(self, weight_file):
         """
         Restore model using weights stored from a previous run.
         

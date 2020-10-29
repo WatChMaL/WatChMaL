@@ -2,7 +2,6 @@ gpu_list:
     - 0
     - 1
 dump_path: './outputs/'
-load_state: '/home/jtindall/WatChMaL/outputs/2020-10-27/single_gpu_run_6/outputs/ClassifierBEST.pth'
 defaults:
     - data: iwcd_postveto_nomichel
     - data/dataset: iwcd_cnn
@@ -10,5 +9,6 @@ defaults:
     - model/feature_extractor: resnet18
     - model/classification_network: resnet_fc
     - engine: classifier
+    - tasks/restore_state: restore_state
     - tasks/evaluate: test
     - sampler@tasks.evaluate.data_loaders.test.sampler: subset_sequential
