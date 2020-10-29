@@ -92,11 +92,7 @@ def main_worker_function(rank, ngpus_per_node, is_distributed, config):
     for task, task_config in config.tasks.items():
         if 'optimizers' in task_config:
             engine.configure_optimizers(task_config.optimizers)
-
-    # Reload previous state
-    if 'load_state' in config:
-        engine.restore_state(config.load_state)
-
+    
     # Perform tasks
     for task, task_config in config.tasks.items():
         getattr(engine, task)(task_config)

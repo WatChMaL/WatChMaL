@@ -391,6 +391,16 @@ class ClassifierEngine:
                   "\nAvg eval acc : "  + str(val_acc/val_iterations))
         
     # ========================================================================
+    def restore_best_state(self, test_dir):
+        print(test_dir)
+        print(self.dirpath)
+        
+        best_validation_path = "{}{}{}{}".format(self.dirpath,
+                                     str(self.model._get_name()),
+                                     "BEST",
+                                     ".pth")
+
+        self.restore_state(best_validation_path)
 
     def restore_state(self, weight_file):
         """
