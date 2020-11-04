@@ -149,7 +149,7 @@ Default config groups (but not parameters) can also be overridden in the default
     - sampler@tasks.train.data_loaders.train.sampler: subset_random
 ```
 
-Hydra comes with documentation that can be accessed in the command line using
+For additional help with comands, Hydra comes with documentation that can be accessed in the command line using:
 
 ```
 --hydra-help
@@ -179,5 +179,3 @@ Override anything in the config (foo.bar=value)
 
 ... [full default config listed]
 ```
-
-
