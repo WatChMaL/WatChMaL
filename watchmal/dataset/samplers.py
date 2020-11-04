@@ -48,10 +48,13 @@ class DistributedSamplerWrapper(DistributedSampler):
             shuffle=shuffle,
         )
         self.sampler = sampler
+    
+    def set_epoch(self, epoch):
+        print("Not implemented")
 
     def __iter__(self):
         """@TODO: Docs. Contribution is welcome."""
-        self.dataset = DatasetFromSampler(self.sampler)
+        self.dataset = DatasetFromSampler(self.sampler, epoch=self.epoch)
         indexes_of_indexes = super().__iter__()
         subsampler_indexes = self.dataset
         return iter(itemgetter(*indexes_of_indexes)(subsampler_indexes))
@@ -59,12 +62,13 @@ class DistributedSamplerWrapper(DistributedSampler):
 class DatasetFromSampler(Dataset):
     """Dataset of indexes from `Sampler`."""
 
-    def __init__(self, sampler: Sampler):
+    def __init__(self, sampler: Sampler, seed=None):
         """
         Args:
             sampler: @TODO: Docs. Contribution is welcome
         """
         self.sampler = sampler
+        self.seed = seed
         self.sampler_list = None
 
     def __getitem__(self, index: int):
