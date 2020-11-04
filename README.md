@@ -53,7 +53,7 @@ def main(config):
     logger.info(f"Running with the following config:\n{OmegaConf.to_yaml(config)}")
 ```
 
-This main config specifies subconfigs which are loaded at runtime. These subconfigs correspond to config groups (more on config groups can be found in the hydra documentation). Generally, all the parameters related to a certain task or object are grouped into separate config groups.
+This main config specifies subconfigs which are loaded at runtime. An example main config is `resnet_train.yaml`:
 
 ```
 gpu_list:
@@ -76,9 +76,9 @@ defaults:
 
 ```
 
-The defaults list in the main config contains default config for relevant config groups.
+These subconfigs correspond to config groups (more on config groups can be found in the hydra documentation). Generally, all the parameters related to a certain task or object are grouped into separate config groups. The defaults list in the main config contains default config for relevant config groups.
 
-Some of the config groups listed are uised to instantiate objects using hydra. For example subset_random.yaml contains:
+Some of the config groups listed are uised to instantiate objects using hydra. For example `subset_random.yaml` contains:
 
 ```
 # @package _group_._name_
@@ -93,7 +93,7 @@ from hydra.utils import instantiate
 sampler = instantiate(sampler_config)
 ```
 
-Other config packages are used for calling functions. The config object is passed as a dict, and then its parameters are used as part of a function. In particular, this is how tasks like training and testing are organized. For example the training config contains parameters used to set up the training run:
+Other config packages are used for calling functions. The config object is passed as a dict, and then its parameters are used as part of a function. In particular, this is how tasks like training and testing are organized. For example the training task config `train_resnet.yaml` contains parameters used to set up the training run:
 
 ```
 # @package _group_
@@ -118,6 +118,18 @@ data_loaders:
     batch_size: 512
     num_workers: 4
 ```
+Which is then used in the call to the task:
+
+```
+def train(self, train_config):
+    ...
+    # initialize training params
+    epochs          = train_config.epochs
+    report_interval = train_config.report_interval
+    val_interval    = train_config.val_interval
+    num_val_batches = train_config.num_val_batches
+    checkpointing   = train_config.checkpointing
+```
 
 Config parameters and groups can be overridden in the command line. For example, to run using default configuration:
 
@@ -131,13 +143,11 @@ And to override the list of GPUs to use:
 python main.py gpu_list=[0]
 ```
 
-
 Default config groups (but not parameters) can also be overridden in the defaults list:
 
 ```
     - sampler@tasks.train.data_loaders.train.sampler: subset_random
 ```
-
 
 Hydra comes with documentation that can be accessed in the command line using
 
