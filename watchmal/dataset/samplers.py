@@ -27,6 +27,7 @@ class DistributedSamplerWrapper(DistributedSampler):
     def __init__(
         self,
         sampler,
+        seed,
         num_replicas: Optional[int] = None,
         rank: Optional[int] = None,
         shuffle: bool = False,
@@ -42,19 +43,21 @@ class DistributedSamplerWrapper(DistributedSampler):
               sampler will shuffle the indices
         """
         super(DistributedSamplerWrapper, self).__init__(
-            DatasetFromSampler(sampler),
+            DatasetFromSampler(sampler, seed),
             num_replicas=num_replicas,
             rank=rank,
             shuffle=shuffle,
+            seed=seed
         )
         self.sampler = sampler
     
     def set_epoch(self, epoch):
-        print("Not implemented")
+        self.epoch = epoch
 
     def __iter__(self):
         """@TODO: Docs. Contribution is welcome."""
-        self.dataset = DatasetFromSampler(self.sampler, epoch=self.epoch)
+        updated_seed = self.seed + int(self.epoch)
+        self.dataset = DatasetFromSampler(self.sampler, seed=updated_seed)
         indexes_of_indexes = super().__iter__()
         subsampler_indexes = self.dataset
         return iter(itemgetter(*indexes_of_indexes)(subsampler_indexes))
@@ -62,7 +65,7 @@ class DistributedSamplerWrapper(DistributedSampler):
 class DatasetFromSampler(Dataset):
     """Dataset of indexes from `Sampler`."""
 
-    def __init__(self, sampler: Sampler, seed=None):
+    def __init__(self, sampler: Sampler, seed: int):
         """
         Args:
             sampler: @TODO: Docs. Contribution is welcome
@@ -79,6 +82,7 @@ class DatasetFromSampler(Dataset):
             Single element by index
         """
         if self.sampler_list is None:
+            torch.manual_seed(self.seed)
             self.sampler_list = list(self.sampler)
         return self.sampler_list[index]
 

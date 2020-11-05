@@ -14,6 +14,7 @@ import torch.multiprocessing as mp
 
 # generic imports
 import os
+import numpy as np
 
 logger = logging.getLogger('train')
 
@@ -44,6 +45,11 @@ def main(config):
         os.makedirs(config.dump_path)
     
     print("Dump path: {}".format(config.dump_path))
+
+    # initialize seed
+    if config.seed is None:
+        # numpy call needed to fix pytorch issue that was patched in August 2020
+        config.seed = np.random.randint(100000) #np.random.seed(torch.seed())
     
     if is_distributed:
         print("Using multiprocessing...")
@@ -86,7 +92,7 @@ def main_worker_function(rank, ngpus_per_node, is_distributed, config):
     # Configure data loaders
     for task, task_config in config.tasks.items():
         if 'data_loaders' in task_config:
-            engine.configure_data_loaders(config.data, task_config.data_loaders, is_distributed)
+            engine.configure_data_loaders(config.data, task_config.data_loaders, is_distributed, config.seed)
     
     # Configure optimizers
     for task, task_config in config.tasks.items():

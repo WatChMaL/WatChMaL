@@ -71,12 +71,12 @@ class ClassifierEngine:
         """
         self.optimizer = instantiate(optimizer_config, params=self.model_accs.parameters())
 
-    def configure_data_loaders(self, data_config, loaders_config, is_distributed):
+    def configure_data_loaders(self, data_config, loaders_config, is_distributed, seed):
         """
         Set up data loaders from loaders config
         """
         for name, loader_config in loaders_config.items():
-            self.data_loaders[name] = get_data_loader(**data_config, **loader_config, is_distributed=is_distributed)
+            self.data_loaders[name] = get_data_loader(**data_config, **loader_config, is_distributed=is_distributed, seed=seed)
     
     def get_synchronized_metrics(self, metric_dict):
         global_metric_dict = {}
@@ -176,7 +176,7 @@ class ClassifierEngine:
 
             train_loader = self.data_loaders["train"]
 
-            # Update seeding for distributed samplers
+            # update seeding for distributed samplers
             if self.is_distributed:
                 train_loader.sampler.set_epoch(epoch)
 

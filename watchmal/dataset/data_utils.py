@@ -6,7 +6,7 @@ from hydra.utils import instantiate
 import numpy as np
 from watchmal.dataset.samplers import DistributedSamplerWrapper
 
-def get_data_loader(dataset, batch_size, sampler, num_workers, is_distributed, split_path=None, split_key=None, transforms=None):
+def get_data_loader(dataset, batch_size, sampler, num_workers, is_distributed, seed, split_path=None, split_key=None, transforms=None):
     dataset = instantiate(dataset, transforms=transforms, is_distributed=is_distributed)
     
     if split_path is not None and split_key is not None:
@@ -18,7 +18,7 @@ def get_data_loader(dataset, batch_size, sampler, num_workers, is_distributed, s
     if is_distributed:
         ngpus = torch.distributed.get_world_size()
         batch_size = int(batch_size/ngpus)
-
-        sampler = DistributedSamplerWrapper(sampler=sampler)
+        
+        sampler = DistributedSamplerWrapper(sampler=sampler, seed=seed)
     
     return DataLoader(dataset, sampler=sampler, batch_size=batch_size, num_workers=num_workers)
