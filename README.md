@@ -80,7 +80,7 @@ defaults:
 
 These subconfigs correspond to config groups (more on config groups can be found in the hydra documentation). Generally, all the parameters related to a certain task or object are grouped into separate config groups. The defaults list in the main config contains default config for relevant config groups.
 
-You can use display list all config groups available, and the full default config, using the `--help` command line argument.
+You can list all config groups available for WatChMaL, and the full default config, using the `--help` command line argument.
 
 ```
 $ python main.py --help
