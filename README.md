@@ -43,9 +43,11 @@ python main.py --config-name=resnet_test gpu_list=[0] tasks.restore_state.weight
 
 Hydra is used to create composable configs that allow modifications to be made without having to maintain separate configs.
 
-Hydra documentation can be found here: https://hydra.cc/docs/tutorials/intro
+Running main.py with the argument `--hydra-help` gives documentation on how to use Hydra's command line options for controlling the configuration.
 
-Run parameters are collected into a main config that is passed to a main function when the code runs. The main config path is set in main.py:
+Full Hydra documentation can be found here: https://hydra.cc/docs/tutorials/intro
+
+Run parameters are collected into a main config that is passed to a main function when the code runs. The main config path is set with the command line arguments `--config-name` / `-cn` and `--config-path` / `-cp`, with the defaults defined in main.py:
 
 ```
 @hydra.main(config_path='config/', config_name='resnet_train')
@@ -78,14 +80,57 @@ defaults:
 
 These subconfigs correspond to config groups (more on config groups can be found in the hydra documentation). Generally, all the parameters related to a certain task or object are grouped into separate config groups. The defaults list in the main config contains default config for relevant config groups.
 
-Some of the config groups listed are uised to instantiate objects using hydra. For example `subset_random.yaml` contains:
+You can use display list all config groups available, and the full default config, using the `--help` command line argument.
+
+```
+$ python main.py --help
+main is powered by Hydra.
+
+== Configuration groups ==
+Compose your configuration from those groups (group=option)data: iwcd_postveto_nomichel
+
+data/dataset: iwcd_cnn, iwcd_pointnet
+engine: classifier
+model: classifier
+model/classification_network: pointnet_fc, resnet_fc
+model/feature_extractor: pointnet, resnet18
+optimizers: adam
+sampler: subset_random, subset_sequential
+tasks/evaluate: test
+tasks/train: train_pointnet, train_resnet
+
+== Config ==
+Override anything in the config (foo.bar=value)
+
+... [full default config listed]
+```
+
+Config parameters and groups can be overridden in the command line. For example, to run using default configuration:
+
+```
+python main.py
+```
+
+And to override the list of GPUs to use:
+
+```
+python main.py gpu_list=[0]
+```
+
+Default config groups (but not parameters) can also be overridden in the defaults list:
+
+```
+    - sampler@tasks.train.data_loaders.train.sampler: subset_random
+```
+
+Some of the config groups listed are used to instantiate objects using hydra. For example `subset_random.yaml` contains:
 
 ```
 # @package _group_._name_
 _target_: torch.utils.data.sampler.SubsetRandomSampler
 ```
 
-And can be used to instantiate a SubsetRandomSampler by:
+And can be used to instantiate a SubsetRandomSampler, where `sampler_config` contains the config object obtained from loading `subset_random.yaml`:
 
 ```
 from hydra.utils import instantiate
@@ -93,7 +138,7 @@ from hydra.utils import instantiate
 sampler = instantiate(sampler_config)
 ```
 
-Other config packages are used for calling functions. The config object is passed as a dict, and then its parameters are used as part of a function. In particular, this is how tasks like training and testing are organized. For example the training task config `train_resnet.yaml` contains parameters used to set up the training run:
+Other config packages are used for calling functions. The config object is passed as an instance of OmegaConf's DictConfig (used like a standard dictionary), and then its parameters are used as part of a function. In particular, this is how tasks like training and testing are organized. For example the training task config `train_resnet.yaml` contains parameters used to set up the training run:
 
 ```
 # @package _group_
@@ -130,52 +175,4 @@ def train(self, train_config):
     num_val_batches = train_config.num_val_batches
     checkpointing   = train_config.checkpointing
 ```
-
-Config parameters and groups can be overridden in the command line. For example, to run using default configuration:
-
-```
-python main.py
-```
-
-And to override the list of GPUs to use:
-
-```
-python main.py gpu_list=[0]
-```
-
-Default config groups (but not parameters) can also be overridden in the defaults list:
-
-```
-    - sampler@tasks.train.data_loaders.train.sampler: subset_random
-```
-
-For additional help with comands, Hydra comes with documentation that can be accessed in the command line using:
-
-```
---hydra-help
-```
-
-You can also use hydra to display list the default config, as well as all config groups available using
-
-```
-$ python main.py --help
-main is powered by Hydra.
-
-== Configuration groups ==
-Compose your configuration from those groups (group=option)data: iwcd_postveto_nomichel
-
-data/dataset: iwcd_cnn, iwcd_pointnet
-engine: classifier
-model: classifier
-model/classification_network: pointnet_fc, resnet_fc
-model/feature_extractor: pointnet, resnet18
-optimizers: adam
-sampler: subset_random, subset_sequential
-tasks/evaluate: test
-tasks/train: train_pointnet, train_resnet
-
-== Config ==
-Override anything in the config (foo.bar=value)
-
-... [full default config listed]
-```
+In our set up, the `data_loaders` and `optimizers` subconfigs of each task (if there are any) are instantiated and configured separately, before performing the tasks.
