@@ -8,6 +8,7 @@ from torch.utils.data.distributed import DistributedSampler
 def SubsetSequentialSampler(indices):
     return indices
 
+
 """
 Wrapper borrowed from https://github.com/catalyst-team/catalyst/blob/master/catalyst/data/sampler.py
 """
