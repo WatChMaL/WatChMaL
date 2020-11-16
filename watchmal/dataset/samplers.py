@@ -41,7 +41,6 @@ class DistributedSamplerWrapper(DistributedSampler):
               sampler will shuffle the indices
         """
         super(DistributedSamplerWrapper, self).__init__(
-            # I think this is legal because the dataset is only passed here for its len()
             list(sampler),
             num_replicas=num_replicas,
             rank=rank,

@@ -139,14 +139,7 @@ class ClassifierEngine:
             
         Returns : None
         """
-        train_loader = self.data_loaders["train"]
-        
-        train_loader.sampler.set_epoch(0)
-        train_iter = iter(train_loader)
-        train_loader.sampler.set_epoch(1)
-        train_iter = iter(train_loader)
 
-        """
         # initialize training params
         epochs          = train_config.epochs
         report_interval = train_config.report_interval
@@ -293,7 +286,6 @@ class ClassifierEngine:
         self.train_log.close()
         if self.rank == 0:
             self.val_log.close()
-        """
 
     def evaluate(self, test_config):
         """
