@@ -7,7 +7,6 @@ from functools import reduce
 from sklearn.metrics import roc_curve, auc
 from sklearn.preprocessing import label_binarize
 
-
 POS_MAP = [(8,4), #0
            (7,2), #1
            (6,0), #2
