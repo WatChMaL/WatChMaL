@@ -48,6 +48,7 @@ class DistributedSamplerWrapper(DistributedSampler):
             seed=seed
         )
         self.sampler = sampler
+        self.epoch = 0
     
     def set_epoch(self, epoch):
         self.epoch = epoch
