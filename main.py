@@ -7,7 +7,17 @@ from hydra.utils import instantiate
 # torch imports
 import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
+
 import torch.multiprocessing as mp
+
+# TODO: Attempted pickle fix
+ctx = mp.get_context()
+print(ctx.reducer)
+
+"""
+import pickle2reducer
+ctx.reducer = pickle2reducer.Pickle2Reducer()
+"""
 
 # TODO: see if this can be removed
 #torch.multiprocessing.set_sharing_strategy('file_system')
@@ -23,6 +33,7 @@ def main(config):
     logger.info(f"Running with the following config:\n{OmegaConf.to_yaml(config)}")
 
     ngpus = len(config.gpu_list)
+    # TODO: Fix distributed mode
     is_distributed = ngpus > 1
     
     # Initialize process group env variables

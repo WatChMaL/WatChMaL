@@ -173,6 +173,7 @@ class ClassifierEngine:
             times = []
 
             start_time = time()
+            iteration_time = start_time
 
             train_loader = self.data_loaders["train"]
 
@@ -277,8 +278,10 @@ class ClassifierEngine:
                 
                 # print the metrics at given intervals
                 if self.rank == 0 and self.iteration % report_interval == 0:
-                    print("... Iteration %d ... Epoch %1.2f ... Training Loss %1.3f ... Training Accuracy %1.3f" %
-                          (self.iteration, epoch, res["loss"], res["accuracy"]))
+                    previous_iteration_time = iteration_time
+                    iteration_time = time()
+                    print("... Iteration %d ... Epoch %1.2f ... Training Loss %1.3f ... Training Accuracy %1.3f ... Time Elapsed %1.3f ... Iteration Time %1.3f" %
+                          (self.iteration, epoch, res["loss"], res["accuracy"], iteration_time - start_time, iteration_time - previous_iteration_time))
                 
                 if epoch >= epochs:
                     break

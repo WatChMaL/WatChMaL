@@ -44,6 +44,7 @@ class H5Dataset(Dataset, ABC):
                                 shape=self.pmt_dict['shape'],
                                 offset=self.pmt_dict['offset'],
                                 dtype=self.pmt_dict['dtype'])
+        
         self.time = np.memmap(self.h5_path, mode="r",
                                 shape=self.time_dict['shape'],
                                 offset=self.time_dict['offset'],
