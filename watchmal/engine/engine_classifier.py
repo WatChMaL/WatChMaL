@@ -124,7 +124,7 @@ class ClassifierEngine:
         self.optimizer.step()       # step params
     
     # ========================================================================
-
+    
     def train(self, train_config):
         """
         Train the model on the training set.
@@ -196,8 +196,15 @@ class ClassifierEngine:
                             val_data = next(val_iter)
                         except StopIteration:
                             del val_iter
+                            # TODO: still needs to be cleaned up before final push
+                            time0 = time()
+                            print("Fetching new validation iterator...")
                             val_iter = iter(self.data_loaders["validation"])
+                            time1 = time()
                             val_data = next(val_iter)
+                            time2= time()
+                            print("Fetching iterator took time ", time1 - time0)
+                            print("second step step took time ", time2 - time1)
                         
                         # extract the event data from the input data tuple
                         self.data      = val_data['data'].float()
@@ -275,7 +282,6 @@ class ClassifierEngine:
                 self.train_log.write()
                 self.train_log.flush()
                 
-                
                 # print the metrics at given intervals
                 if self.rank == 0 and self.iteration % report_interval == 0:
                     previous_iteration_time = iteration_time
@@ -289,6 +295,8 @@ class ClassifierEngine:
         self.train_log.close()
         if self.rank == 0:
             self.val_log.close()
+        
+        
 
     def evaluate(self, test_config):
         """

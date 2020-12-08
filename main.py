@@ -10,18 +10,6 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 
 import torch.multiprocessing as mp
 
-# TODO: Attempted pickle fix
-ctx = mp.get_context()
-print(ctx.reducer)
-
-"""
-import pickle2reducer
-ctx.reducer = pickle2reducer.Pickle2Reducer()
-"""
-
-# TODO: see if this can be removed
-#torch.multiprocessing.set_sharing_strategy('file_system')
-
 # generic imports
 import os
 import numpy as np
@@ -33,7 +21,6 @@ def main(config):
     logger.info(f"Running with the following config:\n{OmegaConf.to_yaml(config)}")
 
     ngpus = len(config.gpu_list)
-    # TODO: Fix distributed mode
     is_distributed = ngpus > 1
     
     # Initialize process group env variables
@@ -72,6 +59,7 @@ def main(config):
         main_worker_function(0, ngpus, is_distributed, config)
 
 def main_worker_function(rank, ngpus_per_node, is_distributed, config):
+    print("rank: ", rank)
     # Infer rank from gpu and ngpus, rank is position in gpu list
     gpu = config.gpu_list[rank]
 

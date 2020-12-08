@@ -6,6 +6,12 @@ from hydra.utils import instantiate
 import numpy as np
 from watchmal.dataset.samplers import DistributedSamplerWrapper
 
+
+from hydra.utils import instantiate
+from torch.utils.data import DataLoader
+from torch.utils.data import SubsetRandomSampler
+
+
 def get_data_loader(dataset, batch_size, sampler, num_workers, is_distributed, seed, split_path=None, split_key=None, transforms=None):
     dataset = instantiate(dataset, transforms=transforms, is_distributed=is_distributed)
     
@@ -17,8 +23,10 @@ def get_data_loader(dataset, batch_size, sampler, num_workers, is_distributed, s
     
     if is_distributed:
         ngpus = torch.distributed.get_world_size()
+
         batch_size = int(batch_size/ngpus)
         
         sampler = DistributedSamplerWrapper(sampler=sampler, seed=seed)
     
     return DataLoader(dataset, sampler=sampler, batch_size=batch_size, num_workers=num_workers)
+    

@@ -107,6 +107,7 @@ datasets/
 
 # testing
 testing/
+kernprof.py
 
 # editor, os cache directory
 .vscode/

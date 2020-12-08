@@ -1,6 +1,7 @@
 import numpy as np
 import math
 import matplotlib.pyplot as plt
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 # DEFINE CONSTANTS FOR SHORT TANK GEOMETRY
 
@@ -129,12 +130,12 @@ def EventDisplay( tubes, quantities, PMTFlatMapPositive, title="Charge", cutrang
     cutrange == minimum and maximum values on plot (or set both same for default)
     """
     
-    fig = plt.figure(figsize=[40,40])
+    fig, ax= plt.subplots(figsize=[30,30])
     preimage = np.zeros( preimage_dimensions )
-    #maxquantity = quantities.max()
-    #preimage *= maxquantity*1.2
+    
     imgmin = quantities.min()
     imgmax = quantities.max()
+
     for idx, tube in enumerate( tubes ):
         if cutrange[0] != cutrange[1]:
             if quantities[idx] < cutrange[0] or quantities[idx] > cutrange[1]:
@@ -151,17 +152,26 @@ def EventDisplay( tubes, quantities, PMTFlatMapPositive, title="Charge", cutrang
         imgmin = cutrange[0]
         imgmax = cutrange[1]
     
-    plt.imshow( preimage, extent = [-positive_x_offset,positive_x_offset,-lower_endcap_offset,lower_endcap_offset], vmin=imgmin, vmax=imgmax )
-    fig.suptitle(title, fontsize=20)
-    plt.xlabel('Distance CCW on perimeter from x-axis (cm)', fontsize=18)
-    plt.ylabel('Y (cm)', fontsize=16)
-    
-    #plt.set_cmap('YlGnBu')
-    #plt.set_cmap('cubehelix_r')
-    #plt.set_cmap('gnuplot2_r')
-    
+    im = ax.imshow( preimage, extent = [-positive_x_offset,positive_x_offset,-lower_endcap_offset,lower_endcap_offset], vmin=imgmin, vmax=imgmax )
+
+    fig.suptitle(title, fontsize=80)
+
+    plt.rc('xtick', labelsize=24) 
+    plt.rc('ytick', labelsize=24) 
+    plt.xlabel('Distance CCW on perimeter from x-axis (cm)', fontsize=48)
+    plt.ylabel('Y (cm)', fontsize=48)
+
     plt.set_cmap('gist_heat_r')
-    plt.colorbar()
+
+    # Create colourbar
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes("right", size="5%", pad=0.05)
+    cbar = plt.colorbar(im, cax=cax)
+    cbar.ax.tick_params(labelsize=24)
+
+    # Fix title height
+    plt.subplots_adjust(top=0.5)
+    plt.tight_layout()
 
 # ========================================================================
 # Subset mapping and plotting functions
@@ -226,8 +236,9 @@ def EventSubsetDisplay( tubes, quantities, PMTFlatMapPositive, tubes_to_plot, ti
     min_subplot_y_value = subset_y_values.min() - padding
     max_subplot_y_value = subset_y_values.max() + padding
     
-    fig = plt.figure(figsize=[40,40])
+    fig, ax= plt.subplots(figsize=[30,30])
     preimage = np.zeros( preimage_dimensions )
+
     subset_quantities = []
     for idx, tube in enumerate( tubes ):
         if cutrange[0] != cutrange[1]:
@@ -243,6 +254,7 @@ def EventSubsetDisplay( tubes, quantities, PMTFlatMapPositive, tubes_to_plot, ti
                     subset_quantities.append(quantities[idx])
     
     subset_quantities = np.array(subset_quantities)
+
     imgmin = subset_quantities.min()
     imgmax = subset_quantities.max()
     
@@ -252,10 +264,22 @@ def EventSubsetDisplay( tubes, quantities, PMTFlatMapPositive, tubes_to_plot, ti
     
     subset_image = preimage[min_subplot_y_value:max_subplot_y_value, min_subplot_x_value:max_subplot_x_value]
     
-    plt.imshow( subset_image, extent = [min_subplot_x_value, max_subplot_x_value, min_subplot_y_value, max_subplot_y_value], vmin=imgmin, vmax=imgmax )
-    fig.suptitle(title, fontsize=20)
-    plt.xlabel('Distance CCW on perimeter from x-axis (cm)', fontsize=18)
-    plt.ylabel('Y (cm)', fontsize=16)
+    im = ax.imshow( subset_image, extent = [min_subplot_x_value, max_subplot_x_value, min_subplot_y_value, max_subplot_y_value], vmin=imgmin, vmax=imgmax )
+
+    fig.suptitle(title, fontsize=80)
+
+    plt.rc('xtick', labelsize=24) 
+    plt.rc('ytick', labelsize=24) 
+    plt.xlabel('Distance CCW on perimeter from x-axis (cm)', fontsize=48)
+    plt.ylabel('Y (cm)', fontsize=48)
     
     plt.set_cmap('gist_heat_r')
-    plt.colorbar()
+
+    # Create colourbar
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes("right", size="5%", pad=0.05)
+    cbar = plt.colorbar(im, cax=cax)
+    cbar.ax.tick_params(labelsize=24)
+
+    # Fix title height
+    plt.tight_layout()
