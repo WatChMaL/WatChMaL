@@ -1,5 +1,5 @@
 # @package _group_
-epochs: 5
+epochs: 20
 
 report_interval: 10
 val_interval: 10
