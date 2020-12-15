@@ -406,7 +406,7 @@ class ClassifierEngine:
                   "\nAvg eval acc : "  + str(val_acc/val_iterations))
         
     # ========================================================================
-    def restore_best_state(self):
+    def restore_best_state(self, placeholder):
         best_validation_path = "{}{}{}{}".format(self.dirpath,
                                      str(self.model._get_name()),
                                      "BEST",

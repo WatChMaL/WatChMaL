@@ -1,0 +1,4 @@
+# @package _group_
+split_path: /home/jtindall/WatChMaL_analysis/short_tank_exploratory_data_analysis/new_dataset/new_dataset_data/equal_indices.npz
+dataset:
+  h5file: /data/WatChMaL/data/IWCD_mPMT_Short_e-mu-gamma_E0to1000MeV_digihits.h5
