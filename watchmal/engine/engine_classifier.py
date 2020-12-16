@@ -212,7 +212,6 @@ class ClassifierEngine:
                         self.energies  = val_data['energies'].float()
                         self.angles    = val_data['angles'].float()
                         self.event_ids = val_data['event_ids'].float()
-
                         val_res = self.forward(False)
                         
                         val_metrics["loss"] += val_res["loss"]

@@ -133,6 +133,8 @@ class ResNet(nn.Module):
         self.conv3a = nn.Conv2d(self.unroll_size, self.unroll_size, kernel_size=(4, 4), stride=(1, 1))
         self.conv3b = nn.Conv2d(self.unroll_size, self.unroll_size, kernel_size=(1, 4), stride=(1, 1))
         self.conv3c = nn.Conv2d(self.unroll_size, self.unroll_size, kernel_size=(2, 2), stride=(1, 1))
+        self.conv3d = nn.Conv2d(self.unroll_size, self.unroll_size, kernel_size=(1, 2), stride=(1, 1))
+        
         self.bn3 = nn.BatchNorm2d(self.unroll_size)
 
         for m in self.modules():
@@ -187,6 +189,7 @@ class ResNet(nn.Module):
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
+
         x = self.conv2(x)
         x = self.bn2(x)
         x = self.relu(x)
@@ -203,11 +206,15 @@ class ResNet(nn.Module):
             x = self.conv3b(x)
         elif x.size()[-2:] == (2, 2):
             x = self.conv3c(x)
+        elif x.size()[-2:] == (1, 2):
+            x = self.conv3d(x)
         
         x = self.bn3(x)
         x = self.relu(x)
+
         x = x.view(x.size(0), -1)
         x = self.relu(self.fc1(x))
+
         if self.bool_deep:
             x = self.relu(self.fc2(x))
         return x
