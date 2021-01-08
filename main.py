@@ -1,5 +1,4 @@
 # hydra imports
-import logging
 import hydra
 from omegaconf import OmegaConf
 from hydra.utils import instantiate
@@ -11,8 +10,12 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 import torch.multiprocessing as mp
 
 # generic imports
+import logging
+import debugpy
 import os
 import numpy as np
+
+
 
 logger = logging.getLogger('train')
 

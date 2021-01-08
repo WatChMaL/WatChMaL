@@ -1,5 +1,5 @@
 gpu_list:
-    - 5
+    - 0
 seed: null
 dump_path: './outputs/'
 defaults:
@@ -8,8 +8,8 @@ defaults:
     - model: classifier
     - model/feature_extractor: resnet18
     - model/classification_network: resnet_fc
-    - engine: classifier
-    - tasks/train: train_resnet
+    - engine: gan
+    - tasks/train: train_gan
     - optimizers@tasks.train.optimizers: adam
     - sampler@tasks.train.data_loaders.train.sampler: subset_random
     - sampler@tasks.train.data_loaders.validation.sampler: subset_random

@@ -1,3 +1,6 @@
+# hydra imports
+from hydra.utils import instantiate
+
 # torch imports
 import torch
 from torch import optim
@@ -5,9 +8,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 #from torch.nn import DataParallel
 from torch.nn.parallel import DistributedDataParallel as DDP
-
-# hydra imports
-from hydra.utils import instantiate
 
 # generic imports
 from math import floor, ceil
@@ -29,11 +29,8 @@ class ClassifierEngine:
     def __init__(self, model, rank, gpu, dump_path):
         # create the directory for saving the log and dump files
         self.dirpath = dump_path
-
         self.rank = rank
-
         self.model = model
-
         self.device = torch.device(gpu)
 
         # Setup the parameters to save given the model type
@@ -46,9 +43,6 @@ class ClassifierEngine:
             self.model_accs = self.model
 
         self.data_loaders = {}
-
-        self.criterion = nn.CrossEntropyLoss()
-        self.softmax = nn.Softmax(dim=1)
 
         # define the placeholder attributes
         self.data      = None
@@ -64,6 +58,9 @@ class ClassifierEngine:
 
         if self.rank == 0:
             self.val_log = CSVData(self.dirpath + "log_val.csv")
+
+        self.criterion = nn.CrossEntropyLoss()
+        self.softmax = nn.Softmax(dim=1)
     
     def configure_optimizers(self, optimizer_config):
         """
@@ -119,6 +116,9 @@ class ClassifierEngine:
                 'raw_pred_labels'  : model_out}
     
     def backward(self):
+        """
+        Backward pass using the loss computed for a mini-batch
+        """
         self.optimizer.zero_grad()  # reset accumulated gradient
         self.loss.backward()        # compute new gradient
         self.optimizer.step()       # step params
