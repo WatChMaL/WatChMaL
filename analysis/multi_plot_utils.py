@@ -6,7 +6,7 @@ import math
 
 from sklearn.metrics import auc
 
-from analysis.plot_utils import compute_roc, plot_roc, disp_learn_hist
+from WatChMaL.analysis.plot_utils import compute_roc, plot_roc, disp_learn_hist
 
 def multi_disp_learn_hist(locations,losslim=None,show=True,titles=None,best_only=False,leg_font=10,title_font=10,xmax=None):
     '''
@@ -39,7 +39,7 @@ def multi_disp_learn_hist(locations,losslim=None,show=True,titles=None,best_only
             ax1 = fig.add_subplot(gs[i],facecolor='w')
         else:
             ax1 = fig.add_subplot(gs[i],facecolor='w',sharey=axes[0])
-        disp_learn_hist(location, axis=ax1, show=False)
+        disp_learn_hist(location, axis=ax1, title=titles[i], losslim=losslim, show=False)
         axes.append(ax1)
     
     gs.tight_layout(fig)

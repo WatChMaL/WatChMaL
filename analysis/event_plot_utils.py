@@ -122,15 +122,16 @@ def PMT_to_flat_cylinder_map_positive( tubes, tube_xyz ):
             mapping[ int( tube-1 ) ] = [ int(round(xflat)), int(round(yflat)) ]
     return mapping
 
-def EventDisplay( tubes, quantities, PMTFlatMapPositive, title="Charge", cutrange=[-1,-1] ):
+def EventDisplay( tubes, quantities, PMTFlatMapPositive, title="Charge", cutrange=[-1,-1], figsize=[30,30]):
     """
     tubes == np.array of PMTs that were hit
     quantities == np.array of PMT quantities (either charge or time)
     title == title to add to display
     cutrange == minimum and maximum values on plot (or set both same for default)
+    figsize == figure dimensions
     """
     
-    fig, ax= plt.subplots(figsize=[30,30])
+    fig, ax = plt.subplots(figsize=figsize)
     preimage = np.zeros( preimage_dimensions )
     
     imgmin = quantities.min()

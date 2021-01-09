@@ -67,7 +67,7 @@ def tile(canvas, ul, pmts):
         for col in range(10):
             canvas[row+ul[0]][col+ul[1]] = mpmt[row][col]
 
-def disp_learn_hist(location, losslim=None, axis=None, show=True):
+def disp_learn_hist(location, title=None, losslim=None, axis=None, show=True):
     
     """
     Purpose : Plot the loss and accuracy history for a training session
@@ -111,6 +111,9 @@ def disp_learn_hist(location, losslim=None, axis=None, show=True):
     leg    = ax2.legend(lines, labels, fontsize=16, loc=5, numpoints=1)
     leg_frame = leg.get_frame()
     leg_frame.set_facecolor('white')
+
+    if title is not None:
+        ax1.set_title(title, fontsize=20)
 
     if show:
         plt.grid()
@@ -462,7 +465,7 @@ def plot_roc(fpr, tpr, thr, true_label_name, false_label_name, fig_list=None, xl
         ax1.set_xlabel(xlabel, fontsize=20)
         ax1.set_ylabel(ylabel, fontsize=20)
         ax1.set_title(title, fontsize=24)
-        ax1.legend(bbox_to_anchor=(1.05, 1), loc='upper left') #loc="upper right",prop={'size': 16})
+        ax1.legend(loc="upper right",prop={'size': 16}) #bbox_to_anchor=(1.05, 1), loc='upper left') #loc="upper right",prop={'size': 16})
 
         if xlims is not None:
             xlim = next(xlim_iter)
