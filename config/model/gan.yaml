@@ -1,3 +1,0 @@
-# @package _group_
-_target_: watchmal.model.classifier.Classifier
-num_classes: 3

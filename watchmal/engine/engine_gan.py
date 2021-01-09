@@ -3,11 +3,20 @@ from hydra.utils import instantiate
 
 # torch imports
 import torch
+from torch import full, FloatTensor
 from torch import randn
+from torch.nn import BCELoss
+from torch.optim import Adam
 
 # WatChMaL imports
 from watchmal.dataset.data_utils import get_data_loader
 from watchmal.utils.logging_utils import CSVData
+
+# generic imports
+import numpy as np
+from math import floor, ceil
+from time import strftime, localtime, time
+import os
 
 class GANEngine:
     def __init__(self, model, rank, gpu, dump_path):
@@ -19,12 +28,17 @@ class GANEngine:
 
         self.data_loaders = {}
 
+        # TODO: adapt model to be distributed
+        self.is_distributed = False
+
         # Loss function
         self.criterion = BCELoss()
 
         # Optimizers
-        self.optimizerG = Adam(self.model.generator.parameters(), lr=config.lr, betas=(0.5, 0.999))
-        self.optimizerD = Adam(self.model.discriminator.parameters(), lr=config.lr, betas=(0.5, 0.999))
+        # TODO: move optimizers to configs
+        lr = 0.0002
+        self.optimizerG = Adam(self.model.generator.parameters(), lr=lr, betas=(0.5, 0.999))
+        self.optimizerD = Adam(self.model.discriminator.parameters(), lr=0.1*lr, betas=(0.5, 0.999))
 
         # define the placeholder attributes
         self.data      = None
@@ -40,6 +54,9 @@ class GANEngine:
         self.dreal_loss = None
         self.dfake_loss = None
 
+        # logging attributes
+        self.train_log = CSVData(self.dirpath + "log_train_{}.csv".format(self.rank))
+
         # Create batch of latent vectors that we will use to visualize the progression of the generator
         self.nz = 128
         self.fixed_noise = randn(64, self.nz, 1, 1, device=self.device)
@@ -47,6 +64,24 @@ class GANEngine:
         # Establish convention for real and fake labels during training
         self.real_label = 1
         self.fake_label = 0
+
+        # set image interval
+        self.img_interval = 500
+    
+    def configure_optimizers(self, optimizer_config):
+        """
+        Set up optimizers from optimizer config
+        """
+        # TODO: rework GAN optimizers
+        #self.optimizer = instantiate(optimizer_config, params=self.model_accs.parameters())
+        print("Optimizers in init")
+    
+    def configure_data_loaders(self, data_config, loaders_config, is_distributed, seed):
+        """
+        Set up data loaders from loaders config
+        """
+        for name, loader_config in loaders_config.items():
+            self.data_loaders[name] = get_data_loader(**data_config, **loader_config, is_distributed=is_distributed, seed=seed)
     
     def forward(self, train=True):
         """
@@ -62,14 +97,13 @@ class GANEngine:
             # ========================================================================
 
             ###### Train with all-real batch ######
-
             # Format batch
+            # TODO: better way of setting batch size
             b_size = self.data.size(0)
-            label = full((b_size,), self.real_label, device=self.device)
+            # TODO: changed labels to float
+            label = full((b_size,), self.real_label, dtype=torch.float).to(self.device)
 
             # Forward pass real batch through D
-            self.data = self.data.type(FloatTensor)
-
             self.model.discriminator.zero_grad()
             output = self.model.discriminator(self.data).view(-1)
 
@@ -81,7 +115,6 @@ class GANEngine:
             D_x = output.mean().item()
 
             ###### Train with all-fake batch ######
-
             # Generate batch of latent vectors
             noise = randn(b_size, self.nz, 1, 1, device=self.device)
 
@@ -135,14 +168,16 @@ class GANEngine:
             #del fake, output, label, noise, errD_real, errD_fake
         
         return {"g_loss"   : errG.cpu().detach().item(),
-                "d_loss"   : errD.cpu().detach().item(),
+                #"d_loss"   : errD.cpu().detach().item(),
+                "d_loss_fake"   : errD_fake.cpu().detach().item(),
+                "d_loss_real"   : errD_real.cpu().detach().item(),
                 "gen_imgs" : genimgs,
                 "D_x"      : D_x,
                 "D_G_z1"   : D_G_z1,
                 "D_G_z2"   : D_G_z2
                }
     
-    def backward(self, iteration, epoch):
+    def backward(self):
         """
         Backward pass using the loss computed for a mini-batch
         """
@@ -188,6 +223,9 @@ class GANEngine:
         # initialize the iterator over the validation set
         val_iter = iter(self.data_loaders["validation"])
 
+        # Create directory for images generated in training
+        os.mkdir(os.path.join(self.dirpath, 'imgs'))
+
         # global training loop for multiple epochs
         while (floor(epoch) < epochs):
             if self.rank == 0:
@@ -207,78 +245,6 @@ class GANEngine:
             # local training loop for batches in a single epoch
             for i, train_data in enumerate(self.data_loaders["train"]):
                 
-                # run validation on given intervals
-                if self.iteration % val_interval == 0:
-                    # set model to eval mode
-                    self.model.eval()
-
-                    val_metrics = {"iteration": self.iteration, "epoch": epoch, "loss": 0., "accuracy": 0., "saved_best": 0}
-
-                    for val_batch in range(num_val_batches):
-                        try:
-                            val_data = next(val_iter)
-                        except StopIteration:
-                            del val_iter
-                            # TODO: still needs to be cleaned up before final push
-                            time0 = time()
-                            print("Fetching new validation iterator...")
-                            val_iter = iter(self.data_loaders["validation"])
-                            time1 = time()
-                            val_data = next(val_iter)
-                            time2= time()
-                            print("Fetching iterator took time ", time1 - time0)
-                            print("second step step took time ", time2 - time1)
-                        
-                        # extract the event data from the input data tuple
-                        self.data      = val_data['data'].float()
-                        self.labels    = val_data['labels'].long()
-                        self.energies  = val_data['energies'].float()
-                        self.angles    = val_data['angles'].float()
-                        self.event_ids = val_data['event_ids'].float()
-                        val_res = self.forward(False)
-                        
-                        val_metrics["loss"] += val_res["loss"]
-                        val_metrics["accuracy"] += val_res["accuracy"]
-                    
-                    # return model to training mode
-                    self.model.train()
-
-                    # record the validation stats to the csv
-                    val_metrics["loss"] /= num_val_batches
-                    val_metrics["accuracy"] /= num_val_batches
-
-                    local_val_metrics = {"loss": np.array([val_metrics["loss"]]), "accuracy": np.array([val_metrics["accuracy"]])}
-
-                    if self.is_distributed:
-                        global_val_metrics = self.get_synchronized_metrics(local_val_metrics)
-                        for name, tensor in zip(global_val_metrics.keys(), global_val_metrics.values()):
-                            global_val_metrics[name] = np.array(tensor.cpu())
-                    else:
-                        global_val_metrics = local_val_metrics
-
-                    if self.rank == 0:
-                        # Save if this is the best model so far
-                        global_val_loss = np.mean(global_val_metrics["loss"])
-                        global_val_accuracy = np.mean(global_val_metrics["accuracy"])
-
-                        val_metrics["loss"] = global_val_loss
-                        val_metrics["accuracy"] = global_val_accuracy
-
-                        if val_metrics["loss"] < best_val_loss:
-                            print('best validation loss so far!: {}'.format(best_val_loss))
-                            self.save_state(best=True)
-                            val_metrics["saved_best"] = 1
-
-                            best_val_loss = val_metrics["loss"]
-
-                        # Save the latest model if checkpointing
-                        if checkpointing:
-                            self.save_state(best=False)
-                                        
-                        self.val_log.record(val_metrics)
-                        self.val_log.write()
-                        self.val_log.flush()
-                
                 # Train on batch
                 self.data      = train_data['data'].float()
                 self.labels    = train_data['labels'].long()
@@ -286,8 +252,12 @@ class GANEngine:
                 self.angles    = train_data['angles'].float()
                 self.event_ids = train_data['event_ids'].float()
 
+                # TODO: get running on 19 channels
+                # Collapse data by summing in each mPMT
+                self.data = torch.sum(self.data, dim=1, keepdim=True)
+
                 # Call forward: make a prediction & measure the average error using data = self.data
-                res = self.forward(True)
+                res = self.forward(train=True)
 
                 #Call backward: backpropagate error and update weights using loss = self.loss
                 self.backward()
@@ -297,7 +267,7 @@ class GANEngine:
                 self.iteration += 1
                 
                 # get relevant attributes of result for logging
-                train_metrics = {"iteration": self.iteration, "epoch": epoch, "loss": res["loss"], "accuracy": res["accuracy"]}
+                train_metrics = {"iteration": self.iteration, "epoch": epoch, "g_loss": res["g_loss"], "d_loss_fake": res["d_loss_fake"], "d_loss_real": res["d_loss_real"]}
                 
                 # record the metrics for the mini-batch in the log
                 self.train_log.record(train_metrics)
@@ -308,8 +278,24 @@ class GANEngine:
                 if self.rank == 0 and self.iteration % report_interval == 0:
                     previous_iteration_time = iteration_time
                     iteration_time = time()
-                    print("... Iteration %d ... Epoch %1.2f ... Training Loss %1.3f ... Training Accuracy %1.3f ... Time Elapsed %1.3f ... Iteration Time %1.3f" %
-                          (self.iteration, epoch, res["loss"], res["accuracy"], iteration_time - start_time, iteration_time - previous_iteration_time))
+                    print("... Iteration %d ... Epoch %1.2f ... Generator Loss %1.3f ... Fake Discriminator Loss %1.3f ... Real Discriminator Loss %1.3f " %
+                          (self.iteration, epoch, res["g_loss"], res["d_loss_fake"], res["d_loss_real"]))
+                
+                #Save example images
+                if self.iteration % self.img_interval ==0:
+                    # set model to eval mode
+                    self.model.eval()
+                    # TODO: sort out how to run with train=False
+                    res = self.forward(train=True)
+                    # set model to training mode
+                    self.model.train()
+
+                    save_arr_keys = ["gen_imgs"]
+                    save_arr_values = [res["gen_imgs"]]
+
+                    # Save the actual and reconstructed event to the disk
+                    np.savez(os.path.join(self.dirpath, 'imgs') + "/iteration_" + str(self.iteration) + ".npz",
+                        **{key:value for key,value in zip(save_arr_keys,save_arr_values)})
                 
                 if epoch >= epochs:
                     break

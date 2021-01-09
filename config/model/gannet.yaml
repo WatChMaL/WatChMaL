@@ -1,0 +1,8 @@
+# @package _group_
+_target_: watchmal.model.gannet.GanNet
+num_input_channels: 1
+num_latent_dims: 128 
+arch_key: 3 
+arch_depth: 18 
+num_classes: 3
+train_all: True

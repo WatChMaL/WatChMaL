@@ -5,14 +5,8 @@ dump_path: './outputs/'
 defaults:
     - data: iwcd_postveto_nomichel
     - data/dataset: iwcd_cnn
-    - model: classifier
-    - model/feature_extractor: resnet18
-    - model/classification_network: resnet_fc
+    - model: gannet
     - engine: gan
     - tasks/train: train_gan
-    - optimizers@tasks.train.optimizers: adam
     - sampler@tasks.train.data_loaders.train.sampler: subset_random
     - sampler@tasks.train.data_loaders.validation.sampler: subset_random
-    - tasks/restore_best_state: restore_best_state
-    - tasks/evaluate: test
-    - sampler@tasks.evaluate.data_loaders.test.sampler: subset_sequential
