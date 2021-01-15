@@ -30,6 +30,8 @@ max_pmt_y_value = 2099
 preimage_dimensions = [max_pmt_y_value + min_pmt_y_value + 1, max_pmt_x_value + min_pmt_x_value + 1]
 
 # ========================================================================
+# Data retrieval
+
 barrel_map_array_idxs = [6, 7, 8, 9, 10, 11, 0, 1, 2, 3, 4, 5, 15, 16, 17, 12, 13, 14, 18]
 pmts_per_mpmt = 19
 
@@ -74,13 +76,11 @@ def PMT_to_flat_cylinder_mapping( tubes, tube_xyz ):
             xflat = x
             yflat = y_offset + z
             mapping[ int( tube-1 ) ] = [ xflat, yflat ]
-            
         elif ( y < -endcap_limit):
-            # in bottom circle of cylinder+
+            # in bottom circle of cylinder
             xflat = x
             yflat = -y_offset + z
             mapping[ int( tube-1 ) ] = [ xflat, yflat ]
-            
         else:
             # in barrel part of cylinder
             theta = math.atan2( z, x )
@@ -107,13 +107,11 @@ def PMT_to_flat_cylinder_map_positive( tubes, tube_xyz ):
             xflat = x + positive_x_offset
             yflat = z + upper_endcap_offset
             mapping[ int( tube-1 ) ] = [ int(round(xflat)), int(round(yflat)) ]
-            
         elif ( y < -endcap_limit):
             # in bottom circle of cylinder
             xflat = x + positive_x_offset
             yflat = z + barrel_radius
             mapping[ int( tube-1 ) ] = [ int(round(xflat)), int(round(yflat)) ]
-            
         else:
             # in barrel part of cylinder
             theta = math.atan2( z, x )
@@ -124,6 +122,8 @@ def PMT_to_flat_cylinder_map_positive( tubes, tube_xyz ):
 
 def EventDisplay( tubes, quantities, PMTFlatMapPositive, title="Charge", cutrange=[-1,-1], figsize=[30,30]):
     """
+    Plot quantities from an event on flattened cylinder
+
     tubes == np.array of PMTs that were hit
     quantities == np.array of PMT quantities (either charge or time)
     title == title to add to display
@@ -221,6 +221,8 @@ def get_barrel_tubes( tubes, tube_xyz ):
 
 def EventSubsetDisplay( tubes, quantities, PMTFlatMapPositive, tubes_to_plot, title="Charge", cutrange=[-1,-1], padding=10):
     """
+    Plot quantities from an event associated with some subset of flattened cylinder
+
     tubes == np.array of PMTs that were hit
     quantities == np.array of PMT quantities (either charge or time)
     title == title to add to display

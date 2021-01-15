@@ -42,9 +42,13 @@ class CNNmPMTDataset(H5Dataset):
         # fix barrel array indexing to match endcaps in xyz ordering
         data[:, 12:28, :] = data[barrel_map_array_idxs, 12:28, :]
 
+        print(data.shape)
+        input()
+
         # collapse arrays if desired
         if self.collapse_arrays:
             data = np.expand_dims(np.sum(data, 0), 0)
+        
         processed_data = from_numpy(data)
 
         if self.transforms is not None:
@@ -52,6 +56,5 @@ class CNNmPMTDataset(H5Dataset):
             for i, transform in enumerate(self.transforms):
                 if selection[i]:
                     processed_data = transform(processed_data)
-        
 
         return processed_data

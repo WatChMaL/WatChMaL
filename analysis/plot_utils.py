@@ -179,7 +179,7 @@ def disp_learn_hist_smoothed(location, losslim=None, window_train=400, window_va
     accuracy_val_st = accuracy_val_uns[stored_indices]
     loss_val_st     = loss_val_uns[stored_indices]
 
-    fig, ax1 = plt.subplots(figsize=(12,8),facecolor='w')
+    fig, ax1 = plt.subplots(figsize=(12,8), facecolor='w')
     line11 = ax1.plot(epoch_train, loss_train, linewidth=2, label='Average training loss', color='b', alpha=0.3)
     line12 = ax1.plot(epoch_val, loss_val, label='Average validation loss', color='blue')
     line13 = ax1.scatter(epoch_val_st, loss_val_st, label='BEST validation loss',
@@ -306,7 +306,7 @@ def plot_classifier_response(softmaxes, labels, particle_names, label_dict,lines
 
     num_panes = softmaxes.shape[1]+len(extra_panes)
 
-    fig, axes = plt.subplots(1,num_panes,figsize=(5*num_panes,5))
+    fig, axes = plt.subplots(1,num_panes,figsize=(5*num_panes,5), facecolor='w')
     inverse_label_dict = {value:key for key, value in label_dict.items()}
 
     softmaxes_list = separate_particles([softmaxes], labels, label_dict, [name for name in label_dict.keys()])[0]
@@ -530,7 +530,7 @@ def plot_rocs(softmax_out_val, labels_val, labels_dict, plot_list=None, vs_list 
             if not (false_label_name == true_label_name):
                 # initialize figure
                 num_panes = 3
-                fig, axes = plt.subplots(1, num_panes, figsize=(8*num_panes,12))
+                fig, axes = plt.subplots(1, num_panes, figsize=(8*num_panes,12), facecolor='w')
                 fig.suptitle("ROC for {} vs {}".format(true_label_name, false_label_name), fontweight='bold',fontsize=32)
 
                 plot_roc(softmax_out_val, labels_val, true_label_name, true_label, false_label_name, false_label, axes=axes)

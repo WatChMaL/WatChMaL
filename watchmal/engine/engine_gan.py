@@ -83,7 +83,7 @@ class GANEngine:
         for name, loader_config in loaders_config.items():
             self.data_loaders[name] = get_data_loader(**data_config, **loader_config, is_distributed=is_distributed, seed=seed)
     
-    def forward(self, train=True):
+    def forward(self, train=True, gen_images=False):
         """
         Args:
         mode -- One of 'train', 'validation' to set the correct grad_mode
@@ -159,9 +159,9 @@ class GANEngine:
             # Update G
             self.optimizerG.step()
 
-            if not train:
+            # TODO: remove unecessary param gen_images
+            if gen_images:
                 genimgs = self.model.generator(self.fixed_noise).cpu().detach().numpy()
-
             else:
                 genimgs = None
             
@@ -254,7 +254,7 @@ class GANEngine:
 
                 # TODO: get running on 19 channels
                 # Collapse data by summing in each mPMT
-                self.data = torch.sum(self.data, dim=1, keepdim=True)
+                #self.data = torch.sum(self.data, dim=1, keepdim=True)
 
                 # Call forward: make a prediction & measure the average error using data = self.data
                 res = self.forward(train=True)
@@ -282,20 +282,16 @@ class GANEngine:
                           (self.iteration, epoch, res["g_loss"], res["d_loss_fake"], res["d_loss_real"]))
                 
                 #Save example images
-                if self.iteration % self.img_interval ==0:
+                if self.iteration % self.img_interval == 0:
                     # set model to eval mode
                     self.model.eval()
                     # TODO: sort out how to run with train=False
-                    res = self.forward(train=True)
+                    res = self.forward(train=True, gen_images=True)
                     # set model to training mode
                     self.model.train()
 
-                    save_arr_keys = ["gen_imgs"]
-                    save_arr_values = [res["gen_imgs"]]
-
                     # Save the actual and reconstructed event to the disk
-                    np.savez(os.path.join(self.dirpath, 'imgs') + "/iteration_" + str(self.iteration) + ".npz",
-                        **{key:value for key,value in zip(save_arr_keys,save_arr_values)})
+                    np.savez(os.path.join(self.dirpath, 'imgs') + "/iteration_" + str(self.iteration) + ".npz", gen_imgs=res['gen_imgs'])
                 
                 if epoch >= epochs:
                     break
