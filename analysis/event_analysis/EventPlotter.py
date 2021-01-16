@@ -11,6 +11,7 @@ class EventPlotter():
         self.dataset = CNNmPMTDataset(h5file=h5_path, mpmt_positions_file=mpmt_positions_file, is_distributed=False)
 
         # ========================================================================
+
         # load tubes
         geofile = np.load(geo_path, allow_pickle=True)
         self.tubes = geofile[ 'tube_no' ]
@@ -88,8 +89,16 @@ class EventPlotter():
                 yflat = y + self.lower_endcap_offset
                 mapping[ int( tube-1 ) ] = [ int(round(xflat)), int(round(yflat)) ]
         return mapping
+    
+    def display_event(self, index, data_type='charge'):
+        pmts, charges, times = self.get_event_data_from_index(index)
 
-    def EventDisplay(self, tubes, quantities, PMTFlatMapPositive, title="Charge", cutrange=[-1,-1], figsize=[30,30]):
+        if data_type == 'charge':
+            self.display_data(pmts, charges)
+        elif data_type == 'time':
+            self.display_data(pmts, times)
+
+    def display_data(self, tubes, quantities, title="Charge", cutrange=[-1,-1], figsize=[30,30]):
         """
         Plot quantities from an event on flattened cylinder
 
@@ -99,6 +108,8 @@ class EventPlotter():
         cutrange == minimum and maximum values on plot (or set both same for default)
         figsize == figure dimensions
         """
+
+        PMTFlatMapPositive = self.flat_map_positive
         
         fig, ax = plt.subplots(figsize=figsize, facecolor='w')
         preimage = np.zeros( self.preimage_dimensions )

@@ -71,10 +71,15 @@ class CNNmPMTDataset(H5Dataset):
         hit_rows = self.mpmt_positions[hit_mpmts, 0]
         hit_cols = self.mpmt_positions[hit_mpmts, 1]
 
-        data = np.zeros(self.data_size)
-        data[hit_pmt_in_modules, hit_rows, hit_cols] = hit_charges
+        # construct data with barrel array indexing to match endcaps in xyz ordering
+        charge_data = np.zeros(self.data_size)
+        charge_data[hit_pmt_in_modules, hit_rows, hit_cols] = hit_charges
+        charge_data[:, 12:28, :] = charge_data[barrel_map_array_idxs, 12:28, :]
+        pmt_charge_data = charge_data[hit_pmt_in_modules, hit_rows, hit_cols].flatten()
 
-        # fix barrel array indexing to match endcaps in xyz ordering
-        data[:, 12:28, :] = data[barrel_map_array_idxs, 12:28, :]
+        time_data = np.zeros(self.data_size)
+        time_data[hit_pmt_in_modules, hit_rows, hit_cols] = hit_charges
+        time_data[:, 12:28, :] = time_data[barrel_map_array_idxs, 12:28, :]
+        pmt_time_data = charge_data[hit_pmt_in_modules, hit_rows, hit_cols].flatten()
 
-        return hit_pmts, data[hit_pmt_in_modules, hit_rows, hit_cols].flatten()
+        return hit_pmts, pmt_charge_data, pmt_time_data
