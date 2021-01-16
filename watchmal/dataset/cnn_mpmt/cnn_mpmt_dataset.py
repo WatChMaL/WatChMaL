@@ -42,9 +42,6 @@ class CNNmPMTDataset(H5Dataset):
         # fix barrel array indexing to match endcaps in xyz ordering
         data[:, 12:28, :] = data[barrel_map_array_idxs, 12:28, :]
 
-        print(data.shape)
-        input()
-
         # collapse arrays if desired
         if self.collapse_arrays:
             data = np.expand_dims(np.sum(data, 0), 0)
@@ -58,3 +55,26 @@ class CNNmPMTDataset(H5Dataset):
                     processed_data = transform(processed_data)
 
         return processed_data
+
+    # TODO: verify that returning tubes and pmt data here is ok
+    def retrieve_event_data(self, item):
+        start = self.event_hits_index[item]
+        stop = self.event_hits_index[item + 1]
+
+        hit_pmts = self.hit_pmt[start:stop].astype(np.int16)
+        hit_charges = self.charge[start:stop]
+        hit_times = self.time[start:stop]
+
+        hit_mpmts = hit_pmts // pmts_per_mpmt
+        hit_pmt_in_modules = hit_pmts % pmts_per_mpmt
+
+        hit_rows = self.mpmt_positions[hit_mpmts, 0]
+        hit_cols = self.mpmt_positions[hit_mpmts, 1]
+
+        data = np.zeros(self.data_size)
+        data[hit_pmt_in_modules, hit_rows, hit_cols] = hit_charges
+
+        # fix barrel array indexing to match endcaps in xyz ordering
+        data[:, 12:28, :] = data[barrel_map_array_idxs, 12:28, :]
+
+        return hit_pmts, data[hit_pmt_in_modules, hit_rows, hit_cols].flatten()
