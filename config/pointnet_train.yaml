@@ -1,7 +1,7 @@
 seed: null
 dump_path: './outputs/'
 defaults:
-    - data: iwcd_postveto_nomichel
+    - data: iwcd_short
     - data/dataset: iwcd_cnn
     - model: classifier
     - model/feature_extractor: pointnet
