@@ -8,7 +8,7 @@ defaults:
     - model/classification_network: pointnet_fc
     - engine: classifier
     - tasks/train: train_pointnet
-    - optimizer@tasks.train.optimizers: adam
+    - optimizers@tasks.train.optimizers: adam
     - sampler@tasks.train.data_loaders.train.sampler: subset_random
     - sampler@tasks.train.data_loaders.validation.sampler: subset_random
     - tasks/restore_best_state: restore_best_state
