@@ -12,7 +12,7 @@ data_loaders:
     split_key: train_idxs
     batch_size: 128
     num_workers: 4
-    transoforms:
+    transforms:
       - x_flip
       - y_flip
       - z_flip
