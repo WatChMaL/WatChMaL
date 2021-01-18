@@ -54,6 +54,9 @@ class EventPlotter():
         self.preimage_dimensions = [max_pmt_y_value + min_pmt_y_value + 1, max_pmt_x_value + min_pmt_x_value + 1]
     
     def get_event_data_from_index(self, index):
+        """
+        Retrieve event data from dataset
+        """
         return self.dataset.retrieve_event_data(index)
 
     # ========================================================================
@@ -91,6 +94,9 @@ class EventPlotter():
         return mapping
     
     def display_event(self, index, data_type='charge'):
+        """
+        Plot single event by index
+        """
         pmts, charges, times = self.get_event_data_from_index(index)
 
         if data_type == 'charge':
@@ -98,7 +104,7 @@ class EventPlotter():
         elif data_type == 'time':
             self.display_data(pmts, times)
 
-    def display_data(self, tubes, quantities, title="Charge", cutrange=[-1,-1], figsize=[30,30]):
+    def display_data(self, tubes, quantities, title="Charge", cutrange=[-1,-1], ax=None, figsize=[30,30]):
         """
         Plot quantities from an event on flattened cylinder
 
@@ -108,11 +114,35 @@ class EventPlotter():
         cutrange == minimum and maximum values on plot (or set both same for default)
         figsize == figure dimensions
         """
+        plt.set_cmap('gist_heat_r')
+        
+        if ax == None:
+            fig, ax = plt.subplots(figsize=figsize, facecolor='w')
+            fig.suptitle(title, fontsize=80)
+        
+        im = self.plot_data(tubes, quantities, [-1,-1], ax)
+
+        plt.rc('xtick', labelsize=24) 
+        plt.rc('ytick', labelsize=24) 
+        plt.xlabel('Distance CCW on perimeter from x-axis (cm)', fontsize=48)
+        plt.ylabel('Y (cm)', fontsize=48)
+
+        # Create colourbar
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="5%", pad=0.05)
+        cbar = plt.colorbar(im, cax=cax)
+        cbar.ax.tick_params(labelsize=24)
+
+        # Fix title height
+        plt.subplots_adjust(top=0.5)
+        plt.tight_layout()
+        
+        return im
+
+    def plot_data(self, tubes, quantities, cutrange, ax):
 
         PMTFlatMapPositive = self.flat_map_positive
-        
-        fig, ax = plt.subplots(figsize=figsize, facecolor='w')
-        preimage = np.zeros( self.preimage_dimensions )
+        preimage = np.zeros(self.preimage_dimensions)
         
         imgmin = quantities.min()
         imgmax = quantities.max()
@@ -133,25 +163,8 @@ class EventPlotter():
             imgmin = cutrange[0]
             imgmax = cutrange[1]
         
-        plt.set_cmap('gist_heat_r')
-        
         im = ax.imshow( preimage, extent = [-self.positive_x_offset,self.positive_x_offset,-self.lower_endcap_offset,self.lower_endcap_offset], vmin=imgmin, vmax=imgmax )
 
-        fig.suptitle(title, fontsize=80)
+        return im
 
-        plt.rc('xtick', labelsize=24) 
-        plt.rc('ytick', labelsize=24) 
-        plt.xlabel('Distance CCW on perimeter from x-axis (cm)', fontsize=48)
-        plt.ylabel('Y (cm)', fontsize=48)
-
-        # Create colourbar
-        divider = make_axes_locatable(ax)
-        cax = divider.append_axes("right", size="5%", pad=0.05)
-        cbar = plt.colorbar(im, cax=cax)
-        cbar.ax.tick_params(labelsize=24)
-
-        # Fix title height
-        plt.subplots_adjust(top=0.5)
-        plt.tight_layout()
         
-        plt.show()
