@@ -15,8 +15,6 @@ import debugpy
 import os
 import numpy as np
 
-
-
 logger = logging.getLogger('train')
 
 @hydra.main(config_path='config/', config_name='gan_train')

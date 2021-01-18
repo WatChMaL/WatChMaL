@@ -20,6 +20,9 @@ import os
 
 class GANEngine:
     def __init__(self, model, rank, gpu, dump_path):
+        # TODO: make a config param
+        self.using_wasserstein = True
+
         # create the directory for saving the log and dump files
         self.dirpath = dump_path
         self.rank = rank
@@ -38,7 +41,7 @@ class GANEngine:
         # TODO: move optimizers to configs
         lr = 0.0002
         self.optimizerG = Adam(self.model.generator.parameters(), lr=lr, betas=(0.5, 0.999))
-        self.optimizerD = Adam(self.model.discriminator.parameters(), lr=0.1*lr, betas=(0.5, 0.999))
+        self.optimizerD = Adam(self.model.discriminator.parameters(), lr=lr, betas=(0.5, 0.999))
 
         # define the placeholder attributes
         self.data      = None
@@ -177,6 +180,105 @@ class GANEngine:
                 "D_G_z2"   : D_G_z2
                }
     
+    def forward_wasserstein(self, train=True, gen_images=False):
+        """
+        Args:
+        mode -- One of 'train', 'validation' to set the correct grad_mode
+        """
+        # Set the correct grad_mode given the mode
+        with torch.set_grad_enabled(train):
+            self.data = self.data.to(self.device)
+
+            # ========================================================================
+            # (1) Update Discriminator network: maximize D(x) - D(G(z))
+            # ========================================================================
+
+            ###### Train with all-real batch ######
+            # Format batch
+            # TODO: better way of setting batch size
+            b_size = self.data.size(0)
+            # TODO: changed labels to float
+            label = full((b_size,), self.real_label, dtype=torch.float).to(self.device)
+
+            # Forward pass real batch through D
+            self.model.discriminator.zero_grad()
+            output = self.model.discriminator(self.data).view(-1)
+
+            # Calculate loss on all-real batch
+            errD_real = -torch.mean(output) #self.criterion(output, label)
+
+            # Calculate gradients for D in backward pass
+            errD_real.backward()
+            D_x = output.mean().item()
+
+            ###### Train with all-fake batch ######
+            # Generate batch of latent vectors
+            noise = randn(b_size, self.nz, 1, 1, device=self.device)
+
+            # Generate fake image batch with G
+            fake = self.model.generator(noise)
+            label.fill_(self.fake_label)
+
+            # Classify all fake batch with D
+            output = self.model.discriminator(fake.detach()).view(-1)
+
+            # Calculate D's loss on the all-fake batch
+            errD_fake = torch.mean(output) # self.criterion(output, label)
+
+            # Calculate the gradients for this batch
+            errD_fake.backward()
+            D_G_z1 = output.mean().item()
+
+            # Add the gradients from the all-real and all-fake batches
+            errD = errD_real + errD_fake
+
+            # Update D
+            self.optimizerD.step()
+
+            # TODO: param clipping (apparently a requirement for WGANs)
+            #Clipping weights
+            for p in self.model.discriminator.parameters():
+                p.data.clamp_(-0.01, 0.01)
+
+
+            # ========================================================================
+            # (2) Update Generator network: maximize D(G(z))
+            # ========================================================================
+
+            self.model.generator.zero_grad()
+            label.fill_(self.real_label)  # fake labels are real for generator cost
+
+            # Since we just updated D, perform another forward pass of all-fake batch through D
+            output = self.model.discriminator(fake).view(-1)
+
+            # Calculate G's loss based on this output
+            errG = -torch.mean(output) #self.criterion(output, label)
+
+            # Calculate gradients for G
+            errG.backward()
+            D_G_z2 = output.mean().item()
+
+            # Update G
+            self.optimizerG.step()
+
+            # TODO: remove unecessary param gen_images
+            if gen_images:
+                genimgs = self.model.generator(self.fixed_noise).cpu().detach().numpy()
+            else:
+                genimgs = None
+            
+            #del fake, output, label, noise, errD_real, errD_fake
+        
+        return {"g_loss"   : errG.cpu().detach().item(),
+                #"d_loss"   : errD.cpu().detach().item(),
+                "d_loss_fake"   : errD_fake.cpu().detach().item(),
+                "d_loss_real"   : errD_real.cpu().detach().item(),
+                "gen_imgs" : genimgs,
+                "D_x"      : D_x,
+                "D_G_z1"   : D_G_z1,
+                "D_G_z2"   : D_G_z2
+               }
+    
     def backward(self):
         """
         Backward pass using the loss computed for a mini-batch
@@ -254,10 +356,13 @@ class GANEngine:
 
                 # TODO: get running on 19 channels
                 # Collapse data by summing in each mPMT
-                #self.data = torch.sum(self.data, dim=1, keepdim=True)
+                self.data = torch.sum(self.data, dim=1, keepdim=True)
 
                 # Call forward: make a prediction & measure the average error using data = self.data
-                res = self.forward(train=True)
+                if self.using_wasserstein:
+                    res = self.forward_wasserstein(train=True)
+                else:
+                    res = self.forward(train=True)
 
                 #Call backward: backpropagate error and update weights using loss = self.loss
                 self.backward()
