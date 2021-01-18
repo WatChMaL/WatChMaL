@@ -1,3 +1,7 @@
+"""
+Class for training a GAN
+"""
+
 # hydra imports
 from hydra.utils import instantiate
 
@@ -8,15 +12,15 @@ from torch import randn
 from torch.nn import BCELoss
 from torch.optim import Adam
 
-# WatChMaL imports
-from watchmal.dataset.data_utils import get_data_loader
-from watchmal.utils.logging_utils import CSVData
-
 # generic imports
 import numpy as np
 from math import floor, ceil
 from time import strftime, localtime, time
 import os
+
+# WatChMaL imports
+from watchmal.dataset.data_utils import get_data_loader
+from watchmal.utils.logging_utils import CSVData
 
 class GANEngine:
     def __init__(self, model, rank, gpu, dump_path):

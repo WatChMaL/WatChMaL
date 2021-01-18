@@ -1,16 +1,23 @@
+"""
+Utils for handling creation of dataloaders
+"""
+
+# hydra imports
+from hydra.utils import instantiate
+
+# torch imports
 import torch
 from torch.utils.data import DataLoader
 from torch.utils.data import SubsetRandomSampler
 from torch.utils.data.distributed import DistributedSampler
-from hydra.utils import instantiate
-import numpy as np
-from watchmal.dataset.samplers import DistributedSamplerWrapper
-
-
-from hydra.utils import instantiate
 from torch.utils.data import DataLoader
 from torch.utils.data import SubsetRandomSampler
 
+# generic imports
+import numpy as np
+
+# WatChMaL imports
+from watchmal.dataset.samplers import DistributedSamplerWrapper
 
 def get_data_loader(dataset, batch_size, sampler, num_workers, is_distributed, seed, split_path=None, split_key=None, transforms=None):
     dataset = instantiate(dataset, transforms=transforms, is_distributed=is_distributed)

@@ -1,9 +1,8 @@
 """
-GeneratorDiscrimantor.py
-PyTorch implementation of Generator and Disciminator models for GAN using ResNet-style architecture.
-End caps 'pasted' into data.
+PyTorch implementation of Generator and Disciminator models for GAN using ResNet-style architecture
 """
-# PyTorch imports
+
+# torch imports
 from torch.nn import Module, Sequential, Linear, Conv2d, ConvTranspose2d, BatchNorm2d, ReLU, LeakyReLU, Sigmoid, Tanh
 from torch.nn.init import kaiming_normal_, constant_
 
@@ -72,6 +71,7 @@ class Generator(Module):
 #-------------------------------
 # Discriminator architecture layers
 #-------------------------------
+
 class Discriminator(Module):
 
     def __init__(self, layers, num_input_channels, num_latent_dims, zero_init_residual=False):

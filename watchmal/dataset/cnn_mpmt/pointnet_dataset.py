@@ -1,8 +1,15 @@
-import numpy as np
+"""
+Class implementing a mPMT dataset for pointnet in h5 format
+"""
+
+# torch imports
 import torch
 
-from watchmal.dataset.h5_dataset import H5Dataset
+# generic imports
+import numpy as np
 
+# WatChMaL imports
+from watchmal.dataset.h5_dataset import H5Dataset
 
 class PointNetDataset(H5Dataset):
 

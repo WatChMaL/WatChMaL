@@ -1,3 +1,7 @@
+"""
+Utils for plotting model performance
+"""
+
 import numpy as np
 import pandas as pd
 import glob
@@ -381,7 +385,15 @@ def separate_particles(input_array_list,labels,index_dict,desired_labels=['gamma
     return separated_arrays
 
 def compute_roc(softmax_out_val, labels_val, true_label, false_label):
-    # Compute ROC metrics
+    """
+    Compute ROC metrics from softmax and labels for given particle labels
+
+    Args:
+        softmax_out_val             ... array of softmax outputs
+        labels_val                  ... 1D array of actual labels
+        true_label                  ... desired particle (efficiency)
+        false_label                 ... rejected particle (rejected)
+    """
     labels_val_for_comp = labels_val[np.where( (labels_val==false_label) | (labels_val==true_label)  )]
     softmax_out_for_comp = softmax_out_val[np.where(  (labels_val==false_label) | (labels_val==true_label)  )][:,true_label]
 
@@ -503,7 +515,6 @@ def plot_roc(fpr, tpr, thr, true_label_name, false_label_name, fig_list=None, xl
         return tuple(figs)
 
 def plot_rocs(softmax_out_val, labels_val, labels_dict, plot_list=None, vs_list = None, show=True):
-    
     """
     Purpose : Plot ROC curves for a classifier that has been evaluated on a validation set for a series of combinations of labels
     

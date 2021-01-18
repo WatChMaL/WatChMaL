@@ -1,10 +1,16 @@
-from operator import itemgetter
-from typing import Optional
-import time
+"""
+Sampler classes
+"""
 
+# torch imports
 import torch
 from torch.utils.data import Dataset, Sampler
 from torch.utils.data.distributed import DistributedSampler
+
+# generic imports
+from operator import itemgetter
+from typing import Optional
+import time
 
 def SubsetSequentialSampler(indices):
     return indices
@@ -12,15 +18,13 @@ def SubsetSequentialSampler(indices):
 
 class DistributedSamplerWrapper(DistributedSampler):
     """
-    Wrapper over `Sampler` for distributed training.
-    Allows you to use any sampler in distributed mode.
-    It is especially useful in conjunction with
-    `torch.nn.parallel.DistributedDataParallel`. In such case, each
-    process can pass a DistributedSamplerWrapper instance as a DataLoader
-    sampler, and load a subset of subsampled data of the original dataset
-    that is exclusive to it.
-    .. note::
-        Sampler is assumed to be of constant size.
+    Wrapper for making general samplers compatible with multiprocessing.
+
+    Allows you to use any sampler in distributed mode when training with 
+    torch.nn.parallel.DistributedDataParallel. In such case, each process 
+    can pass a DistributedSamplerWrapper instance as a DataLoader sampler, 
+    and load a subset of subsampled data of the original dataset that is 
+    exclusive to it.
     """
 
     def __init__(

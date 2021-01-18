@@ -1,3 +1,7 @@
+"""
+Main file used for running the code
+"""
+
 # hydra imports
 import hydra
 from omegaconf import OmegaConf
@@ -17,8 +21,14 @@ import numpy as np
 
 logger = logging.getLogger('train')
 
-@hydra.main(config_path='config/', config_name='gan_train')
+@hydra.main(config_path='config/', config_name='resnet_train')
 def main(config):
+    """
+    Run model using given config, spawn worker subprocesses as necessary
+
+    Args:
+        config              ... hydra config specified in the @hydra.main annotation
+    """
     logger.info(f"Running with the following config:\n{OmegaConf.to_yaml(config)}")
 
     ngpus = len(config.gpu_list)
@@ -61,6 +71,15 @@ def main(config):
         main_worker_function(0, ngpus, is_distributed, config)
 
 def main_worker_function(rank, ngpus_per_node, is_distributed, config):
+    """
+    Instantiate model on a particular GPU, and perform train/evaluation tasks as specified
+
+    Args:
+        rank                    ... rank of processes among all spawned process (in multiprocessing mode)
+        ngpus_per_node          ... number of gpus being used (in multiprocessing mode)
+        is_distributed          ... whether running in multiprocessing mode
+        config                  ... hydra config specified in the @hydra.main annotation
+    """
     print("rank: ", rank)
     # Infer rank from gpu and ngpus, rank is position in gpu list
     gpu = config.gpu_list[rank]

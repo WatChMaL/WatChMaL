@@ -1,3 +1,7 @@
+"""
+Transformation functions used for data augmentation
+"""
+
 from torch import flip
 
 __all__ = ['horizontal_flip', 'vertical_flip', ]

@@ -1,6 +1,19 @@
+"""
+Utils for processing data for plotting purposes
+"""
+
 import numpy as np
 
 def get_masked_data(data, cut_path, test_idxs, cut_list):
+    """
+    Apply masks to remove unwanted data
+
+    Args: 
+        data                ... data to apply cuts to (must have dimension 0 of length that of full dataset)
+        cut_path            ... path to array of indices associated with each mask
+        test_idxs           ... indices of full test set
+        cut_list            ... list of keys of cuts to apply
+    """
     cut_file = np.load(cut_path, allow_pickle=True) 
 
     cut_arrays = []
@@ -17,6 +30,15 @@ def get_masked_data(data, cut_path, test_idxs, cut_list):
     return output_data
 
 def multi_get_masked_data(data_list, cut_path, test_idxs, cut_list):
+    """
+    Call get_masked_data on multiple sets of data
+
+    Args: 
+        data_list           ... list of sets of data (must have dimension 0 of length that of full dataset)
+        cut_path            ... path to array of indices associated with each mask
+        test_idxs           ... indices of full test set
+        cut_list            ... list of keys of cuts to apply
+    """
     cut_file = np.load(cut_path, allow_pickle=True) 
 
     cut_arrays = []
@@ -37,10 +59,8 @@ def collapse_test_output(softmaxes, labels, index_dict, predictions=None,ignore_
     Args:
         softmaxes                  ... 2d array of dimension (n,3) corresponding to softmax output
         labels                     ... 1d array of event labels, of length n, taking values in the set of values of 'index_dict'
-        index_dict                 ... Dictionary with keys 'gamma','e','mu' pointing to the corresponding integer
-                                       label taken by 'labels'
-        predictions                ... 1d array of event type predictions, of length n, taking values in the 
-                                       set of values of 'index_dict'   
+        index_dict                 ... Dictionary with keys 'gamma','e','mu' pointing to the corresponding integer label taken by 'labels'
+        predictions                ... 1d array of event type predictions, of length n, taking values in the set of values of 'index_dict'   
         ignore_type                ... single string, name of event type to exclude                     
     '''
     if ignore_type is not None:
@@ -68,6 +88,9 @@ def collapse_test_output(softmaxes, labels, index_dict, predictions=None,ignore_
 
 
 def multi_collapse_test_output(output_softmax_list, actual_labels_list, label_dict, ignore_type=None):
+    """
+    Call collapse_test_output on multiple sets of data
+    """
     collapsed_class_scores_list, collapsed_class_labels_list = [],[]
 
     for softmaxes, labels in zip(output_softmax_list, actual_labels_list):

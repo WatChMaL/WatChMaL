@@ -10,7 +10,8 @@ from WatChMaL.analysis.plot_utils import compute_roc, plot_roc, disp_learn_hist
 
 def multi_disp_learn_hist(locations,losslim=None,show=True,titles=None,best_only=False,leg_font=10,title_font=10,xmax=None):
     '''
-    Plots a grid of learning histories.
+    Plot a grid of learning histories
+
     Args:
         locations               ... list of paths to directories of training dumps
         losslim                 ... limit of loss axis
@@ -46,7 +47,15 @@ def multi_disp_learn_hist(locations,losslim=None,show=True,titles=None,best_only
     return fig
 
 def multi_compute_roc(softmax_out_val_list, labels_val_list, true_label, false_label):
-    # Compute ROC metrics
+    """
+    Call compute_roc on multiple sets of data
+
+    Args:
+        softmax_out_val_list        ...
+        labels_val_list             ...
+        true_label                  ...
+        false_label                 ...
+    """
     fprs, tprs, thrs = [], [], []
     for softmax_out_val, labels_val in zip(softmax_out_val_list, labels_val_list):
         fpr, tpr, thr = compute_roc(softmax_out_val, labels_val, true_label, false_label)
