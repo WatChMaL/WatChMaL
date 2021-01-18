@@ -11,6 +11,7 @@ import numpy as np
 # WatChMaL imports
 from watchmal.dataset.h5_dataset import H5Dataset
 from watchmal.dataset.pointnet import transformations
+import watchmal.dataset.data_utils as du
 
 class PointNetDataset(H5Dataset):
 
@@ -21,13 +22,7 @@ class PointNetDataset(H5Dataset):
         self.geo_orientations = torch.from_numpy(geo_file["orientation"]).float()
         self.use_orientations = use_orientations
         self.n_points = n_points
-        self.transforms = transforms
-        if self.transforms is not None:
-            for transform_name in transforms:
-                assert hasattr(transformations, transform_name), f"Error: There is no defined transform named {transform_name}"
-            transform_funcs = [getattr(transformations, transform_name) for transform_name in transforms]
-            self.transforms = transform_funcs
-            self.n_transforms = len(self.transforms)
+        self.transforms = du.get_transformations(transformations, transforms)
 
 
     def get_data(self, hit_pmts, hit_charges, hit_times):
@@ -43,10 +38,6 @@ class PointNetDataset(H5Dataset):
         data[-2, :n_hits] = hit_charges[:n_hits]
         data[-1, :n_hits] = hit_times[:n_hits]
 
-        if self.transforms is not None:
-            selection = np.random.choice(2, self.n_transforms)
-            for i, transform in enumerate(self.transforms):
-                if selection[i]:
-                    data = transform(data)
+        data = du.apply_random_transformations(self.transforms, data)
 
         return data

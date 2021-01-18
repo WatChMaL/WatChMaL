@@ -52,4 +52,19 @@ def get_data_loader(dataset, batch_size, sampler, num_workers, is_distributed, s
         sampler = DistributedSamplerWrapper(sampler=sampler, seed=seed)
     
     return DataLoader(dataset, sampler=sampler, batch_size=batch_size, num_workers=num_workers)
-    
+
+
+def get_transformations(transformations, transform_names):
+    if transform_names is not None:
+        for transform_name in transform_names:
+            assert hasattr(transformations, transform_name), f"Error: There is no defined transform named {transform_name}"
+        transform_funcs = [getattr(transformations, transform_name) for transform_name in transform_names]
+        return transform_funcs
+
+
+def apply_random_transformations(transforms, data):
+    selection = np.where(np.random.choice(2, len(transforms))==1)
+    np.random.shuffle(selection)
+    for transform in transforms[selection]:
+        data = transform(data)
+    return data

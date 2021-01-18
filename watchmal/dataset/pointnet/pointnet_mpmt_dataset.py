@@ -3,6 +3,7 @@ import torch
 
 from watchmal.dataset.h5_dataset import H5Dataset
 from watchmal.dataset.pointnet import transformations
+import watchmal.dataset.data_utils as du
 
 barrel_map_array_idxs = [ 6,  7,  8,  9, 10, 11,  0,  1,  2,  3,  4,  5, 15, 16, 17, 12, 13, 14, 18]
 pmts_per_mpmt = 19
@@ -19,15 +20,8 @@ class PointNetMultiPMTDataset(H5Dataset):
         self.mpmt_orientations = geo_orientations[18::19, :].T
         self.barrel_mpmts = np.where(np.abs(self.mpmt_positions[:,1]) < np.max(np.abs(self.mpmt_positions))-10)
         self.use_orientations = use_orientations
-        self.transforms = transforms
         self.max_points = max_points
-        if self.transforms is not None:
-            for transform_name in transforms:
-                assert hasattr(transformations, transform_name), f"Error: There is no defined transform named {transform_name}"
-            transform_funcs = [getattr(transformations, transform_name) for transform_name in transforms]
-            self.transforms = transform_funcs
-            self.n_transforms = len(self.transforms)
-
+        self.transforms = du.get_transformations(transformations, transforms)
 
     def get_data(self, hit_pmts, hit_charges, hit_times):
         hit_mpmts = hit_pmts // pmts_per_mpmt
@@ -57,10 +51,6 @@ class PointNetMultiPMTDataset(H5Dataset):
         data[charge_channels, unique_hit_mpmts] = hit_charges
         data[time_channels, unique_hit_mpmts] = hit_times
 
-        if self.transforms is not None:
-            selection = np.random.choice(2, self.n_transforms)
-            for i, transform in enumerate(self.transforms):
-                if selection[i]:
-                    data = transform(data)
+        data = du.apply_random_transformations(self.transforms, data)
 
         return data
