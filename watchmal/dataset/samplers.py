@@ -37,13 +37,10 @@ class DistributedSamplerWrapper(DistributedSampler):
     ):
         """
         Args:
-            sampler: Sampler used for subsampling
-            num_replicas (int, optional): Number of processes participating in
-              distributed training
-            rank (int, optional): Rank of the current process
-              within ``num_replicas``
-            shuffle (bool, optional): If true,
-              sampler will shuffle the indices
+            sampler                         ... Sampler used for subsampling
+            num_replicas (int, optional)    ... Number of processes participating in distributed training
+            rank (int, optional)            ... Rank of the current process within ``num_replicas``
+            shuffle (bool, optional)        ... If true sampler will shuffle the indices
         """
         super(DistributedSamplerWrapper, self).__init__(
             list(sampler),
