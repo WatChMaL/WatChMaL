@@ -1,4 +1,4 @@
-from WatChMaL.watchmal.dataset.h5_dataset import H5Dataset, H5TrueDataset
+from watchmal.dataset.h5_dataset import H5Dataset, H5TrueDataset
 import pickle
 import time
 
