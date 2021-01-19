@@ -34,9 +34,9 @@ class h5CommonDataset(Dataset, ABC):
     def __init__(self, h5_path, is_distributed, transforms=None):
         """
         Args:
-            h5_path                 ... path to h5 dataset file
-            is_distributed          ... whether running in multiprocessing mode
-            transforms              ... transforms to apply
+            h5_path             ... path to h5 dataset file
+            is_distributed      ... whether running in multiprocessing mode
+            transforms          ... transforms to apply
         """
         self.h5_path = h5_path
         with h5py.File(self.h5_path, 'r') as h5_file:
@@ -58,7 +58,7 @@ class h5CommonDataset(Dataset, ABC):
         self.energies           = np.array( self.h5_file['energies'] )   
         self.veto               = np.array( self.h5_file["veto"])
         self.veto2              = np.array( self.h5_file["veto2"])
-        self.event_hits_index   = np.array( self.h5_file['event_hits_index'] )  
+        self.event_hits_index   = np.array( self.h5_file['event_hits_index'] )
         
         self.hdf5_hit_pmt = self.h5_file["hit_pmt"]
         self.hdf5_hit_time = self.h5_file["hit_time"]
