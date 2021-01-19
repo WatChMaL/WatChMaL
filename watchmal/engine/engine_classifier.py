@@ -327,9 +327,9 @@ class ClassifierEngine:
         """
         Evaluate the performance of the trained model on the validation set.
         
-        Parameters : None
+        Parameters: None
         
-        Outputs : 
+        Outputs: 
             total_val_loss = accumulated validation loss
             avg_val_loss = average validation loss
             total_val_acc = accumulated validation accuracy
@@ -433,7 +433,7 @@ class ClassifierEngine:
     # ========================================================================
     # Saving and loading models
 
-    def save_state(self,best=False):
+    def save_state(self, best=False):
         """
         Save model weights to a file.
         

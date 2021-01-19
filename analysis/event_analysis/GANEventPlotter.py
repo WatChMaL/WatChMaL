@@ -1,3 +1,7 @@
+"""
+Class for plotting hit data and generated GAN data for CNN mPMT datasets
+"""
+
 from analysis.event_analysis.EventPlotter import EventPlotter
 from watchmal.dataset.cnn_mpmt.cnn_mpmt_dataset import pmts_per_mpmt
 

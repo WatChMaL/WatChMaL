@@ -1,3 +1,7 @@
+"""
+Class for plotting hit data for CNN mPMT datasets
+"""
+
 import numpy as np
 import math
 import matplotlib.pyplot as plt
@@ -56,6 +60,9 @@ class EventPlotter():
     def get_event_data_from_index(self, index):
         """
         Retrieve event data from dataset
+
+        Args:
+            index               ... index of event in dataset
         """
         return self.dataset.retrieve_event_data(index)
 
@@ -65,10 +72,15 @@ class EventPlotter():
     def PMT_to_flat_cylinder_map_positive(self, tubes, tube_xyz):
         """
         Build dictionary of PMT number, to (x,y) on a flat cylinder
+
+        Args:
+            tubes                ... tube numbers from geometry file
+            tube_xyz             ... tube locations from geometry file
         
-        N.B. Tube numbers in full geometry file go from 1:NPMTs, but it seems like
-        the event data number from 0:NPMTs-1, so subtracting 1 from tube number here?
+        Returns: dict mapping event tube index to flattened cylinder coordinates 
         
+        NOTE: Tube numbers in full geometry file go from 1:NPMTs, but it seems like
+        the event data number from 0:NPMTs-1, so must subtract 1 from tube number
         """
         mapping = {}
         for idx, tube in enumerate(tubes):
@@ -96,6 +108,10 @@ class EventPlotter():
     def display_event(self, index, data_type='charge'):
         """
         Plot single event by index
+
+        Args:
+            index               ... index of event in dataset
+            data_type           ... type of event data to display, one of 'charge' or 'time'
         """
         pmts, charges, times = self.get_event_data_from_index(index)
 
@@ -106,13 +122,14 @@ class EventPlotter():
 
     def display_data(self, tubes, quantities, title="Charge", cutrange=[-1,-1], ax=None, figsize=[30,30]):
         """
-        Plot quantities from an event on flattened cylinder
+        Plot quantities from an event on a flattened cylinder
 
-        tubes == np.array of PMTs that were hit
-        quantities == np.array of PMT quantities (either charge or time)
-        title == title to add to display
-        cutrange == minimum and maximum values on plot (or set both same for default)
-        figsize == figure dimensions
+        Args:
+            tubes               ... np.array of PMTs that were hit
+            quantities          ... np.array of PMT quantities (either charge or time)
+            title               ... title to add to display
+            cutrange            ... minimum and maximum values on plot (or set both same for default)
+            figsize             ... figure dimensions
         """
         plt.set_cmap('gist_heat_r')
         

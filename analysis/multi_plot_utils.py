@@ -8,7 +8,7 @@ from sklearn.metrics import auc
 
 from WatChMaL.analysis.plot_utils import compute_roc, plot_roc, disp_learn_hist
 
-def multi_disp_learn_hist(locations,losslim=None,show=True,titles=None,best_only=False,leg_font=10,title_font=10,xmax=None):
+def multi_disp_learn_hist(locations, losslim=None, show=True, titles=None, best_only=False, leg_font=10, title_font=10, xmax=None):
     '''
     Plot a grid of learning histories
 
@@ -19,10 +19,11 @@ def multi_disp_learn_hist(locations,losslim=None,show=True,titles=None,best_only
         titles                  ... list of titles for each plot in the grid
         best_only               ... bool, whether to plot only the points where best model was saved
         leg_font                ... legend font size
+        title_font              ... title font size
+        xmax                    ... maximum value on x-axis
     author: Calum Macdonald
     June 2020
     '''
-
     ncols = 1
     nrows = math.ceil(len(locations))
 
@@ -37,9 +38,9 @@ def multi_disp_learn_hist(locations,losslim=None,show=True,titles=None,best_only
     for i, location in enumerate(locations):
         print("i: ", i)
         if i == 0:
-            ax1 = fig.add_subplot(gs[i],facecolor='w')
+            ax1 = fig.add_subplot(gs[i], facecolor='w')
         else:
-            ax1 = fig.add_subplot(gs[i],facecolor='w',sharey=axes[0])
+            ax1 = fig.add_subplot(gs[i], facecolor='w', sharey=axes[0])
         disp_learn_hist(location, axis=ax1, title=titles[i], losslim=losslim, show=False)
         axes.append(ax1)
     
@@ -51,10 +52,11 @@ def multi_compute_roc(softmax_out_val_list, labels_val_list, true_label, false_l
     Call compute_roc on multiple sets of data
 
     Args:
-        softmax_out_val_list        ...
-        labels_val_list             ...
-        true_label                  ...
-        false_label                 ...
+        softmax_out_val_list        ... list of arrays of softmax outputs
+        labels_val_list             ... list of 1D arrays of actual labels
+        true_label                  ... desired particle (efficiency)
+        false_label                 ... rejected particle (rejected)
+        
     """
     fprs, tprs, thrs = [], [], []
     for softmax_out_val, labels_val in zip(softmax_out_val_list, labels_val_list):
