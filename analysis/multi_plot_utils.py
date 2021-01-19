@@ -1,3 +1,7 @@
+"""
+Utils for plotting model performance for multiple runs at the same time
+"""
+
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -13,14 +17,14 @@ def multi_disp_learn_hist(locations, losslim=None, show=True, titles=None, best_
     Plot a grid of learning histories
 
     Args:
-        locations               ... list of paths to directories of training dumps
-        losslim                 ... limit of loss axis
-        show                    ... bool, whether to show the plot
-        titles                  ... list of titles for each plot in the grid
-        best_only               ... bool, whether to plot only the points where best model was saved
-        leg_font                ... legend font size
-        title_font              ... title font size
-        xmax                    ... maximum value on x-axis
+        locations   ... list of paths to directories of training dumps
+        losslim     ... limit of loss axis
+        show        ... bool, whether to show the plot
+        titles      ... list of titles for each plot in the grid
+        best_only   ... bool, whether to plot only the points where best model was saved
+        leg_font    ... legend font size
+        title_font  ... title font size
+        xmax        ... maximum value on x-axis
     author: Calum Macdonald
     June 2020
     '''
@@ -52,11 +56,11 @@ def multi_compute_roc(softmax_out_val_list, labels_val_list, true_label, false_l
     Call compute_roc on multiple sets of data
 
     Args:
-        softmax_out_val_list        ... list of arrays of softmax outputs
-        labels_val_list             ... list of 1D arrays of actual labels
-        true_label                  ... desired particle (efficiency)
-        false_label                 ... rejected particle (rejected)
-        
+        softmax_out_val_list    ... list of arrays of softmax outputs
+        labels_val_list         ... list of 1D arrays of actual labels
+        true_label              ... label of class to be used as true binary label
+        false_label             ... label of class to be used as false binary label
+
     """
     fprs, tprs, thrs = [], [], []
     for softmax_out_val, labels_val in zip(softmax_out_val_list, labels_val_list):
@@ -69,24 +73,19 @@ def multi_compute_roc(softmax_out_val_list, labels_val_list, true_label, false_l
 
 def multi_plot_roc(fprs, tprs, thrs, true_label_name, false_label_name, fig_list=None, xlims=None, ylims=None, axes=None, linestyles=None, linecolors=None, plot_labels=None, show=False):
     '''
-    plot_multiple_ROC(data, metric, pos_neg_labels, plot_labels = None, png_name=None,title='ROC Curve', annotate=True,ax=None, linestyle=None, leg_loc=None, xlabel=None,ylabel=None,legend_label_dict=None)
     Plot multiple ROC curves of background rejection vs signal efficiency. Can plot 'rejection' (1/fpr) or 'fraction' (tpr).
+
     Args:
-        data                ... tuple of (n false positive rates, n true positive rate, n thresholds) to plot rejection or 
-                                (rejection fractions, true positive rates, false positive rates, thresholds) to plot rejection fraction.
-        metric              ... string, name of metric to plot: ('rejection' or 'fraction')
-        pos_neg_labels      ... array of one positive and one negative string label, or list of lists, with each list giving positive and negative label for
-                                one dataset
-        plot_labels         ... label for each run to display in legend
-        png_name            ... name of image to save
-        title               ... title of plot
-        annotate            ... whether or not to include annotations of critical points for each curve, default True
-        ax                  ... matplotlib.pyplot.axes on which to place plot
-        linestyle           ... list of linestyles to use for each curve, can be '-', ':', '-.'
-        leg_loc             ... location for legend, eg 'upper right' - vertical upper, center, lower, horizontal right left
-        legend_label_dict   ... dictionary of display symbols for each string label, to use for displaying pretty characters in labels
-    author: Calum Macdonald
-    June 2020
+        fprs, tprs, thrs        ... list of false positive rate, list of true positive rate, list of thresholds used to compute scores
+        true_label_name         ... name of class to be used as true binary label
+        false_label_name        ... name of class to be used as false binary label
+        fig_list                ... list of indexes of ROC curves to plot
+        xlims                   ... xlims to apply to plots
+        ylims                   ... ylims to apply to plots
+        axes                    ... axes to plot on
+        linestyle, linecolor    ... lists of line styles and colors
+        plot_labels             ... list of strings to use in title of plots
+        show                    ... if true then display figures, otherwise return figures
     '''
     rejections = [1.0/(fpr+1e-10) for fpr in fprs]
     AUCs = [auc(fpr,tpr) for fpr, tpr in zip(fprs, tprs)]
