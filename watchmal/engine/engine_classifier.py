@@ -28,6 +28,13 @@ from watchmal.utils.logging_utils import CSVData
 
 class ClassifierEngine:
     def __init__(self, model, rank, gpu, dump_path):
+        """
+        Args:
+            model       ... model object that engine will use in training or evaluation
+            rank        ... rank of process among all spawned processes (in multiprocessing mode)
+            gpu         ... gpu that this process is running on
+            dump_path   ... path to store outputs in
+        """
         # create the directory for saving the log and dump files
         self.dirpath = dump_path
         self.rank = rank
@@ -68,7 +75,7 @@ class ClassifierEngine:
         Set up optimizers from optimizer config
 
         Args:
-            optimizer_config            ...
+            optimizer_config    ... hydra config specifying optimizer object
         """
         self.optimizer = instantiate(optimizer_config, params=self.model_accs.parameters())
 
@@ -77,10 +84,10 @@ class ClassifierEngine:
         Set up data loaders from loaders config
 
         Args:
-            data_config                 ...
-            loaders_config              ...
-            is_distributed              ...
-            seed                        ...
+            data_config     ... hydra config specifying dataset
+            loaders_config  ... hydra config specifying dataloaders
+            is_distributed  ... boolean indicating if running in multiprocessing mode
+            seed            ... seed to use to initialize dataloaders
         
         Parameters:
             self should have dict attribute data_loaders
@@ -93,10 +100,10 @@ class ClassifierEngine:
         Gathers metrics from multiple processes using pytorch distributed operations
 
         Args:
-            metric_dict                 ... dict containing values that are tensor outputs of a single process
+            metric_dict         ... dict containing values that are tensor outputs of a single process
         
         Returns:
-            global_metric_dict          ... dict containing concatenated list of tensor values gathered from all processes
+            global_metric_dict  ... dict containing concatenated list of tensor values gathered from all processes
         """
         global_metric_dict = {}
         for name, array in zip(metric_dict.keys(), metric_dict.values()):
@@ -112,14 +119,14 @@ class ClassifierEngine:
         Compute predictions and metrics for a batch of data
 
         Args:
-            train                       ... whether to compute gradients for backpropagation
+            train   ... whether to compute gradients for backpropagation
 
         Parameters:
             self should have attributes data, labels, model, criterion, softmax
         
-        Returns: a dict containing loss, predicted labels, softmax, accuracy, and raw model outputs
+        Returns:
+            dict containing loss, predicted labels, softmax, accuracy, and raw model outputs
         """
-
         with torch.set_grad_enabled(train):
             # Move the data and the labels to the GPU (if using CPU this has no effect)
             self.data = self.data.to(self.device)
@@ -158,20 +165,17 @@ class ClassifierEngine:
         Train the model on the training set
 
         Args:
-            train_config                ...
+            train_config    ... config specigying training parameters
         
         Parameters:
             self should have attributes model, data_loaders
         
         Outputs:
-            total_val_loss              ... accumulated validation loss
-            avg_val_loss                ... average validation loss
-            total_val_acc               ... accumulated validation accuracy
-            avg_val_acc                 ... accumulated validation accuracy
+            val_log      ... csv log containing iteration, epoch, loss, accuracy for each iteration on validation set
+            train_logs   ... csv logs containing iteration, epoch, loss, accuracy for each iteration on training set
             
         Returns: None
         """
-
         # initialize training params
         epochs          = train_config.epochs
         report_interval = train_config.report_interval
@@ -238,6 +242,7 @@ class ClassifierEngine:
                         self.energies  = val_data['energies'].float()
                         self.angles    = val_data['angles'].float()
                         self.event_ids = val_data['event_ids'].float()
+
                         val_res = self.forward(False)
                         
                         val_metrics["loss"] += val_res["loss"]
@@ -320,22 +325,24 @@ class ClassifierEngine:
         self.train_log.close()
         if self.rank == 0:
             self.val_log.close()
-        
-        
 
     def evaluate(self, test_config):
         """
-        Evaluate the performance of the trained model on the validation set.
+        Evaluate the performance of the trained model on the test set
+
+        Args:
+            test_config ... hydra config specifying evaluation parameters
         
-        Parameters: None
+        Parameters:
+            self should have attributes model, data_loaders, dirpath
         
-        Outputs: 
-            total_val_loss = accumulated validation loss
-            avg_val_loss = average validation loss
-            total_val_acc = accumulated validation accuracy
-            avg_val_acc = accumulated validation accuracy
+        Outputs:
+            indices     ... index in dataset of each event
+            labels      ... actual label of each event
+            predictions ... predicted label of each event
+            softmax     ... softmax output over classes for each event
             
-        Returns : None
+        Returns: None
         """
         print("evaluating in directory: ", self.dirpath)
         
@@ -438,9 +445,10 @@ class ClassifierEngine:
         Save model weights to a file.
         
         Args:
-            best
+            best    ... if true, save as best model found, else save as checkpoint
         
-        Outputs: 
+        Outputs:
+            dict containing iteration, optimizer state dict, and model state dict
             
         Returns: filename
         """
@@ -468,7 +476,9 @@ class ClassifierEngine:
         Restore model using best model found in current directory
 
         Args:
-            placeholder             ... extraneous; hydra configs are not allowed to be empty
+            placeholder     ... extraneous; hydra configs are not allowed to be empty
+
+        Outputs: model params are now those loaded from best model file
         """
         best_validation_path = "{}{}{}{}".format(self.dirpath,
                                      str(self.model._get_name()),
@@ -485,11 +495,9 @@ class ClassifierEngine:
         Restore model using weights stored from a previous run
         
         Args: 
-            weight_file             ... path to weights to load
+            weight_file     ... path to weights to load
         
-        Outputs: 
-            
-        Returns: None
+        Outputs: model params are now those loaded from file
         """
         # Open a file in read-binary mode
         with open(weight_file, 'rb') as f:
