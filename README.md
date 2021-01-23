@@ -19,6 +19,20 @@ To download the repository use :
 
 ## Usage
 
+Before training or evaluation can be done, a container needs to be attached.
+
+# Datasets
+
+A consideration to make is that if training/evaluation needs to be conducted on a particular dataset, then there needs to be config files for that dataset located in the `WatChMaL/config/data` and `WatChMaL/config/data/dataset` directories. If there are not any config files for that dataset, then new config files should be created for that dataset. 
+
+The first config file should follow the same format as the files in the `WatChMaL/config/data` directory. Once this file has been created, it should be added to the following directory:  
+
+`WatChMaL/config/data`
+
+The other file should should follow the same format as the files in the `WatChMaL/config/data/dataset` directory. Once this file has been created, it should be added to the following directory:  
+
+`WatChMaL/config/data/dataset`
+
 # Run Examples:
 
 ```
