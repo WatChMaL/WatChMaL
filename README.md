@@ -33,6 +33,12 @@ The other file should should follow the same format as the files in the `WatChMa
 
 `WatChMaL/config/data/dataset`
 
+In order to override the dataset being used:  
+`python main.py data="name_of_data_config" data/dataset="name_of_dataset_config"`
+
+For example, if someone wants to use the short-tank data:  
+`python main.py data=iwcd_short data/dataset=iwcd_cnn_short` 
+
 # Run Examples:
 
 ```
