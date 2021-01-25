@@ -7,7 +7,6 @@ from functools import reduce
 from sklearn.metrics import roc_curve, auc
 from sklearn.preprocessing import label_binarize
 
-
 POS_MAP = [(8,4), #0
            (7,2), #1
            (6,0), #2
@@ -68,7 +67,7 @@ def tile(canvas, ul, pmts):
         for col in range(10):
             canvas[row+ul[0]][col+ul[1]] = mpmt[row][col]
 
-def disp_learn_hist(location,losslim=None,show=True):
+def disp_learn_hist(location, losslim=None, axis=None, show=True):
     
     """
     Purpose : Plot the loss and accuracy history for a training session
@@ -82,7 +81,11 @@ def disp_learn_hist(location,losslim=None,show=True):
 
     train_log_df = get_aggregated_train_data(location)
 
-    fig, ax1 = plt.subplots(figsize=(12,8),facecolor='w')
+    if axis is None:
+        fig, ax1 = plt.subplots(figsize=(12,8),facecolor='w')
+    else:
+        ax1 = axis
+    
     line11 = ax1.plot(train_log_df.epoch, train_log_df.loss, linewidth=2, label='Train loss', color='b', alpha=0.3)
     line12 = ax1.plot(val_log_df.epoch, val_log_df.loss, marker='o', markersize=3, linestyle='', label='Validation loss', color='blue')
 
@@ -114,13 +117,16 @@ def disp_learn_hist(location,losslim=None,show=True):
         plt.show()
         return
     
-    return fig
+    if axis is None:
+        return fig
 
 def get_aggregated_train_data(location):
     # get all training data files
     base_log_path = location + '/log_train_[0-9]*.csv'
     log_paths = glob.glob(base_log_path)
+
     print("Found training logs: ", log_paths)
+    
     log_dfs = []
     for log_path in log_paths:
         log_dfs.append(pd.read_csv(log_path))
@@ -139,8 +145,7 @@ def get_aggregated_train_data(location):
 
     return train_log_df
 
-def disp_learn_hist_smoothed(location, losslim=None, window_train=400,window_val=40,show=True):
-    
+def disp_learn_hist_smoothed(location, losslim=None, window_train=400, window_val=40, show=True):
     """
     Purpose : Plot the loss and accuracy history for a training session with averaging to clean up noise
     
@@ -372,6 +377,128 @@ def separate_particles(input_array_list,labels,index_dict,desired_labels=['gamma
 
     return separated_arrays
 
+def compute_roc(softmax_out_val, labels_val, true_label, false_label):
+    # Compute ROC metrics
+    labels_val_for_comp = labels_val[np.where( (labels_val==false_label) | (labels_val==true_label)  )]
+    softmax_out_for_comp = softmax_out_val[np.where(  (labels_val==false_label) | (labels_val==true_label)  )][:,true_label]
+
+    fpr, tpr, thr = roc_curve(labels_val_for_comp, softmax_out_for_comp, pos_label=true_label)
+    
+    return fpr, tpr, thr
+
+def plot_roc(fpr, tpr, thr, true_label_name, false_label_name, fig_list=None, xlims=None, ylims=None, axes=None, linestyle=None, linecolor=None, plot_label=None, show=False):
+    """
+    Purpose : Plot ROC curves for a classifier that has been evaluated on a validation set with respect to given labels
+    
+    Args: location     ... output directory containing log files
+          losslim      ... sets bound on y axis of loss
+          show         ... if true then display figure, otherwise return figure
+    """
+    # Compute additional parameters
+    rejection=1.0/(fpr+1e-10)
+    roc_AUC = auc(fpr,tpr)
+
+    if fig_list is None:
+        fig_list = list(range(3))
+    
+    figs = []
+    # Plot results
+    if axes is None:
+        if 0 in fig_list:
+            fig0, ax0 = plt.subplots(figsize=(12,8),facecolor="w")
+            figs.append(fig0)
+        if 1 in fig_list: 
+            fig1, ax1 = plt.subplots(figsize=(12,8),facecolor="w")
+            figs.append(fig1)
+        if 2 in fig_list: 
+            fig2, ax2 = plt.subplots(figsize=(12,8),facecolor="w")
+            figs.append(fig2)
+    else:
+        print(axes)
+        axes_iter = iter(axes)
+        if 0 in fig_list:
+            ax0 = next(axes_iter)
+        if 1 in fig_list: 
+            ax1 = next(axes_iter)
+        if 2 in fig_list: 
+            ax2 = next(axes_iter)
+
+    if xlims is not None:
+        xlim_iter = iter(xlims)
+    if ylims is not None:
+        ylim_iter = iter(ylims)
+
+    if 0 in fig_list: 
+        ax0.tick_params(axis="both", labelsize=20)
+        ax0.plot(fpr, tpr,
+                    label=plot_label if plot_label + ', AUC={:.3f}'.format(roc_AUC)  is not None else r'{} VS {} ROC, AUC={:.3f}'.format(true_label_name, false_label_name, roc_AUC),
+                    linestyle=linestyle  if linestyle is not None else None,
+                    color=linecolor if linecolor is not None else None)
+        ax0.set_xlabel('FPR', fontsize=20)
+        ax0.set_ylabel('TPR', fontsize=20)
+        ax0.legend(loc="lower right",prop={'size': 16})
+
+        if xlims is not None:
+            xlim = next(xlim_iter)
+            ax0.set_xlim(xlim[0],xlim[1])
+        if ylims is not None:
+            ylim = next(ylim_iter)
+            ax0.set_ylim(ylim[0],ylim[1])
+    
+    if 1 in fig_list: 
+        ax1.tick_params(axis="both", labelsize=20)
+        ax1.set_yscale('log')
+        ax1.grid(b=True, which='major', color='gray', linestyle='-')
+        ax1.grid(b=True, which='minor', color='gray', linestyle='--')
+        ax1.plot(tpr, rejection, 
+                    label=plot_label + ', AUC={:.3f}'.format(roc_AUC)  if plot_label is not None else r'{} VS {} ROC, AUC={:.3f}'.format(true_label_name, false_label_name, roc_AUC),
+                    linestyle=linestyle  if linestyle is not None else None,
+                    color=linecolor if linecolor is not None else None)
+
+        xlabel = f'{true_label_name} Signal Efficiency'
+        ylabel = f'{false_label_name} Background Rejection'
+        title = '{} vs {} Rejection'.format(true_label_name, false_label_name)
+
+        ax1.set_xlabel(xlabel, fontsize=20)
+        ax1.set_ylabel(ylabel, fontsize=20)
+        ax1.set_title(title, fontsize=24)
+        ax1.legend(bbox_to_anchor=(1.05, 1), loc='upper left') #loc="upper right",prop={'size': 16})
+
+        if xlims is not None:
+            xlim = next(xlim_iter)
+            ax1.set_xlim(xlim[0],xlim[1])
+        if ylims is not None:
+            ylim = next(ylim_iter)
+            ax1.set_ylim(ylim[0],ylim[1])
+    
+    if 2 in fig_list: 
+        ax2.tick_params(axis="both", labelsize=20)
+        #plt.yscale('log')
+        #plt.ylim(1.0,1)
+        ax2.grid(b=True, which='major', color='gray', linestyle='-')
+        ax2.grid(b=True, which='minor', color='gray', linestyle='--')
+        ax2.plot(tpr, tpr/np.sqrt(fpr), 
+                    label= plot_label + ', AUC={:.3f}'.format(roc_AUC) if plot_label is not None else r'{} VS {} ROC, AUC={:.3f}'.format(true_label_name, false_label_name, roc_AUC),
+                    linestyle=linestyle  if linestyle is not None else None,
+                    color=linecolor if linecolor is not None else None)
+        ax2.set_xlabel('efficiency', fontsize=20)
+        ax2.set_ylabel('~significance', fontsize=20)
+        ax2.legend(loc="upper right",prop={'size': 16})
+
+        if xlims is not None:
+            xlim = next(xlim_iter)
+            ax2.set_xlim(xlim[0],xlim[1])
+        if ylims is not None:
+            ylim = next(ylim_iter)
+            ax2.set_ylim(ylim[0],ylim[1])
+
+    if show:
+        plt.show()
+        return
+    
+    if axes is None:
+        return tuple(figs)
+
 def plot_rocs(softmax_out_val, labels_val, labels_dict, plot_list=None, vs_list = None, show=True):
     
     """
@@ -411,65 +538,3 @@ def plot_rocs(softmax_out_val, labels_val, labels_dict, plot_list=None, vs_list 
         return
     
     return figs
-
-def plot_roc(softmax_out_val, labels_val, true_label_name, true_label, false_label_name, false_label, axes=None, show=False):
-    
-    """
-    Purpose : Plot ROC curves for a classifier that has been evaluated on a validation set with respect to given labels
-    
-    Args: location     ... output directory containing log files
-          losslim      ... sets bound on y axis of loss
-          show         ... if true then display figure, otherwise return figure
-    """
-    # Compute ROC metrics
-    labels_val_for_comp = labels_val[np.where( (labels_val==false_label) | (labels_val==true_label)  )]
-    softmax_out_for_comp = softmax_out_val[np.where(  (labels_val==false_label) | (labels_val==true_label)  )][:,true_label]
-
-    fpr, tpr, thr = roc_curve(labels_val_for_comp, softmax_out_for_comp, pos_label=true_label)
-    
-    roc_AUC = auc(fpr,tpr)
-
-    # Plot results
-    if axes is None:
-        fig1, ax1 = plt.subplots(figsize=(12,8),facecolor="w")
-        fig2, ax2 = plt.subplots(figsize=(12,8),facecolor="w")
-        fig3, ax3 = plt.subplots(figsize=(12,8),facecolor="w")
-    else:
-        ax1 = axes[0]
-        ax2 = axes[1]
-        ax3 = axes[2]
-
-    ax1.tick_params(axis="both", labelsize=20)
-    ax1.plot(fpr,tpr,label=r'{} VS {} ROC, AUC={:.3f}'.format(true_label_name, false_label_name, roc_AUC))
-    ax1.set_xlabel('FPR',fontweight='bold',fontsize=24,color='black')
-    ax1.set_ylabel('TPR',fontweight='bold',fontsize=24,color='black')
-    ax1.legend(loc="lower right",prop={'size': 16})
-
-    rejection=1.0/(fpr+1e-10)
-    
-    ax2.tick_params(axis="both", labelsize=20)
-    ax2.set_yscale('log')
-    ax2.set_ylim(0.2,1.2e6)
-    ax2.grid(b=True, which='major', color='gray', linestyle='-')
-    ax2.grid(b=True, which='minor', color='gray', linestyle='--')
-    ax2.plot(tpr, rejection, label=r'{} VS {} ROC, AUC={:.3f}'.format(true_label_name, false_label_name, roc_AUC))
-    ax2.set_xlabel('efficiency',fontweight='bold',fontsize=24,color='black')
-    ax2.set_ylabel('Rejection',fontweight='bold',fontsize=24,color='black')
-    ax2.legend(loc="upper right",prop={'size': 16})
-    
-    ax3.tick_params(axis="both", labelsize=20)
-    #plt.yscale('log')
-    #plt.ylim(1.0,1)
-    ax3.grid(b=True, which='major', color='gray', linestyle='-')
-    ax3.grid(b=True, which='minor', color='gray', linestyle='--')
-    ax3.plot(tpr, tpr/np.sqrt(fpr), label=r'{} VS {} ROC, AUC={:.3f}'.format(true_label_name, false_label_name, roc_AUC))
-    ax3.set_xlabel('efficiency',fontweight='bold',fontsize=24,color='black')
-    ax3.set_ylabel('~significance',fontweight='bold',fontsize=24,color='black')
-    ax3.legend(loc="upper right",prop={'size': 16})
-
-    if show:
-        plt.show()
-        return
-    
-    if axes is None:
-        return fig1, fig2, fig3

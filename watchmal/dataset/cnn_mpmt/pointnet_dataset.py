@@ -6,8 +6,8 @@ from watchmal.dataset.h5_dataset import H5Dataset
 
 class PointNetDataset(H5Dataset):
 
-    def __init__(self, h5file, geometry_file, use_orientations=False, n_points=4000, transforms=None):
-        super().__init__(h5file, transforms)
+    def __init__(self, h5file, geometry_file, is_distributed, use_orientations=False, n_points=4000, transforms=None):
+        super().__init__(h5file, is_distributed, transforms)
         geo_file = np.load(geometry_file, 'r')
         self.geo_positions = torch.from_numpy(geo_file["position"]).float()
         self.geo_orientations = torch.from_numpy(geo_file["orientation"]).float()

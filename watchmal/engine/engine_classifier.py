@@ -17,11 +17,11 @@ import os
 from time import strftime, localtime, time
 import sys
 from sys import stdout
+import copy
 
 # WatChMaL imports
 from watchmal.dataset.data_utils import get_data_loader
 from watchmal.utils.logging_utils import CSVData
-from watchmal.dataset.data_utils import get_data_loader
 
 #extraneous testing imports
 
@@ -71,12 +71,12 @@ class ClassifierEngine:
         """
         self.optimizer = instantiate(optimizer_config, params=self.model_accs.parameters())
 
-    def configure_data_loaders(self, data_config, loaders_config, is_distributed):
+    def configure_data_loaders(self, data_config, loaders_config, is_distributed, seed):
         """
         Set up data loaders from loaders config
         """
         for name, loader_config in loaders_config.items():
-            self.data_loaders[name] = get_data_loader(**data_config, **loader_config, is_distributed=is_distributed)
+            self.data_loaders[name] = get_data_loader(**data_config, **loader_config, is_distributed=is_distributed, seed=seed)
     
     def get_synchronized_metrics(self, metric_dict):
         global_metric_dict = {}
@@ -124,7 +124,7 @@ class ClassifierEngine:
         self.optimizer.step()       # step params
     
     # ========================================================================
-
+    
     def train(self, train_config):
         """
         Train the model on the training set.
@@ -173,8 +173,13 @@ class ClassifierEngine:
             times = []
 
             start_time = time()
+            iteration_time = start_time
 
             train_loader = self.data_loaders["train"]
+
+            # update seeding for distributed samplers
+            if self.is_distributed:
+                train_loader.sampler.set_epoch(epoch)
 
             # local training loop for batches in a single epoch
             for i, train_data in enumerate(self.data_loaders["train"]):
@@ -190,7 +195,16 @@ class ClassifierEngine:
                         try:
                             val_data = next(val_iter)
                         except StopIteration:
+                            del val_iter
+                            # TODO: still needs to be cleaned up before final push
+                            time0 = time()
+                            print("Fetching new validation iterator...")
                             val_iter = iter(self.data_loaders["validation"])
+                            time1 = time()
+                            val_data = next(val_iter)
+                            time2= time()
+                            print("Fetching iterator took time ", time1 - time0)
+                            print("second step step took time ", time2 - time1)
                         
                         # extract the event data from the input data tuple
                         self.data      = val_data['data'].float()
@@ -198,7 +212,6 @@ class ClassifierEngine:
                         self.energies  = val_data['energies'].float()
                         self.angles    = val_data['angles'].float()
                         self.event_ids = val_data['event_ids'].float()
-
                         val_res = self.forward(False)
                         
                         val_metrics["loss"] += val_res["loss"]
@@ -211,14 +224,19 @@ class ClassifierEngine:
                     val_metrics["loss"] /= num_val_batches
                     val_metrics["accuracy"] /= num_val_batches
 
+                    local_val_metrics = {"loss": np.array([val_metrics["loss"]]), "accuracy": np.array([val_metrics["accuracy"]])}
+
                     if self.is_distributed:
-                        local_val_metrics = {"loss": np.array([val_metrics["loss"]]), "accuracy": np.array([val_metrics["accuracy"]])}
                         global_val_metrics = self.get_synchronized_metrics(local_val_metrics)
+                        for name, tensor in zip(global_val_metrics.keys(), global_val_metrics.values()):
+                            global_val_metrics[name] = np.array(tensor.cpu())
+                    else:
+                        global_val_metrics = local_val_metrics
 
                     if self.rank == 0:
                         # Save if this is the best model so far
-                        global_val_loss = np.mean(np.array(global_val_metrics["loss"].cpu()))
-                        global_val_accuracy = np.mean(np.array(global_val_metrics["accuracy"].cpu()))
+                        global_val_loss = np.mean(global_val_metrics["loss"])
+                        global_val_accuracy = np.mean(global_val_metrics["accuracy"])
 
                         val_metrics["loss"] = global_val_loss
                         val_metrics["accuracy"] = global_val_accuracy
@@ -254,7 +272,7 @@ class ClassifierEngine:
                 # update the epoch and iteration
                 epoch          += 1./len(self.data_loaders["train"])
                 self.iteration += 1
-
+                
                 # get relevant attributes of result for logging
                 train_metrics = {"iteration": self.iteration, "epoch": epoch, "loss": res["loss"], "accuracy": res["accuracy"]}
                 
@@ -265,8 +283,10 @@ class ClassifierEngine:
                 
                 # print the metrics at given intervals
                 if self.rank == 0 and self.iteration % report_interval == 0:
-                    print("... Iteration %d ... Epoch %1.2f ... Training Loss %1.3f ... Training Accuracy %1.3f" %
-                          (self.iteration, epoch, res["loss"], res["accuracy"]))
+                    previous_iteration_time = iteration_time
+                    iteration_time = time()
+                    print("... Iteration %d ... Epoch %1.2f ... Training Loss %1.3f ... Training Accuracy %1.3f ... Time Elapsed %1.3f ... Iteration Time %1.3f" %
+                          (self.iteration, epoch, res["loss"], res["accuracy"], iteration_time - start_time, iteration_time - previous_iteration_time))
                 
                 if epoch >= epochs:
                     break
@@ -274,6 +294,8 @@ class ClassifierEngine:
         self.train_log.close()
         if self.rank == 0:
             self.val_log.close()
+        
+        
 
     def evaluate(self, test_config):
         """
@@ -307,9 +329,12 @@ class ClassifierEngine:
             
             # Extract the event data and label from the DataLoader iterator
             for it, eval_data in enumerate(self.data_loaders["test"]):
-
-                self.data = eval_data['data'].float()
-                self.labels = eval_data['labels'].long()
+                
+                # TODO: see if copying helps
+                self.data = copy.deepcopy(eval_data['data'].float())
+                self.labels = copy.deepcopy(eval_data['labels'].long())
+                
+                eval_indices = copy.deepcopy(eval_data['indices'].long().to("cpu"))
 
                 # Run the forward procedure and output the result
                 result = self.forward(False)
@@ -319,7 +344,6 @@ class ClassifierEngine:
                 
                 # Copy the tensors back to the CPU
                 self.labels = self.labels.to("cpu")
-                eval_indices = eval_data['indices'].long().to("cpu")
                 
                 # Add the local result to the final result
                 indices.extend(eval_indices)
@@ -378,11 +402,21 @@ class ClassifierEngine:
             val_acc = np.sum(local_eval_metrics_dict["eval_acc"])
 
             print("\nAvg eval loss : " + str(val_loss/val_iterations),
-                "\nAvg eval acc : " + str(val_acc/val_iterations))
+                  "\nAvg eval acc : "  + str(val_acc/val_iterations))
         
     # ========================================================================
+    def restore_best_state(self, placeholder):
+        best_validation_path = "{}{}{}{}".format(self.dirpath,
+                                     str(self.model._get_name()),
+                                     "BEST",
+                                     ".pth")
 
-    def restore_state(self, weight_file):
+        self.restore_state_from_file(best_validation_path)
+    
+    def restore_state(self, restore_config):
+        self.restore_state_from_file(restore_config.weight_file)
+
+    def restore_state_from_file(self, weight_file):
         """
         Restore model using weights stored from a previous run.
         
@@ -403,7 +437,7 @@ class ClassifierEngine:
             self.model_accs.load_state_dict(checkpoint['state_dict'])
             
             # if optim is provided, load the state of the optim
-            if self.optimizer is not None:
+            if hasattr(self, 'optimizer'):
                 self.optimizer.load_state_dict(checkpoint['optimizer'])
             
             # load iteration count

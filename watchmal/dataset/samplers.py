@@ -1,5 +1,6 @@
 from operator import itemgetter
 from typing import Optional
+import time
 
 import torch
 from torch.utils.data import Dataset, Sampler
@@ -8,9 +9,7 @@ from torch.utils.data.distributed import DistributedSampler
 def SubsetSequentialSampler(indices):
     return indices
 
-"""
-Wrapper borrowed from https://github.com/catalyst-team/catalyst/blob/master/catalyst/data/sampler.py
-"""
+
 class DistributedSamplerWrapper(DistributedSampler):
     """
     Wrapper over `Sampler` for distributed training.
@@ -27,6 +26,7 @@ class DistributedSamplerWrapper(DistributedSampler):
     def __init__(
         self,
         sampler,
+        seed,
         num_replicas: Optional[int] = None,
         rank: Optional[int] = None,
         shuffle: bool = False,
@@ -42,45 +42,30 @@ class DistributedSamplerWrapper(DistributedSampler):
               sampler will shuffle the indices
         """
         super(DistributedSamplerWrapper, self).__init__(
-            DatasetFromSampler(sampler),
+            list(sampler),
             num_replicas=num_replicas,
             rank=rank,
             shuffle=shuffle,
+            seed=seed
         )
         self.sampler = sampler
-
+        self.epoch = 0
+    
+    def set_epoch(self, epoch):
+        self.epoch = epoch
+    
     def __iter__(self):
-        """@TODO: Docs. Contribution is welcome."""
-        self.dataset = DatasetFromSampler(self.sampler)
+        # fetch DistributedSampler indices
         indexes_of_indexes = super().__iter__()
-        subsampler_indexes = self.dataset
-        return iter(itemgetter(*indexes_of_indexes)(subsampler_indexes))
+        
+        # deterministically shuffle based on epoch
+        updated_seed = self.seed + int(self.epoch)
+        torch.manual_seed(updated_seed)
 
-class DatasetFromSampler(Dataset):
-    """Dataset of indexes from `Sampler`."""
+        # fetch subsampler indices with synchronized seeding
+        subsampler_indices = list(self.sampler)
 
-    def __init__(self, sampler: Sampler):
-        """
-        Args:
-            sampler: @TODO: Docs. Contribution is welcome
-        """
-        self.sampler = sampler
-        self.sampler_list = None
+        # get subsampler_indexes[indexes_of_indexes]
+        distributed_subsampler_indices = itemgetter(*indexes_of_indexes)(subsampler_indices)
 
-    def __getitem__(self, index: int):
-        """Gets element of the dataset.
-        Args:
-            index: index of the element in the dataset
-        Returns:
-            Single element by index
-        """
-        if self.sampler_list is None:
-            self.sampler_list = list(self.sampler)
-        return self.sampler_list[index]
-
-    def __len__(self) -> int:
-        """
-        Returns:
-            int: length of the dataset
-        """
-        return len(self.sampler)
+        return iter(distributed_subsampler_indices)

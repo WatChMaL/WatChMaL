@@ -1,7 +1,7 @@
 # @package _group_
-epochs: 1
+epochs: 20
 
-report_interval: 50
+report_interval: 100
 val_interval: 100
 num_val_batches: 32
 

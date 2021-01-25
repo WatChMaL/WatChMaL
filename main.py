@@ -7,13 +7,12 @@ from hydra.utils import instantiate
 # torch imports
 import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
-import torch.multiprocessing as mp
 
-# TODO: see if this can be removed
-torch.multiprocessing.set_sharing_strategy('file_system')
+import torch.multiprocessing as mp
 
 # generic imports
 import os
+import numpy as np
 
 logger = logging.getLogger('train')
 
@@ -25,8 +24,16 @@ def main(config):
     is_distributed = ngpus > 1
     
     # Initialize process group env variables
-    os.environ['MASTER_ADDR'] = 'localhost'
-    os.environ['MASTER_PORT'] = '12355'
+    if is_distributed:
+        os.environ['MASTER_ADDR'] = 'localhost'
+
+        if 'MASTER_PORT' in config:
+            master_port = config.MASTER_PORT
+        else:
+            master_port = 12355
+        # Automatically select port based on base gpu
+        master_port += config.gpu_list[0]
+        os.environ['MASTER_PORT'] = str(master_port)
 
     # create run directory
     try:
@@ -35,7 +42,12 @@ def main(config):
         print("Creating a directory for run dump at : {}".format(config.dump_path))
         os.makedirs(config.dump_path)
     
-    print("Dump path: ", config.dump_path)
+    print("Dump path: {}".format(config.dump_path))
+
+    # initialize seed
+    if config.seed is None:
+        # numpy call needed to fix pytorch issue that was patched in August 2020
+        config.seed = np.random.randint(100000) #np.random.seed(torch.seed())
     
     if is_distributed:
         print("Using multiprocessing...")
@@ -47,7 +59,8 @@ def main(config):
         main_worker_function(0, ngpus, is_distributed, config)
 
 def main_worker_function(rank, ngpus_per_node, is_distributed, config):
-    # infer rank from gpu and ngpus, rank is position in gpu list
+    print("rank: ", rank)
+    # Infer rank from gpu and ngpus, rank is position in gpu list
     gpu = config.gpu_list[rank]
 
     print("Running main worker function on device: {}".format(gpu))
@@ -66,7 +79,7 @@ def main_worker_function(rank, ngpus_per_node, is_distributed, config):
     # Instantiate model and engine
     model = instantiate(config.model).to(gpu)
 
-    # configure the device to be used for model training and inference
+    # Configure the device to be used for model training and inference
     if is_distributed:
         # Convert model batch norms to synchbatchnorm
         model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
@@ -78,17 +91,13 @@ def main_worker_function(rank, ngpus_per_node, is_distributed, config):
     # Configure data loaders
     for task, task_config in config.tasks.items():
         if 'data_loaders' in task_config:
-            engine.configure_data_loaders(config.data, task_config.data_loaders, is_distributed)
+            engine.configure_data_loaders(config.data, task_config.data_loaders, is_distributed, config.seed)
     
     # Configure optimizers
     for task, task_config in config.tasks.items():
         if 'optimizers' in task_config:
             engine.configure_optimizers(task_config.optimizers)
-
-    # Reload previous state
-    if 'load_state' in config:
-        engine.restore_state(config.load_state)
-
+    
     # Perform tasks
     for task, task_config in config.tasks.items():
         getattr(engine, task)(task_config)

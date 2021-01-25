@@ -3,6 +3,8 @@ from torch.utils.data import Dataset
 import h5py
 import numpy as np
 from abc import ABC, abstractmethod
+import copy
+import time
 
 class h5CommonDataset(Dataset, ABC):
     """
@@ -23,13 +25,16 @@ class h5CommonDataset(Dataset, ABC):
     hit_time 	(n_hits,) 	float32 	Time of the digitized hit
     """
     
-    def __init__(self, h5_path, transforms=None):
+    def __init__(self, h5_path, is_distributed, transforms=None):
         self.h5_path = h5_path
+        with h5py.File(self.h5_path, 'r') as h5_file:
+            self.dataset_length = h5_file["labels"].shape[0]
 
-        with h5py.File(self.h5_path, 'r') as init_h5_file:
-            self.dataset_length = init_h5_file["labels"].shape[0]
-    
-    def open_hdf5(self):
+        self.initialized = False
+        if not is_distributed:
+            self.initialize()
+
+    def initialize(self):
         self.file_descriptor = open(self.h5_path, 'rb')
         self.h5_file = h5py.File(self.file_descriptor, "r")
 
@@ -54,6 +59,9 @@ class h5CommonDataset(Dataset, ABC):
                               offset=self.hdf5_hit_time.id.get_offset(),
                               dtype=self.hdf5_hit_time.dtype)
         self.load_hits()
+
+        # Set attribute so that method won't be invoked again
+        self.initialized = True
         
     @abstractmethod
     def load_hits(self):
@@ -84,25 +92,26 @@ class H5Dataset(h5CommonDataset, ABC):
  
         
     def __getitem__(self, item):
-        if not hasattr(self, 'h5_file'):
-            self.open_hdf5()
+        if not self.initialized:
+            self.initialize()
         
         start = self.event_hits_index[item]
         stop = self.event_hits_index[item + 1]
+
         hit_pmts = self.hit_pmt[start:stop].astype(np.int16)
         hit_charges = self.hit_charge[start:stop]
         hit_times = self.time[start:stop]
         
         data = self.get_data(hit_pmts, hit_charges, hit_times)
-
+        
         data_dict = {
             "data": data,
             "labels": self.labels[item],
             "energies": self.energies[item],
             "angles": self.angles[item],
             "positions": self.positions[item],
-            "event_ids": self.event_ids[item],
             "root_files": self.root_files[item],
+            "event_ids": self.event_ids[item],
             "indices": item
         }
 

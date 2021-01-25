@@ -1,5 +1,6 @@
 gpu_list:
-    - 5
+    - 0
+    - 1
 seed: null
 dump_path: './outputs/'
 defaults:
@@ -9,10 +10,6 @@ defaults:
     - model/feature_extractor: resnet18
     - model/classification_network: resnet_fc
     - engine: classifier
-    - tasks/train: train_resnet
-    - optimizers@tasks.train.optimizers: adam
-    - sampler@tasks.train.data_loaders.train.sampler: subset_random
-    - sampler@tasks.train.data_loaders.validation.sampler: subset_sequential
-    - tasks/restore_best_state: restore_best_state
+    - tasks/restore_state: restore_state
     - tasks/evaluate: test
     - sampler@tasks.evaluate.data_loaders.test.sampler: subset_sequential

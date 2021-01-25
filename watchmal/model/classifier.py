@@ -3,7 +3,6 @@ from hydra.utils import instantiate
 
 
 class Classifier(nn.Module):
-
     def __init__(self, feature_extractor, classification_network, num_classes):
         super().__init__()
 
