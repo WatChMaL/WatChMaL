@@ -25,7 +25,7 @@ class CNNmPMTDataset(H5Dataset):
             transforms          ... transforms to apply
             collapse_arrays     ... whether to collapse arrays in return
         """
-        super().__init__(h5file, is_distributed, transforms)
+        super().__init__(h5file, is_distributed)
         
         self.mpmt_positions = np.load(mpmt_positions_file)['mpmt_image_positions']
         self.data_size = np.max(self.mpmt_positions, axis=0) + 1
@@ -65,22 +65,12 @@ class CNNmPMTDataset(H5Dataset):
 
     def  __getitem__(self, item):
 
-        hit_pmts, hit_charges, hit_times = super().__getitem__(item)
+        data_dict = super().__getitem__(item)
 
-        processed_data = from_numpy(self.process_data(hit_pmts, hit_charges))
-
+        processed_data = from_numpy(self.process_data(data_dict["data"]["hit_pmts"], data_dict["data"]["hit_charges"]))
         processed_data = du.apply_random_transformations(self.transforms, processed_data)
 
-        data_dict = {
-            "data": processed_data,
-            "labels": self.labels[item],
-            "energies": self.energies[item],
-            "angles": self.angles[item],
-            "positions": self.positions[item],
-            "root_files": self.root_files[item],
-            "event_ids": self.event_ids[item],
-            "indices": item
-        }
+        data_dict["data"] = processed_data
 
         return data_dict
 
@@ -97,12 +87,12 @@ class CNNmPMTDataset(H5Dataset):
             pmt_time_data           ... array of times of hits
 
         """
-        hit_pmts, hit_charges, hit_times = super().__getitem__(item)
+        data_dict = super().__getitem__(item)
 
         # construct charge data with barrel array indexing to match endcaps in xyz ordering
-        pmt_charge_data = self.process_data(hit_pmts, hit_charges).flatten()
+        pmt_charge_data = self.process_data(data_dict["data"]["hit_pmts"], data_dict["data"]["hit_charges"]).flatten()
 
         # construct time data with barrel array indexing to match endcaps in xyz ordering
-        pmt_time_data = self.process_data(hit_pmts, hit_times).flatten()
+        pmt_time_data = self.process_data(data_dict["data"]["hit_pmts"], data_dict["data"]["hit_times"]).flatten()
 
-        return hit_pmts, pmt_charge_data, pmt_time_data
+        return data_dict["data"]["hit_pmts"], pmt_charge_data, pmt_time_data
