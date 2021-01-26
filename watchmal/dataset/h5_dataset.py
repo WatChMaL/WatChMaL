@@ -100,13 +100,11 @@ class H5Dataset(h5CommonDataset, ABC):
         self.hit_charge = np.memmap( self.h5_path, mode="r", shape=self.hdf5_hit_charge.shape,
                               offset=self.hdf5_hit_charge.id.get_offset(),
                               dtype=self.hdf5_hit_charge.dtype)
-
- 
         
     def __getitem__(self, item):
         if not self.initialized:
             self.initialize()
-        
+
         start = self.event_hits_index[item]
         stop = self.event_hits_index[item + 1]
 
@@ -114,21 +112,7 @@ class H5Dataset(h5CommonDataset, ABC):
         hit_charges = self.hit_charge[start:stop]
         hit_times = self.time[start:stop]
         
-        data = self.get_data(hit_pmts, hit_charges, hit_times)
-        
-        data_dict = {
-            "data": data,
-            "labels": self.labels[item],
-            "energies": self.energies[item],
-            "angles": self.angles[item],
-            "positions": self.positions[item],
-            "root_files": self.root_files[item],
-            "event_ids": self.event_ids[item],
-            "indices": item
-        }
-
-        return data_dict
-
+        return hit_pmts, hit_charges, hit_times
     
 class H5TrueDataset(h5CommonDataset, ABC):
     """

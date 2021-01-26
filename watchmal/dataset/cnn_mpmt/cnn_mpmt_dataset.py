@@ -40,7 +40,7 @@ class CNNmPMTDataset(H5Dataset):
             self.transforms = transform_funcs
             self.n_transforms = len(self.transforms)
 
-    def get_data(self, hit_pmts, hit_charges, hit_times):
+    def process_data(self, hit_pmts, hit_data):
         hit_mpmts = hit_pmts // pmts_per_mpmt
         hit_pmt_in_modules = hit_pmts % pmts_per_mpmt
 
@@ -48,7 +48,7 @@ class CNNmPMTDataset(H5Dataset):
         hit_cols = self.mpmt_positions[hit_mpmts, 1]
 
         data = np.zeros(self.data_size)
-        data[hit_pmt_in_modules, hit_rows, hit_cols] = hit_charges
+        data[hit_pmt_in_modules, hit_rows, hit_cols] = hit_data
 
         # fix barrel array indexing to match endcaps in xyz ordering
         data[:, 12:28, :] = data[barrel_map_array_idxs, 12:28, :]
@@ -57,15 +57,32 @@ class CNNmPMTDataset(H5Dataset):
         if self.collapse_arrays:
             data = np.expand_dims(np.sum(data, 0), 0)
         
-        processed_data = from_numpy(data)
+        return data
+
+    def  __getitem__(self, item):
+
+        hit_pmts, hit_charges, hit_times = super().__getitem__(item)
+        
+        processed_data = from_numpy(process_data(hit_pmts, hit_charges))
 
         if self.transforms is not None:
             selection = np.random.choice(2, self.n_transforms)
             for i, transform in enumerate(self.transforms):
                 if selection[i]:
                     processed_data = transform(processed_data)
+        
+        data_dict = {
+            "data": processed_data,
+            "labels": self.labels[item],
+            "energies": self.energies[item],
+            "angles": self.angles[item],
+            "positions": self.positions[item],
+            "root_files": self.root_files[item],
+            "event_ids": self.event_ids[item],
+            "indices": item
+        }
 
-        return processed_data
+        return data_dict
 
     def retrieve_event_data(self, item):
         """
@@ -80,29 +97,12 @@ class CNNmPMTDataset(H5Dataset):
             pmt_time_data           ... array of times of hits
 
         """
-        start = self.event_hits_index[item]
-        stop = self.event_hits_index[item + 1]
-
-        hit_pmts = self.hit_pmt[start:stop].astype(np.int16)
-        hit_charges = self.charge[start:stop]
-        hit_times = self.time[start:stop]
-
-        hit_mpmts = hit_pmts // pmts_per_mpmt
-        hit_pmt_in_modules = hit_pmts % pmts_per_mpmt
-
-        hit_rows = self.mpmt_positions[hit_mpmts, 0]
-        hit_cols = self.mpmt_positions[hit_mpmts, 1]
+        hit_pmts, hit_charges, hit_times = super().__getitem__(item)
 
         # construct charge data with barrel array indexing to match endcaps in xyz ordering
-        charge_data = np.zeros(self.data_size)
-        charge_data[hit_pmt_in_modules, hit_rows, hit_cols] = hit_charges
-        charge_data[:, 12:28, :] = charge_data[barrel_map_array_idxs, 12:28, :]
-        pmt_charge_data = charge_data[hit_pmt_in_modules, hit_rows, hit_cols].flatten()
+        pmt_charge_data = self.process_data(hit_pmts, hit_charges).flatten()
 
         # construct time data with barrel array indexing to match endcaps in xyz ordering
-        time_data = np.zeros(self.data_size)
-        time_data[hit_pmt_in_modules, hit_rows, hit_cols] = hit_charges
-        time_data[:, 12:28, :] = time_data[barrel_map_array_idxs, 12:28, :]
-        pmt_time_data = charge_data[hit_pmt_in_modules, hit_rows, hit_cols].flatten()
+        pmt_time_data = self.process_data(hit_pmts, hit_times).flatten()
 
         return hit_pmts, pmt_charge_data, pmt_time_data
