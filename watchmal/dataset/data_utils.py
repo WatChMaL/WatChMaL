@@ -61,10 +61,13 @@ def get_transformations(transformations, transform_names):
             assert hasattr(transformations, transform_name), f"Error: There is no defined transform named {transform_name}"
         transform_funcs = [getattr(transformations, transform_name) for transform_name in transform_names]
         return transform_funcs
+    else:
+        return None
 
 
 def apply_random_transformations(transforms, data):
-    for transformation in transforms:
-        if random.getrandbits(1):
-            data = transformation(data)
+    if transforms is not None:
+        for transformation in transforms:
+            if random.getrandbits(1):
+                data = transformation(data)
     return data
