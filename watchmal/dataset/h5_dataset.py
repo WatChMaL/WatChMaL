@@ -53,8 +53,9 @@ class H5CommonDataset(Dataset, ABC):
         self.positions          = np.array(self.h5_file["positions"])
         self.angles             = np.array(self.h5_file["angles"])
         self.energies           = np.array(self.h5_file["energies"])
-        self.veto               = np.array(self.h5_file["veto"])
-        self.veto2              = np.array(self.h5_file["veto2"])
+        if "veto" in self.h5_file.keys():
+            self.veto               = np.array(self.h5_file["veto"])
+            self.veto2              = np.array(self.h5_file["veto2"])
         self.event_hits_index   = np.array(self.h5_file["event_hits_index"])
         
         self.hdf5_hit_pmt = self.h5_file["hit_pmt"]
