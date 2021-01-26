@@ -1,3 +1,7 @@
+"""
+Utils for plotting model performance
+"""
+
 import numpy as np
 import pandas as pd
 import glob
@@ -7,74 +11,16 @@ from functools import reduce
 from sklearn.metrics import roc_curve, auc
 from sklearn.preprocessing import label_binarize
 
-POS_MAP = [(8,4), #0
-           (7,2), #1
-           (6,0), #2
-           (4,0), #3
-           (2,0), #4
-           (1,2), #5
-           (0,4), #6
-           (1,6), #7
-           (2,8), #8
-           (4,8), #9
-           (6,8), #10
-           (7,6), #11
-           # Inner ring
-           (6,4), #12
-           (5,2), #13
-           (3,2), #14
-           (2,4), #15
-           (3,6), #16
-           (5,6), #17
-           (4,4)] #18
-
-PADDING = 1
-
-def get_plot_array(event_data):
-    
-    # Assertions on the shape of the data and the number of input channels
-    assert(len(event_data.shape) == 3 and event_data.shape[2] == 19)
-    
-    # Extract the number of rows and columns from the event data
-    rows = event_data.shape[0]
-    cols = event_data.shape[1]
-    
-    # Make empty output pixel grid
-    output = np.empty(((10+PADDING)*rows, (10+PADDING)*cols))
-    output[:] = np.nan
-    i, j = 0, 0
-    
-    for row in range(rows):
-        j = 0
-        for col in range(cols):
-            pmts = event_data[row, col]
-            tile(output, (i, j), pmts)
-            j += 10 + PADDING
-        i += 10 + PADDING
-        
-    return output
-
-def tile(canvas, ul, pmts):
-    
-    # First, create 10x10 grid representing single mpmt
-    mpmt = np.empty((10, 10))
-    mpmt[:] = np.nan
-    for i, val in enumerate(pmts):
-        mpmt[POS_MAP[i][0]][POS_MAP[i][1]] = val
-
-    # Then, place grid on appropriate position on canvas
-    for row in range(10):
-        for col in range(10):
-            canvas[row+ul[0]][col+ul[1]] = mpmt[row][col]
-
-def disp_learn_hist(location, losslim=None, axis=None, show=True):
-    
+def disp_learn_hist(location, title=None, losslim=None, axis=None, show=True):
     """
     Purpose : Plot the loss and accuracy history for a training session
     
-    Args: location     ... output directory containing log files
-          losslim      ... sets bound on y axis of loss
-          show         ... if true then display figure, otherwise return figure
+    Args: 
+        location    ... output directory containing log files
+        title       ... the title for the plot
+        losslim     ... sets bound on y axis of loss
+        axis        ... axis to plot on
+        show        ... if true then display figure, otherwise return figure
     """
     val_log=location + '/log_val.csv'
     val_log_df  = pd.read_csv(val_log)
@@ -112,6 +58,9 @@ def disp_learn_hist(location, losslim=None, axis=None, show=True):
     leg_frame = leg.get_frame()
     leg_frame.set_facecolor('white')
 
+    if title is not None:
+        ax1.set_title(title, fontsize=20)
+
     if show:
         plt.grid()
         plt.show()
@@ -121,6 +70,14 @@ def disp_learn_hist(location, losslim=None, axis=None, show=True):
         return fig
 
 def get_aggregated_train_data(location):
+    """
+    Aggregate training logs from all processes into a single set of data
+
+    Args:
+        location    ... path to outputs directory containing training logs
+
+    Returns: pandas dataframe containing aggregated data
+    """
     # get all training data files
     base_log_path = location + '/log_train_[0-9]*.csv'
     log_paths = glob.glob(base_log_path)
@@ -147,13 +104,15 @@ def get_aggregated_train_data(location):
 
 def disp_learn_hist_smoothed(location, losslim=None, window_train=400, window_val=40, show=True):
     """
-    Purpose : Plot the loss and accuracy history for a training session with averaging to clean up noise
+    Plot the loss and accuracy history for a training session with averaging to clean up noise
     
-    Args: location     ... output directory containing log files
-          losslim      ... sets bound on y axis of loss
-          show         ... if true then display figure, otherwise return figure
+    Args: location      ... output directory containing log files
+          losslim       ... sets bound on y axis of loss
+          window_train  ... window to average training data over
+          window_val    ... window to average validation data over
+          show          ... if true then display figure, otherwise return figure
     """
-    val_log=location + '/log_val.csv'
+    val_log = location + '/log_val.csv'
     val_log_df   = pd.read_csv(val_log)
 
     train_log_df = get_aggregated_train_data(location)
@@ -176,7 +135,7 @@ def disp_learn_hist_smoothed(location, losslim=None, window_train=400, window_va
     accuracy_val_st = accuracy_val_uns[stored_indices]
     loss_val_st     = loss_val_uns[stored_indices]
 
-    fig, ax1 = plt.subplots(figsize=(12,8),facecolor='w')
+    fig, ax1 = plt.subplots(figsize=(12,8), facecolor='w')
     line11 = ax1.plot(epoch_train, loss_train, linewidth=2, label='Average training loss', color='b', alpha=0.3)
     line12 = ax1.plot(epoch_val, loss_val, label='Average validation loss', color='blue')
     line13 = ax1.scatter(epoch_val_st, loss_val_st, label='BEST validation loss',
@@ -220,23 +179,22 @@ def disp_learn_hist_smoothed(location, losslim=None, window_train=400, window_va
     return fig
 
 def moving_average(a, n=3) :
+    """
+    Compute average of a over windows of size n
+    """
     ret = np.cumsum(a, dtype=float)
     ret[n:] = ret[n:] - ret[:-n]
     return ret[n - 1:] / n
 
-# Function to plot a confusion matrix
 def plot_confusion_matrix(labels, predictions, class_names):
-    
     """
-    plot_confusion_matrix(labels, predictions, class_names)
+    Plot the confusion matrix for a given energy interval
     
-    Purpose : Plot the confusion matrix for a given energy interval
-    
-    Args: labels              ... 1D array of true label value, the length = sample size
-          predictions         ... 1D array of predictions, the length = sample size
-          class_names         ... 1D array of string label for classification targets, the length = number of categories
+    Args: 
+        labels        ... 1D array of true label value, the length = sample size
+        predictions   ... 1D array of predictions, the length = sample size
+        class_names   ... 1D array of string label for classification targets, the length = number of categories
     """
-    
     fig, ax = plt.subplots(figsize=(12,8),facecolor='w')
 
     num_labels = len(class_names)
@@ -274,23 +232,24 @@ def plot_confusion_matrix(labels, predictions, class_names):
    
     plt.show()
 
-def plot_classifier_response(softmaxes, labels, particle_names, label_dict,linestyles=None,bins=None,legend_locs=None,
-                  extra_panes=[], xlim=None,label_size=14, legend_label_dict=None, show=True):
+def plot_classifier_response(softmaxes, labels, particle_names, label_dict, 
+                            bins=None, linestyles=None, legend_locs=None,
+                            extra_panes=[], xlim=None,label_size=14, legend_label_dict=None, show=True):
     '''
-    Plots classifier softmax outputs for each particle type.
+    Plot classifier likelihoods over different classes for events of a given particle type
+
     Args:
-        softmaxes                    ... 2d array with first dimension n_samples
-        labels                       ... 1d array of particle labels to use in every output plot, or list of 4 lists of particle names to use in each respectively
-        particle_names               ... list of string names of particle types to plot. All must be keys in 'label_dict' 
-        label_dict                   ... dictionary of particle labels, with string particle name keys and values corresponsing to 
-                                         values taken by 'labels'
-        bins                         ... optional, number of bins for histogram
-        fig, axes                    ... optional, figure and axes on which to do plotting (use to build into bigger grid)
-        legend_locs                  ... list of 4 strings for positioning the legends
-        extra_panes                  ... list of lists of particle names, each of which contains the names of particles to use in a joint response plot
-        xlim                         ... limit the x-axis
-        label_size                   ... font size
-        legend_label_dict            ... dictionary of display symbols for each string label, to use for displaying pretty characters
+        softmaxes           ... 2d array with first dimension n_samples
+        labels              ... 1d array of particle labels to use in every output plot, or list of 4 lists of particle names to use in each respectively
+        particle_names      ... list of string names of particle types to plot. All must be keys in 'label_dict' 
+        label_dict          ... dictionary of particle labels, with string particle name keys and values corresponsing to values taken by 'labels'
+        bins                ... optional, number of bins for histogram
+        legend_locs         ... list of 4 strings for positioning the legends
+        extra_panes         ... list of lists of particle names, each of which contains the names of particles to use in a joint response plot
+        xlim                ... limit the x-axis
+        label_size          ... font size
+        legend_label_dict   ... dictionary of display symbols for each string label, to use for displaying pretty characters
+        show                ... if true then display figure, otherwise return figure
     author: Calum Macdonald
     June 2020
     '''
@@ -303,7 +262,7 @@ def plot_classifier_response(softmaxes, labels, particle_names, label_dict,lines
 
     num_panes = softmaxes.shape[1]+len(extra_panes)
 
-    fig, axes = plt.subplots(1,num_panes,figsize=(5*num_panes,5))
+    fig, axes = plt.subplots(1,num_panes,figsize=(5*num_panes,5), facecolor='w')
     inverse_label_dict = {value:key for key, value in label_dict.items()}
 
     softmaxes_list = separate_particles([softmaxes], labels, label_dict, [name for name in label_dict.keys()])[0]
@@ -355,17 +314,18 @@ def plot_classifier_response(softmaxes, labels, particle_names, label_dict,lines
 
     return fig
 
-def separate_particles(input_array_list,labels,index_dict,desired_labels=['gamma','e','mu']):
+def separate_particles(input_array_list, labels, index_dict, desired_labels=['gamma','e','mu']):
     '''
     Separates all arrays in a list by indices where 'labels' takes a certain value, corresponding to a particle type.
-    Assumes that the arrays have the same event order as labels. Returns list of tuples, each tuple contains section of each
-    array corresponsing to a desired label.
+    
     Args:
-        input_array_list            ... list of arrays to be separated, must have same length and same length as 'labels'
-        labels                      ... list of labels, taking any of the three values in index_dict.values()
-        index_dict                  ... dictionary of particle labels, must have 'gamma','mu','e' keys pointing to values taken by 'labels', 
+        input_array_list    ... list of arrays to be separated, must have same length and same length as 'labels'
+        labels              ... list of labels, taking any of the three values in index_dict.values()
+        index_dict          ... dictionary of particle labels, must have 'gamma','mu','e' keys pointing to values taken by 'labels', 
                                         unless desired_labels is passed
-        desired_labels              ... optional list specifying which labels are desired and in what order. Default is ['gamma','e','mu']
+        desired_labels      ... optional list specifying which labels are desired and in what order. Default is ['gamma','e','mu']
+    
+    Returns: a list of tuples, each tuple contains section of each array corresponsing to a desired label
     author: Calum Macdonald
     June 2020
     '''
@@ -378,7 +338,18 @@ def separate_particles(input_array_list,labels,index_dict,desired_labels=['gamma
     return separated_arrays
 
 def compute_roc(softmax_out_val, labels_val, true_label, false_label):
-    # Compute ROC metrics
+    """
+    Compute ROC metrics from softmax and labels for given particle labels
+
+    Args:
+        softmax_out_val     ... array of softmax outputs
+        labels_val          ... 1D array of actual labels
+        true_label          ... label of class to be used as true binary label
+        false_label         ... label of class to be used as false binary label
+    
+    Returns:
+        fpr, tpr, thr       ... false positive rate, true positive rate, thresholds used to compute scores
+    """
     labels_val_for_comp = labels_val[np.where( (labels_val==false_label) | (labels_val==true_label)  )]
     softmax_out_for_comp = softmax_out_val[np.where(  (labels_val==false_label) | (labels_val==true_label)  )][:,true_label]
 
@@ -388,11 +359,19 @@ def compute_roc(softmax_out_val, labels_val, true_label, false_label):
 
 def plot_roc(fpr, tpr, thr, true_label_name, false_label_name, fig_list=None, xlims=None, ylims=None, axes=None, linestyle=None, linecolor=None, plot_label=None, show=False):
     """
-    Purpose : Plot ROC curves for a classifier that has been evaluated on a validation set with respect to given labels
+    Plot ROC curves for a classifier that has been evaluated on a validation set with respect to given labels
     
-    Args: location     ... output directory containing log files
-          losslim      ... sets bound on y axis of loss
-          show         ... if true then display figure, otherwise return figure
+    Args:
+        fpr, tpr, thr           ... false positive rate, true positive rate, thresholds used to compute scores
+        true_label_name         ... name of class to be used as true binary label
+        false_label_name        ... name of class to be used as false binary label
+        fig_list                ... list of indexes of ROC curves to plot
+        xlims                   ... xlims to apply to plots
+        ylims                   ... ylims to apply to plots
+        axes                    ... axes to plot on
+        linestyle, linecolor    ... line style and color
+        plot_label              ... string to use in title of plots
+        show                    ... if true then display figure, otherwise return figure
     """
     # Compute additional parameters
     rejection=1.0/(fpr+1e-10)
@@ -462,7 +441,7 @@ def plot_roc(fpr, tpr, thr, true_label_name, false_label_name, fig_list=None, xl
         ax1.set_xlabel(xlabel, fontsize=20)
         ax1.set_ylabel(ylabel, fontsize=20)
         ax1.set_title(title, fontsize=24)
-        ax1.legend(bbox_to_anchor=(1.05, 1), loc='upper left') #loc="upper right",prop={'size': 16})
+        ax1.legend(loc="upper right",prop={'size': 16}) #bbox_to_anchor=(1.05, 1), loc='upper left') #loc="upper right",prop={'size': 16})
 
         if xlims is not None:
             xlim = next(xlim_iter)
@@ -500,15 +479,17 @@ def plot_roc(fpr, tpr, thr, true_label_name, false_label_name, fig_list=None, xl
         return tuple(figs)
 
 def plot_rocs(softmax_out_val, labels_val, labels_dict, plot_list=None, vs_list = None, show=True):
-    
     """
-    Purpose : Plot ROC curves for a classifier that has been evaluated on a validation set for a series of combinations of labels
+    Plot ROC curves for a classifier for a series of combinations of labels
     
-    Args: location     ... output directory containing log files
-          losslim      ... sets bound on y axis of loss
-          show         ... if true then display figure, otherwise return figure
+    Args:
+        softmax_out_val     ... array of softmax outputs
+        labels_val          ... actual labels
+        labels_dict         ... dict matching particle labels to numerical labels
+        plot_list           ... list of labels to use as true labels
+        vs_list             ... list of labels to use as false labels
+        show                ... if true then display figure, otherwise return figure
     """
-    # Compute ROC metrics
     # if no list of labels to plot, assume using all members of dict
     all_labels = list(labels_dict.keys())
 
@@ -527,7 +508,7 @@ def plot_rocs(softmax_out_val, labels_val, labels_dict, plot_list=None, vs_list 
             if not (false_label_name == true_label_name):
                 # initialize figure
                 num_panes = 3
-                fig, axes = plt.subplots(1, num_panes, figsize=(8*num_panes,12))
+                fig, axes = plt.subplots(1, num_panes, figsize=(8*num_panes,12), facecolor='w')
                 fig.suptitle("ROC for {} vs {}".format(true_label_name, false_label_name), fontweight='bold',fontsize=32)
 
                 plot_roc(softmax_out_val, labels_val, true_label_name, true_label, false_label_name, false_label, axes=axes)

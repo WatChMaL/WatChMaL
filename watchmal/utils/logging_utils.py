@@ -1,4 +1,7 @@
-# class to organize output csv file
+"""
+Class to organize output csv file
+"""
+
 class CSVData:
     def __init__(self,fout):
         self.name  = fout

@@ -1,5 +1,8 @@
+"""
+Main file used for running the code
+"""
+
 # hydra imports
-import logging
 import hydra
 from omegaconf import OmegaConf
 from hydra.utils import instantiate
@@ -11,6 +14,8 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 import torch.multiprocessing as mp
 
 # generic imports
+import logging
+import debugpy
 import os
 import numpy as np
 
@@ -18,6 +23,12 @@ logger = logging.getLogger('train')
 
 @hydra.main(config_path='config/', config_name='resnet_train')
 def main(config):
+    """
+    Run model using given config, spawn worker subprocesses as necessary
+
+    Args:
+        config  ... hydra config specified in the @hydra.main annotation
+    """
     logger.info(f"Running with the following config:\n{OmegaConf.to_yaml(config)}")
 
     ngpus = len(config.gpu_list)
@@ -31,6 +42,7 @@ def main(config):
             master_port = config.MASTER_PORT
         else:
             master_port = 12355
+            
         # Automatically select port based on base gpu
         master_port += config.gpu_list[0]
         os.environ['MASTER_PORT'] = str(master_port)
@@ -59,6 +71,15 @@ def main(config):
         main_worker_function(0, ngpus, is_distributed, config)
 
 def main_worker_function(rank, ngpus_per_node, is_distributed, config):
+    """
+    Instantiate model on a particular GPU, and perform train/evaluation tasks as specified
+
+    Args:
+        rank            ... rank of process among all spawned processes (in multiprocessing mode)
+        ngpus_per_node  ... number of gpus being used (in multiprocessing mode)
+        is_distributed  ... boolean indicating if running in multiprocessing mode
+        config          ... hydra config specified in the @hydra.main annotation
+    """
     print("rank: ", rank)
     # Infer rank from gpu and ngpus, rank is position in gpu list
     gpu = config.gpu_list[rank]

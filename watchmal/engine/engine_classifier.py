@@ -1,13 +1,16 @@
+"""
+Class for training a fully supervised classifier
+"""
+
+# hydra imports
+from hydra.utils import instantiate
+
 # torch imports
 import torch
 from torch import optim
 import torch.nn as nn
 import torch.nn.functional as F
-#from torch.nn import DataParallel
 from torch.nn.parallel import DistributedDataParallel as DDP
-
-# hydra imports
-from hydra.utils import instantiate
 
 # generic imports
 from math import floor, ceil
@@ -23,17 +26,19 @@ import copy
 from watchmal.dataset.data_utils import get_data_loader
 from watchmal.utils.logging_utils import CSVData
 
-#extraneous testing imports
-
 class ClassifierEngine:
     def __init__(self, model, rank, gpu, dump_path):
+        """
+        Args:
+            model       ... model object that engine will use in training or evaluation
+            rank        ... rank of process among all spawned processes (in multiprocessing mode)
+            gpu         ... gpu that this process is running on
+            dump_path   ... path to store outputs in
+        """
         # create the directory for saving the log and dump files
         self.dirpath = dump_path
-
         self.rank = rank
-
         self.model = model
-
         self.device = torch.device(gpu)
 
         # Setup the parameters to save given the model type
@@ -46,9 +51,6 @@ class ClassifierEngine:
             self.model_accs = self.model
 
         self.data_loaders = {}
-
-        self.criterion = nn.CrossEntropyLoss()
-        self.softmax = nn.Softmax(dim=1)
 
         # define the placeholder attributes
         self.data      = None
@@ -64,21 +66,45 @@ class ClassifierEngine:
 
         if self.rank == 0:
             self.val_log = CSVData(self.dirpath + "log_val.csv")
+
+        self.criterion = nn.CrossEntropyLoss()
+        self.softmax = nn.Softmax(dim=1)
     
     def configure_optimizers(self, optimizer_config):
         """
         Set up optimizers from optimizer config
+
+        Args:
+            optimizer_config    ... hydra config specifying optimizer object
         """
         self.optimizer = instantiate(optimizer_config, params=self.model_accs.parameters())
 
     def configure_data_loaders(self, data_config, loaders_config, is_distributed, seed):
         """
         Set up data loaders from loaders config
+
+        Args:
+            data_config     ... hydra config specifying dataset
+            loaders_config  ... hydra config specifying dataloaders
+            is_distributed  ... boolean indicating if running in multiprocessing mode
+            seed            ... seed to use to initialize dataloaders
+        
+        Parameters:
+            self should have dict attribute data_loaders
         """
         for name, loader_config in loaders_config.items():
             self.data_loaders[name] = get_data_loader(**data_config, **loader_config, is_distributed=is_distributed, seed=seed)
     
     def get_synchronized_metrics(self, metric_dict):
+        """
+        Gathers metrics from multiple processes using pytorch distributed operations
+
+        Args:
+            metric_dict         ... dict containing values that are tensor outputs of a single process
+        
+        Returns:
+            global_metric_dict  ... dict containing concatenated list of tensor values gathered from all processes
+        """
         global_metric_dict = {}
         for name, array in zip(metric_dict.keys(), metric_dict.values()):
             tensor = torch.as_tensor(array).to(self.device)
@@ -90,15 +116,17 @@ class ClassifierEngine:
 
     def forward(self, train=True):
         """
-        Compute predictions and metrics for a batch of data.
+        Compute predictions and metrics for a batch of data
+
+        Args:
+            train   ... whether to compute gradients for backpropagation
 
         Parameters:
-            train = whether to compute gradients for backpropagation
-            self should have attributes model, criterion, softmax, data, label
+            self should have attributes data, labels, model, criterion, softmax
         
-        Returns : a dict of loss, predicted labels, softmax, accuracy, and raw model outputs
+        Returns:
+            dict containing loss, predicted labels, softmax, accuracy, and raw model outputs
         """
-
         with torch.set_grad_enabled(train):
             # Move the data and the labels to the GPU (if using CPU this has no effect)
             self.data = self.data.to(self.device)
@@ -119,27 +147,35 @@ class ClassifierEngine:
                 'raw_pred_labels'  : model_out}
     
     def backward(self):
+        """
+        Backward pass using the loss computed for a mini-batch
+
+        Parameters:
+            self should have attributes loss, optimizer
+        """
         self.optimizer.zero_grad()  # reset accumulated gradient
         self.loss.backward()        # compute new gradient
         self.optimizer.step()       # step params
     
     # ========================================================================
+    # Training and evaluation loops
     
     def train(self, train_config):
         """
-        Train the model on the training set.
-        
-        Parameters : None
-        
-        Outputs :
-            total_val_loss = accumulated validation loss
-            avg_val_loss = average validation loss
-            total_val_acc = accumulated validation accuracy
-            avg_val_acc = accumulated validation accuracy
-            
-        Returns : None
-        """
+        Train the model on the training set
 
+        Args:
+            train_config    ... config specigying training parameters
+        
+        Parameters:
+            self should have attributes model, data_loaders
+        
+        Outputs:
+            val_log      ... csv log containing iteration, epoch, loss, accuracy for each iteration on validation set
+            train_logs   ... csv logs containing iteration, epoch, loss, accuracy for each iteration on training set
+            
+        Returns: None
+        """
         # initialize training params
         epochs          = train_config.epochs
         report_interval = train_config.report_interval
@@ -196,15 +232,9 @@ class ClassifierEngine:
                             val_data = next(val_iter)
                         except StopIteration:
                             del val_iter
-                            # TODO: still needs to be cleaned up before final push
-                            time0 = time()
                             print("Fetching new validation iterator...")
                             val_iter = iter(self.data_loaders["validation"])
-                            time1 = time()
                             val_data = next(val_iter)
-                            time2= time()
-                            print("Fetching iterator took time ", time1 - time0)
-                            print("second step step took time ", time2 - time1)
                         
                         # extract the event data from the input data tuple
                         self.data      = val_data['data'].float()
@@ -212,6 +242,7 @@ class ClassifierEngine:
                         self.energies  = val_data['energies'].float()
                         self.angles    = val_data['angles'].float()
                         self.event_ids = val_data['event_ids'].float()
+
                         val_res = self.forward(False)
                         
                         val_metrics["loss"] += val_res["loss"]
@@ -294,22 +325,24 @@ class ClassifierEngine:
         self.train_log.close()
         if self.rank == 0:
             self.val_log.close()
-        
-        
 
     def evaluate(self, test_config):
         """
-        Evaluate the performance of the trained model on the validation set.
+        Evaluate the performance of the trained model on the test set
+
+        Args:
+            test_config ... hydra config specifying evaluation parameters
         
-        Parameters : None
+        Parameters:
+            self should have attributes model, data_loaders, dirpath
         
-        Outputs : 
-            total_val_loss = accumulated validation loss
-            avg_val_loss = average validation loss
-            total_val_acc = accumulated validation accuracy
-            avg_val_acc = accumulated validation accuracy
+        Outputs:
+            indices     ... index in dataset of each event
+            labels      ... actual label of each event
+            predictions ... predicted label of each event
+            softmax     ... softmax output over classes for each event
             
-        Returns : None
+        Returns: None
         """
         print("evaluating in directory: ", self.dirpath)
         
@@ -330,7 +363,7 @@ class ClassifierEngine:
             # Extract the event data and label from the DataLoader iterator
             for it, eval_data in enumerate(self.data_loaders["test"]):
                 
-                # TODO: see if copying helps
+                # load data
                 self.data = copy.deepcopy(eval_data['data'].float())
                 self.labels = copy.deepcopy(eval_data['labels'].long())
                 
@@ -405,55 +438,19 @@ class ClassifierEngine:
                   "\nAvg eval acc : "  + str(val_acc/val_iterations))
         
     # ========================================================================
-    def restore_best_state(self, placeholder):
-        best_validation_path = "{}{}{}{}".format(self.dirpath,
-                                     str(self.model._get_name()),
-                                     "BEST",
-                                     ".pth")
+    # Saving and loading models
 
-        self.restore_state_from_file(best_validation_path)
-    
-    def restore_state(self, restore_config):
-        self.restore_state_from_file(restore_config.weight_file)
-
-    def restore_state_from_file(self, weight_file):
-        """
-        Restore model using weights stored from a previous run.
-        
-        Parameters : weight_file
-        
-        Outputs : 
-            
-        Returns : None
-        """
-        # Open a file in read-binary mode
-        with open(weight_file, 'rb') as f:
-            print('Restoring state from', weight_file)
-
-            # torch interprets the file, then we can access using string keys
-            checkpoint = torch.load(f)
-            
-            # load network weights
-            self.model_accs.load_state_dict(checkpoint['state_dict'])
-            
-            # if optim is provided, load the state of the optim
-            if hasattr(self, 'optimizer'):
-                self.optimizer.load_state_dict(checkpoint['optimizer'])
-            
-            # load iteration count
-            self.iteration = checkpoint['global_step']
-        
-        print('Restoration complete.')
-    
-    def save_state(self,best=False):
+    def save_state(self, best=False):
         """
         Save model weights to a file.
         
-        Parameters : best
+        Args:
+            best    ... if true, save as best model found, else save as checkpoint
         
-        Outputs : 
+        Outputs:
+            dict containing iteration, optimizer state dict, and model state dict
             
-        Returns : filename
+        Returns: filename
         """
         filename = "{}{}{}{}".format(self.dirpath,
                                      str(self.model._get_name()),
@@ -473,3 +470,50 @@ class ClassifierEngine:
         }, filename)
         print('Saved checkpoint as:', filename)
         return filename
+
+    def restore_best_state(self, placeholder):
+        """
+        Restore model using best model found in current directory
+
+        Args:
+            placeholder     ... extraneous; hydra configs are not allowed to be empty
+
+        Outputs: model params are now those loaded from best model file
+        """
+        best_validation_path = "{}{}{}{}".format(self.dirpath,
+                                     str(self.model._get_name()),
+                                     "BEST",
+                                     ".pth")
+
+        self.restore_state_from_file(best_validation_path)
+    
+    def restore_state(self, restore_config):
+        self.restore_state_from_file(restore_config.weight_file)
+
+    def restore_state_from_file(self, weight_file):
+        """
+        Restore model using weights stored from a previous run
+        
+        Args: 
+            weight_file     ... path to weights to load
+        
+        Outputs: model params are now those loaded from file
+        """
+        # Open a file in read-binary mode
+        with open(weight_file, 'rb') as f:
+            print('Restoring state from', weight_file)
+
+            # torch interprets the file, then we can access using string keys
+            checkpoint = torch.load(f)
+            
+            # load network weights
+            self.model_accs.load_state_dict(checkpoint['state_dict'])
+            
+            # if optim is provided, load the state of the optim
+            if hasattr(self, 'optimizer'):
+                self.optimizer.load_state_dict(checkpoint['optimizer'])
+            
+            # load iteration count
+            self.iteration = checkpoint['global_step']
+        
+        print('Restoration complete.')
