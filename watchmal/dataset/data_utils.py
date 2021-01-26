@@ -64,7 +64,6 @@ def get_transformations(transformations, transform_names):
 
 
 def apply_random_transformations(transforms, data):
-    random.shuffle(transforms)
     for transformation in transforms:
         if random.getrandbits(1):
             data = transformation(data)
