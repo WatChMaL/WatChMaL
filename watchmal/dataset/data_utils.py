@@ -15,6 +15,7 @@ from torch.utils.data import SubsetRandomSampler
 
 # generic imports
 import numpy as np
+import random
 
 # WatChMaL imports
 from watchmal.dataset.samplers import DistributedSamplerWrapper
@@ -63,8 +64,8 @@ def get_transformations(transformations, transform_names):
 
 
 def apply_random_transformations(transforms, data):
-    selection = np.where(np.random.choice(2, len(transforms))==1)
-    np.random.shuffle(selection)
-    for transform in transforms[selection]:
-        data = transform(data)
+    random.shuffle(transforms)
+    for transformation in transforms:
+        if random.getrandbits(1):
+            data = transformation(data)
     return data
