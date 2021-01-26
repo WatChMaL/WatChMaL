@@ -140,7 +140,7 @@ class H5TrueDataset(h5CommonDataset, ABC):
     
     def __getitem__(self, item):
         if not hasattr(self, 'h5_file'):
-            self.open_hdf5()
+            self.initialize()
         
         start = self.event_hits_index[item]
         stop = self.event_hits_index[item + 1]
@@ -150,7 +150,7 @@ class H5TrueDataset(h5CommonDataset, ABC):
  
         hit_pmts, hit_times, hit_charges = self.digitize( self.true_pmts, self.true_times, self.true_parents )
 
-        data = self.get_data(hit_pmts, hit_charges, hit_times)
+        data = [hit_pmts, hit_charges, hit_times]
 
         data_dict = {
             "data": data,
