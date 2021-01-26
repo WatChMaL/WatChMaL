@@ -79,10 +79,6 @@ class h5CommonDataset(Dataset, ABC):
     def load_hits(self):
         pass
 
-    @abstractmethod
-    def get_data(self, hit_pmts, hit_charges, hit_times):
-        pass
-
     def __len__(self):
         return self.dataset_length
 
@@ -92,8 +88,8 @@ class H5Dataset(h5CommonDataset, ABC):
     Initialize digihits dataset.  Adds access to digitized hits data.  These are:
     hit_charge 	(n_hits,) 	float32 	Charge of the digitized hit
     """
-    def __init__(self, h5_path, transforms=None):
-        h5CommonDataset.__init__(self,h5_path, transforms)
+    def __init__(self, h5_path, is_distributed, transforms=None):
+        h5CommonDataset.__init__(self,h5_path, is_distributed, transforms)
         
     def load_hits(self):
         self.hdf5_hit_charge = self.h5_file["hit_charge"]
@@ -111,7 +107,7 @@ class H5Dataset(h5CommonDataset, ABC):
         hit_pmts = self.hit_pmt[start:stop].astype(np.int16)
         hit_charges = self.hit_charge[start:stop]
         hit_times = self.time[start:stop]
-        
+
         return hit_pmts, hit_charges, hit_times
     
 class H5TrueDataset(h5CommonDataset, ABC):

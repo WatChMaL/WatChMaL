@@ -41,6 +41,16 @@ class CNNmPMTDataset(H5Dataset):
             self.n_transforms = len(self.transforms)
 
     def process_data(self, hit_pmts, hit_data):
+        """
+        Returns event data from dataset associated with a specific index
+
+        Args:
+            hit_pmts                ... array of ids of hit pmts
+            hid_data                ... array of data associated with hits
+        
+        Returns:
+            data                    ... array of hits in cnn format
+        """
         hit_mpmts = hit_pmts // pmts_per_mpmt
         hit_pmt_in_modules = hit_pmts % pmts_per_mpmt
 
@@ -63,7 +73,7 @@ class CNNmPMTDataset(H5Dataset):
 
         hit_pmts, hit_charges, hit_times = super().__getitem__(item)
         
-        processed_data = from_numpy(process_data(hit_pmts, hit_charges))
+        processed_data = from_numpy(self.process_data(hit_pmts, hit_charges))
 
         if self.transforms is not None:
             selection = np.random.choice(2, self.n_transforms)
