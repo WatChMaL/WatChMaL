@@ -12,7 +12,7 @@ pmts_per_mpmt = 19
 class PointNetMultiPMTDataset(H5Dataset):
 
     def __init__(self, h5file, geometry_file, is_distributed, use_orientations=False, transforms=None, max_points=None):
-        super().__init__(h5file, is_distributed, transforms)
+        super().__init__(h5file, is_distributed)
         geo_file = np.load(geometry_file, 'r')
         geo_positions = torch.from_numpy(geo_file["position"]).float()
         geo_orientations = torch.from_numpy(geo_file["orientation"]).float()
@@ -23,11 +23,19 @@ class PointNetMultiPMTDataset(H5Dataset):
         self.max_points = max_points
         self.transforms = du.get_transformations(transformations, transforms)
 
-    def get_data(self, hit_pmts, hit_charges, hit_times):
+
+    def  __getitem__(self, item):
+
+        data_dict = super().__getitem__(item)
+        hit_pmts = data_dict["data"]["hit_pmts"]
+        hit_charges = data_dict["data"]["hit_charges"]
+        hit_times = data_dict["data"]["hit_times"]
+
         hit_mpmts = hit_pmts // pmts_per_mpmt
         hit_pmt_in_modules = hit_pmts % pmts_per_mpmt
         hit_barrel = np.where(hit_mpmts in self.barrel_mpmts)
         hit_pmt_in_modules[hit_barrel] = barrel_map_array_idxs[hit_pmt_in_modules[hit_barrel]]
+
         if self.max_points is not None:
             n_points = self.max_points
             unique_mpmts, unique_hit_mpmts = np.unique(hit_mpmts, return_index=True)
@@ -53,4 +61,5 @@ class PointNetMultiPMTDataset(H5Dataset):
 
         data = du.apply_random_transformations(self.transforms, data)
 
-        return data
+        data_dict["data"] = data
+        return data_dict

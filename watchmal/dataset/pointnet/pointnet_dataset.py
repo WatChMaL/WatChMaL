@@ -16,7 +16,7 @@ import watchmal.dataset.data_utils as du
 class PointNetDataset(H5Dataset):
 
     def __init__(self, h5file, geometry_file, is_distributed, use_orientations=False, n_points=4000, transforms=None):
-        super().__init__(h5file, is_distributed, transforms)
+        super().__init__(h5file, is_distributed)
         geo_file = np.load(geometry_file, 'r')
         self.geo_positions = torch.from_numpy(geo_file["position"]).float()
         self.geo_orientations = torch.from_numpy(geo_file["orientation"]).float()
@@ -25,7 +25,13 @@ class PointNetDataset(H5Dataset):
         self.transforms = du.get_transformations(transformations, transforms)
 
 
-    def get_data(self, hit_pmts, hit_charges, hit_times):
+    def  __getitem__(self, item):
+
+        data_dict = super().__getitem__(item)
+        hit_pmts = data_dict["data"]["hit_pmts"]
+        hit_charges = data_dict["data"]["hit_charges"]
+        hit_times = data_dict["data"]["hit_times"]
+
         hit_positions = self.geo_positions[hit_pmts, :]
         n_hits = min(self.n_points, hit_pmts.shape[0])
         if not self.use_orientations:
@@ -40,4 +46,5 @@ class PointNetDataset(H5Dataset):
 
         data = du.apply_random_transformations(self.transforms, data)
 
-        return data
+        data_dict["data"] = data
+        return data_dict
