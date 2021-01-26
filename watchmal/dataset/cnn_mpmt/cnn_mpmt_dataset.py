@@ -105,7 +105,6 @@ class CNNmPMTDataset(H5Dataset):
             hit_pmts                ... array of ids of hit pmts
             pmt_charge_data         ... array of charge of hits
             pmt_time_data           ... array of times of hits
-
         """
         hit_pmts, hit_charges, hit_times = super().__getitem__(item)
 
