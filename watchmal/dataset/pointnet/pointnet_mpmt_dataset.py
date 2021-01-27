@@ -18,7 +18,7 @@ class PointNetMultiPMTDataset(H5Dataset):
         geo_orientations = torch.from_numpy(geo_file["orientation"]).float()
         self.mpmt_positions = geo_positions[18::19, :].T
         self.mpmt_orientations = geo_orientations[18::19, :].T
-        self.barrel_mpmts = np.where(np.abs(self.mpmt_positions[:,1]) < np.max(np.abs(self.mpmt_positions))-10)
+        self.barrel_mpmts = np.where(np.abs(self.mpmt_positions[1,:]) < np.max(np.abs(self.mpmt_positions[1,:]))-10)[0]
         self.use_orientations = use_orientations
         self.max_points = max_points
         self.transforms = du.get_transformations(transformations, transforms)
@@ -43,7 +43,7 @@ class PointNetMultiPMTDataset(H5Dataset):
                 unique_mpmts = unique_mpmts[:self.max_points]
                 unique_hit_mpmts = unique_hit_mpmts.where[unique_hit_mpmts < self.max_points]
         else:
-            n_points = self.mpmt_positions.shape[0]
+            n_points = self.mpmt_positions.shape[1]
             unique_mpmts = np.arange(n_points)
             unique_hit_mpmts = hit_mpmts
         if not self.use_orientations:
@@ -52,10 +52,10 @@ class PointNetMultiPMTDataset(H5Dataset):
             time_channels = hit_pmt_in_modules+22
         else:
             data = np.zeros((44, n_points))
-            data[3:5,:] = self.mpmt_orientations[unique_mpmts,:]
+            data[3:5,:] = self.mpmt_orientations[:, unique_mpmts]
             charge_channels = hit_pmt_in_modules+6
             time_channels = hit_pmt_in_modules+25
-        data[:3, :] = self.mpmt_positions[unique_mpmts,:]
+        data[:3, :] = self.mpmt_positions[:, unique_mpmts]
         data[charge_channels, unique_hit_mpmts] = hit_charges
         data[time_channels, unique_hit_mpmts] = hit_times
 
