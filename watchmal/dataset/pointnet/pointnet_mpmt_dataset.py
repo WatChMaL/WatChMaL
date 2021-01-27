@@ -18,7 +18,8 @@ class PointNetMultiPMTDataset(H5Dataset):
         geo_orientations = torch.from_numpy(geo_file["orientation"]).float()
         self.mpmt_positions = geo_positions[18::19, :].T
         self.mpmt_orientations = geo_orientations[18::19, :].T
-        self.barrel_mpmts = np.where(np.abs(self.mpmt_positions[1,:]) < np.max(np.abs(self.mpmt_positions[1,:]))-10)[0]
+        mpmt_y = np.abs(self.mpmt_positions[1, :])
+        self.barrel_mpmts = np.where(mpmt_y < mpmt_y.max() - 10)[0]
         self.use_orientations = use_orientations
         self.max_points = max_points
         self.transforms = du.get_transformations(transformations, transforms)
