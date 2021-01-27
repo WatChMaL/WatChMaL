@@ -5,7 +5,7 @@ from watchmal.dataset.h5_dataset import H5Dataset
 from watchmal.dataset.pointnet import transformations
 import watchmal.dataset.data_utils as du
 
-barrel_map_array_idxs = [ 6,  7,  8,  9, 10, 11,  0,  1,  2,  3,  4,  5, 15, 16, 17, 12, 13, 14, 18]
+barrel_map_array_idxs = np.array([ 6,  7,  8,  9, 10, 11,  0,  1,  2,  3,  4,  5, 15, 16, 17, 12, 13, 14, 18], dtype=np.int16)
 pmts_per_mpmt = 19
 
 
@@ -19,7 +19,7 @@ class PointNetMultiPMTDataset(H5Dataset):
         self.mpmt_positions = geo_positions[18::19, :].T
         self.mpmt_orientations = geo_orientations[18::19, :].T
         mpmt_y = np.abs(self.mpmt_positions[1, :])
-        self.barrel_mpmts = np.where(mpmt_y < mpmt_y.max() - 10)[0]
+        self.barrel_mpmts = np.where(mpmt_y < mpmt_y.max() - 10)[0].astype(np.int16)
         self.use_orientations = use_orientations
         self.max_points = max_points
         self.transforms = du.get_transformations(transformations, transforms)
@@ -34,7 +34,7 @@ class PointNetMultiPMTDataset(H5Dataset):
 
         hit_mpmts = hit_pmts // pmts_per_mpmt
         hit_pmt_in_modules = hit_pmts % pmts_per_mpmt
-        hit_barrel = np.where(hit_mpmts in self.barrel_mpmts)
+        hit_barrel = np.where(np.in1d(hit_mpmts, self.barrel_mpmts))[0]
         hit_pmt_in_modules[hit_barrel] = barrel_map_array_idxs[hit_pmt_in_modules[hit_barrel]]
 
         if self.max_points is not None:
