@@ -51,5 +51,6 @@ def get_data_loader(dataset, batch_size, sampler, num_workers, is_distributed, s
         
         sampler = DistributedSamplerWrapper(sampler=sampler, seed=seed)
     
-    return DataLoader(dataset, sampler=sampler, batch_size=batch_size, num_workers=num_workers)
+    # TODO: added drop_last, should decide if we want to keep this
+    return DataLoader(dataset, sampler=sampler, batch_size=batch_size, num_workers=num_workers, drop_last=True)
     
