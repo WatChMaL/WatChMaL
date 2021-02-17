@@ -15,6 +15,7 @@ from torch.utils.data import SubsetRandomSampler
 
 # generic imports
 import numpy as np
+import random
 
 # WatChMaL imports
 from watchmal.dataset.samplers import DistributedSamplerWrapper
@@ -53,4 +54,21 @@ def get_data_loader(dataset, batch_size, sampler, num_workers, is_distributed, s
     
     # TODO: added drop_last, should decide if we want to keep this
     return DataLoader(dataset, sampler=sampler, batch_size=batch_size, num_workers=num_workers, drop_last=True)
-    
+
+
+def get_transformations(transformations, transform_names):
+    if transform_names is not None:
+        for transform_name in transform_names:
+            assert hasattr(transformations, transform_name), f"Error: There is no defined transform named {transform_name}"
+        transform_funcs = [getattr(transformations, transform_name) for transform_name in transform_names]
+        return transform_funcs
+    else:
+        return None
+
+
+def apply_random_transformations(transforms, data):
+    if transforms is not None:
+        for transformation in transforms:
+            if random.getrandbits(1):
+                data = transformation(data)
+    return data
