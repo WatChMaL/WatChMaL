@@ -56,7 +56,7 @@ class H5CommonDataset(Dataset, ABC):
         if "veto" in self.h5_file.keys():
             self.veto               = np.array(self.h5_file["veto"])
             self.veto2              = np.array(self.h5_file["veto2"])
-        self.event_hits_index   = np.array(self.h5_file["event_hits_index"])
+        self.event_hits_index   = np.append(self.h5_file["event_hits_index"], self.h5_file["hit_pmt"].shape[0]).astype(np.int64)
         
         self.hdf5_hit_pmt = self.h5_file["hit_pmt"]
         self.hdf5_hit_time = self.h5_file["hit_time"]
@@ -95,7 +95,6 @@ class H5CommonDataset(Dataset, ABC):
         }
 
         return data_dict
-
 
 
 class H5Dataset(H5CommonDataset, ABC):
