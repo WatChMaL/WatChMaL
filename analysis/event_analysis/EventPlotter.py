@@ -4,6 +4,7 @@ Class for plotting hit data for CNN mPMT datasets
 
 import numpy as np
 import math
+import copy
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
@@ -105,7 +106,7 @@ class EventPlotter():
                 mapping[ int( tube-1 ) ] = [ int(round(xflat)), int(round(yflat)) ]
         return mapping
     
-    def display_event(self, index, data_type='charge'):
+    def display_event(self, index, data_type='charge', dark=False):
         """
         Plot single event by index
 
@@ -116,11 +117,11 @@ class EventPlotter():
         pmts, charges, times = self.get_event_data_from_index(index)
 
         if data_type == 'charge':
-            self.display_data(pmts, charges)
+            self.display_data(pmts, charges, dark=dark)
         elif data_type == 'time':
-            self.display_data(pmts, times)
+            self.display_data(pmts, times, dark=dark)
 
-    def display_data(self, tubes, quantities, title="Charge", cutrange=[-1,-1], ax=None, figsize=[30,30]):
+    def display_data(self, tubes, quantities, title="Charge", cutrange=[-1,-1], ax=None, figsize=[30,30], dark=False):
         """
         Plot quantities from an event on a flattened cylinder
 
@@ -130,8 +131,14 @@ class EventPlotter():
             title               ... title to add to display
             cutrange            ... minimum and maximum values on plot (or set both same for default)
             figsize             ... figure dimensions
+            dark                ... whether to use light or dark mapping
         """
-        plt.set_cmap('gist_heat_r')
+        if dark:
+            cmap = copy.copy(plt.cm.viridis)
+            cmap.set_bad(color='black')
+            plt.set_cmap(cmap)
+        else:
+            plt.set_cmap('gist_heat_r')
         
         if ax == None:
             fig, ax = plt.subplots(figsize=figsize, facecolor='w')
@@ -172,7 +179,6 @@ class EventPlotter():
                 for dy in range(-3,4):
                     if abs(dx)==3 and abs(dy)==3:
                         continue
-                        
                     #print( "idx=", idx, " len(quantities)=",len(quantities), " tube=", tube, " len(PMTFlatMap)=", len(PMTFlatMapPositive))
                     preimage[ PMTFlatMapPositive[tube][1]+dx, PMTFlatMapPositive[tube][0]+dy ] = quantities[idx]
 
@@ -180,7 +186,10 @@ class EventPlotter():
             imgmin = cutrange[0]
             imgmax = cutrange[1]
         
-        im = ax.imshow( preimage, extent = [-self.positive_x_offset,self.positive_x_offset,-self.lower_endcap_offset,self.lower_endcap_offset], vmin=imgmin, vmax=imgmax )
+        # TODO: check
+        preimage[preimage == 0] = np.NaN
+
+        im = ax.imshow(preimage, extent = [-self.positive_x_offset,self.positive_x_offset,-self.lower_endcap_offset,self.lower_endcap_offset], vmin=imgmin, vmax=imgmax)
 
         return im
 

@@ -40,7 +40,7 @@ class CNNmPMTDataset(H5Dataset):
             self.transforms = transform_funcs
             self.n_transforms = len(self.transforms)
 
-    def process_data(self, hit_pmts, hit_data):
+    def process_data(self, hit_pmts, hit_data, retrieve=False):
         """
         Returns event data from dataset associated with a specific index
 
@@ -66,7 +66,9 @@ class CNNmPMTDataset(H5Dataset):
         # collapse arrays if desired
         if self.collapse_arrays:
             data = np.expand_dims(np.sum(data, 0), 0)
-        
+        if retrieve:
+            # TODO: fix retrieval
+            return data[hit_pmt_in_modules, hit_rows, hit_cols].flatten()
         return data
 
     def  __getitem__(self, item):
@@ -109,9 +111,9 @@ class CNNmPMTDataset(H5Dataset):
         hit_pmts, hit_charges, hit_times = super().__getitem__(item)
 
         # construct charge data with barrel array indexing to match endcaps in xyz ordering
-        pmt_charge_data = self.process_data(hit_pmts, hit_charges).flatten()
+        pmt_charge_data = self.process_data(hit_pmts, hit_charges, retrieve=True)
 
         # construct time data with barrel array indexing to match endcaps in xyz ordering
-        pmt_time_data = self.process_data(hit_pmts, hit_times).flatten()
+        pmt_time_data = self.process_data(hit_pmts, hit_times, retrieve=True)
 
         return hit_pmts, pmt_charge_data, pmt_time_data
