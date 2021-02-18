@@ -91,7 +91,7 @@ def multi_plot_roc(fprs, tprs, thrs, true_label_name, false_label_name, fig_list
     AUCs = [auc(fpr,tpr) for fpr, tpr in zip(fprs, tprs)]
 
     num_panes = len(fig_list)
-    fig, axes = plt.subplots(num_panes, 1, figsize=(12,8*num_panes))
+    fig, axes = plt.subplots(num_panes, 1, figsize=(12,8*num_panes), facecolor='w')
     if num_panes > 1:
         fig.suptitle("ROC for {} vs {}".format(true_label_name, false_label_name), fontweight='bold',fontsize=32)
 
