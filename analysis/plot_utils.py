@@ -11,7 +11,6 @@ from functools import reduce
 from sklearn.metrics import roc_curve, auc
 from sklearn.preprocessing import label_binarize
 
-
 def disp_learn_hist(location, title=None, losslim=None, axis=None, show=True):
     """
     Purpose : Plot the loss and accuracy history for a training session
