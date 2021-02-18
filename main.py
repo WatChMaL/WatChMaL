@@ -130,5 +130,3 @@ def main_worker_function(rank, ngpus_per_node, is_distributed, config):
 if __name__ == '__main__':
     # pylint: disable=no-value-for-parameter
     main()
-    # PATH = '/home/asorokina/WatChMaL/outputs/2021-02-17/16-49-13/outputs'
-    # disp_reg_hist(PATH)

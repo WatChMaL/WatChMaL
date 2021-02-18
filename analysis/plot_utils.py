@@ -11,26 +11,6 @@ from functools import reduce
 from sklearn.metrics import roc_curve, auc
 from sklearn.preprocessing import label_binarize
 
-def disp_reg_hist(location, show=False):
-    val_log = location + '/log_val.csv'
-    train_log = location + '/log_train_0.csv'
-    val_log_df = pd.read_csv(val_log)
-    train_log_df = pd.read_csv(train_log)
-    plt.plot(train_log_df.epoch, train_log_df.loss, 'g', label='Training loss')
-    plt.plot(val_log_df.epoch, val_log_df.loss, 'b', label='Validation loss')
-    plt.title('Training and Validation loss')
-    plt.xlabel('Epochs')
-    plt.ylabel('Loss')
-    plt.legend()
-
-    if show:
-        plt.grid()
-        plt.show()
-        return
-
-    else:
-        plt.savefig(location + '/loss_vs_epochs.png')
-
 
 def disp_learn_hist(location, title=None, losslim=None, axis=None, show=True):
     """
@@ -540,3 +520,36 @@ def plot_rocs(softmax_out_val, labels_val, labels_dict, plot_list=None, vs_list 
         return
     
     return figs
+
+
+def disp_reg_hist(location, title=None, show=False, train_num=0):
+    """
+    Purpose : Plot the validation and training loss history for a
+    regression output
+
+    Args:
+        location    ... output directory containing log files
+        title       ... the title for the plot
+        show        ... if true then display figure, otherwise return figure
+        train_num   ... the number of the log_train file from output directory
+    """
+    val_log = location + '/log_val.csv'
+    train_log = location + '/log_train_'+ train_num +'.csv'
+    val_log_df = pd.read_csv(val_log)
+    train_log_df = pd.read_csv(train_log)
+    plt.plot(train_log_df.epoch, train_log_df.loss, 'g', label='Training loss')
+    plt.plot(val_log_df.epoch, val_log_df.loss, 'b', label='Validation loss')
+    if title is not None:
+        plt.set_title(title, fontsize=20)
+    else:
+        plt.title('Training and Validation loss')
+    plt.xlabel('Epochs')
+    plt.ylabel('Loss')
+    plt.legend()
+
+    if show:
+        plt.grid()
+        plt.show()
+        return
+    else:
+        plt.savefig(location + '/loss_vs_epochs.png')
