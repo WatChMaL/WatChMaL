@@ -11,6 +11,27 @@ from functools import reduce
 from sklearn.metrics import roc_curve, auc
 from sklearn.preprocessing import label_binarize
 
+def disp_reg_hist(location, show=False):
+    val_log = location + '/log_val.csv'
+    train_log = location + '/log_train_0.csv'
+    val_log_df = pd.read_csv(val_log)
+    train_log_df = pd.read_csv(train_log)
+    plt.plot(train_log_df.epoch, train_log_df.loss, 'g', label='Training loss')
+    plt.plot(val_log_df.epoch, val_log_df.loss, 'b', label='Validation loss')
+    plt.title('Training and Validation loss')
+    plt.xlabel('Epochs')
+    plt.ylabel('Loss')
+    plt.legend()
+
+    if show:
+        plt.grid()
+        plt.show()
+        return
+
+    else:
+        plt.savefig(location + '/loss_vs_epochs.png')
+
+
 def disp_learn_hist(location, title=None, losslim=None, axis=None, show=True):
     """
     Purpose : Plot the loss and accuracy history for a training session

@@ -19,6 +19,8 @@ import debugpy
 import os
 import numpy as np
 
+from analysis.plot_utils import disp_learn_hist, disp_reg_hist
+
 logger = logging.getLogger('train')
 
 @hydra.main(config_path='config/', config_name='reg_train')
@@ -85,6 +87,8 @@ def main_worker_function(rank, ngpus_per_node, is_distributed, config):
     gpu = config.gpu_list[rank]
 
     print("Running main worker function on device: {}".format(gpu))
+    print(torch.cuda.device_count())
+    print(torch.cuda.is_available())
     torch.cuda.set_device(gpu)
 
     world_size = ngpus_per_node
@@ -126,3 +130,5 @@ def main_worker_function(rank, ngpus_per_node, is_distributed, config):
 if __name__ == '__main__':
     # pylint: disable=no-value-for-parameter
     main()
+    # PATH = '/home/asorokina/WatChMaL/outputs/2021-02-17/16-49-13/outputs'
+    # disp_reg_hist(PATH)
