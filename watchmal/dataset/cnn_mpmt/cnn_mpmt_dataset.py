@@ -67,7 +67,7 @@ class CNNmPMTDataset(H5Dataset):
 
         data_dict = super().__getitem__(item)
 
-        processed_data = from_numpy(self.process_data(data_dict["data"]["hit_pmts"], data_dict["data"]["hit_charges"]))
+        processed_data = from_numpy(self.process_data(self.hit_pmts, self.hit_charges))
         processed_data = du.apply_random_transformations(self.transforms, processed_data)
 
         data_dict["data"] = processed_data
@@ -90,9 +90,9 @@ class CNNmPMTDataset(H5Dataset):
         data_dict = super().__getitem__(item)
 
         # construct charge data with barrel array indexing to match endcaps in xyz ordering
-        pmt_charge_data = self.process_data(data_dict["data"]["hit_pmts"], data_dict["data"]["hit_charges"]).flatten()
+        pmt_charge_data = self.process_data(self.hit_pmts, self.hit_charges).flatten()
 
         # construct time data with barrel array indexing to match endcaps in xyz ordering
-        pmt_time_data = self.process_data(data_dict["data"]["hit_pmts"], data_dict["data"]["hit_times"]).flatten()
+        pmt_time_data = self.process_data(self.hit_pmts, self.hit_times).flatten()
 
-        return data_dict["data"]["hit_pmts"], pmt_charge_data, pmt_time_data
+        return self.hit_pmts, pmt_charge_data, pmt_time_data
