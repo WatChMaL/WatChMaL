@@ -71,7 +71,7 @@ def multi_compute_roc(softmax_out_val_list, labels_val_list, true_label, false_l
 
     return fprs, tprs, thrs
 
-def multi_plot_roc(fprs, tprs, thrs, true_label_name, false_label_name, fig_list=None, xlims=None, ylims=None, axes=None, linestyles=None, linecolors=None, plot_labels=None, show=False):
+def multi_plot_roc(fprs, tprs, thrs, true_label_name, false_label_name, fig_list=None, xlims=None, ylims=None, axes=None, linestyles=None, linecolors=None, plot_labels=None, title='', show=False):
     '''
     Plot multiple ROC curves of background rejection vs signal efficiency. Can plot 'rejection' (1/fpr) or 'fraction' (tpr).
 
@@ -105,6 +105,7 @@ def multi_plot_roc(fprs, tprs, thrs, true_label_name, false_label_name, fig_list
                         linestyle=linestyles[idx]   if linestyles is not None else None,
                         linecolor=linecolors[idx]   if linecolors is not None else None,
                         plot_label=plot_labels[idx] if plot_labels is not None else None,
+                        title=title,
                         show=False)
 
     return figs
