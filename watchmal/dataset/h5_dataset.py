@@ -117,9 +117,9 @@ class H5Dataset(H5CommonDataset, ABC):
         start = self.event_hits_index[item]
         stop = self.event_hits_index[item + 1]
 
-        self.hit_pmts = self.hit_pmt[start:stop].astype(np.int16)
-        self.hit_charges = self.hit_charge[start:stop]
-        self.hit_times = self.time[start:stop]
+        self.event_hit_pmts = self.hit_pmt[start:stop].astype(np.int16)
+        self.event_hit_charges = self.hit_charge[start:stop]
+        self.event_hit_times = self.time[start:stop]
 
         return data_dict
 
@@ -163,10 +163,10 @@ class H5TrueDataset(H5CommonDataset, ABC):
         true_parents = self.hit_parent[start:stop]
 
         if self.digitize_hits:
-            self.hit_pmts, self.hit_times, self.hit_charges = self.digitize(true_pmts, true_times, true_parents)
+            self.event_hit_pmts, self.event_hit_times, self.event_hit_charges = self.digitize(true_pmts, true_times, true_parents)
         else:
-            self.hit_pmts = true_pmts
-            self.hit_times = true_times
-            self.hit_parents = true_parents
+            self.event_hit_pmts = true_pmts
+            self.event_hit_times = true_times
+            self.event_hit_parents = true_parents
 
         return data_dict

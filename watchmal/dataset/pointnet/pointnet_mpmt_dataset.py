@@ -29,8 +29,8 @@ class PointNetMultiPMTDataset(H5Dataset):
 
         data_dict = super().__getitem__(item)
 
-        hit_mpmts = self.hit_pmts // pmts_per_mpmt
-        hit_pmt_in_modules = self.hit_pmts % pmts_per_mpmt
+        hit_mpmts = self.event_hit_pmts // pmts_per_mpmt
+        hit_pmt_in_modules = self.event_hit_pmts % pmts_per_mpmt
         hit_barrel = np.where(np.in1d(hit_mpmts, self.barrel_mpmts))[0]
         hit_pmt_in_modules[hit_barrel] = barrel_map_array_idxs[hit_pmt_in_modules[hit_barrel]]
 
@@ -54,8 +54,8 @@ class PointNetMultiPMTDataset(H5Dataset):
             charge_channels = hit_pmt_in_modules+6
             time_channels = hit_pmt_in_modules+25
         data[:3, :] = self.mpmt_positions[:, unique_mpmts]
-        data[charge_channels, unique_hit_mpmts] = self.hit_charges
-        data[time_channels, unique_hit_mpmts] = self.hit_times
+        data[charge_channels, unique_hit_mpmts] = self.event_hit_charges
+        data[time_channels, unique_hit_mpmts] = self.event_hit_times
 
         data = du.apply_random_transformations(self.transforms, data)
 
