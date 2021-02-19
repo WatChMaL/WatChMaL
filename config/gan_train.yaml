@@ -1,0 +1,12 @@
+gpu_list:
+    - 0
+seed: null
+dump_path: './outputs/'
+defaults:
+    - data: iwcd_postveto_nomichel
+    - data/dataset: iwcd_cnn
+    - model: gannet
+    - engine: gan
+    - tasks/train: train_gan
+    - sampler@tasks.train.data_loaders.train.sampler: subset_random
+    - sampler@tasks.train.data_loaders.validation.sampler: subset_random
