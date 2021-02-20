@@ -1,0 +1,4 @@
+# @package _group_
+split_path: /home/agoryelov/electron.npz
+dataset:
+  h5file: /fast_scratch/WatChMaL/data/IWCD_mPMT_Short_emg_E0to1000MeV_digihits.h5

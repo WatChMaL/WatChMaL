@@ -342,7 +342,6 @@ class RegressionEngine:
 
         # Variables to output at the end
         eval_loss = 0.0
-        eval_acc = 0.0
         eval_iterations = 0
 
         # Iterate over the validation set to calculate val_loss and val_acc
@@ -352,12 +351,13 @@ class RegressionEngine:
             self.model.eval()
 
             # Variables for the confusion matrix
-            losses, outputs = [], []
+            loss, indices, energies, outputs = [], [], [], []
 
             # Extract the event data and label from the DataLoader iterator
             for it, eval_data in enumerate(self.data_loaders["test"]):
                 # load data
                 self.data = copy.deepcopy(eval_data['data'].float())
+                self.energies = copy.deepcopy(eval_data['energies'].float())
 
                 eval_indices = copy.deepcopy(eval_data['indices'].long().to("cpu"))
 
@@ -370,8 +370,9 @@ class RegressionEngine:
                 self.energies = self.energies.to("cpu")
 
                 # Add the local result to the final result
-                losses.extend(result['loss'])
-                outputs.extend(result['output'])
+                indices.extend(eval_indices)
+                energies.extend(self.energies)
+                outputs.extend(result['output'])                
 
                 print("eval_iteration : " + str(it) + " eval_loss : " + str(
                     result["loss"]))
@@ -387,9 +388,10 @@ class RegressionEngine:
         local_eval_metrics_dict = {"eval_iterations": iterations, "eval_loss": loss}
 
         indices = np.array(eval_indices)
+        energies = np.array(energies)
         outputs = np.array(outputs)
 
-        local_eval_results_dict = {"indices": indices, "outputs": outputs}
+        local_eval_results_dict = {"indices": indices, "energies": energies, "outputs": outputs}
 
         if self.is_distributed:
             # Gather results from all processes
@@ -402,6 +404,7 @@ class RegressionEngine:
                     local_eval_metrics_dict[name] = np.array(tensor.cpu())
 
                 indices = np.array(global_eval_results_dict["indices"].cpu())
+                energies = np.array(global_eval_results_dict["energies".cpu()])
                 outputs = np.array(global_eval_results_dict["outputs"].cpu())
 
         if self.rank == 0:
@@ -416,10 +419,8 @@ class RegressionEngine:
             # Compute overall evaluation metrics
             val_iterations = np.sum(local_eval_metrics_dict["eval_iterations"])
             val_loss = np.sum(local_eval_metrics_dict["eval_loss"])
-            val_acc = np.sum(local_eval_metrics_dict["eval_acc"])
 
-            print("\nAvg eval loss : " + str(val_loss / val_iterations),
-                  "\nAvg eval acc : " + str(val_acc / val_iterations))
+            print("\nAvg eval loss : " + str(val_loss / val_iterations))
 
     # ========================================================================
     # Saving and loading models
