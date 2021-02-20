@@ -404,7 +404,7 @@ class RegressionEngine:
                     local_eval_metrics_dict[name] = np.array(tensor.cpu())
 
                 indices = np.array(global_eval_results_dict["indices"].cpu())
-                energies = np.array(global_eval_results_dict["energies".cpu()])
+                energies = np.array(global_eval_results_dict["energies"].cpu())
                 outputs = np.array(global_eval_results_dict["outputs"].cpu())
 
         if self.rank == 0:
