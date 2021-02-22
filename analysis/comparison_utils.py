@@ -74,7 +74,7 @@ def collapse_test_output(softmaxes, labels, index_dict, predictions=None, ignore
         new_predictions     ... 1d array of collapsed classe event type predictions
     '''
     if ignore_type is not None:
-        keep_indices = np.where(labels!=index_dict[ignore_type])[0]
+        keep_indices = np.where((labels!=index_dict[ignore_type]) & (labels!=3))[0]
         softmaxes = softmaxes[keep_indices]
         labels = labels[keep_indices]
         if predictions is not None:
