@@ -16,9 +16,6 @@ import pickle
 from watchmal.dataset.h5_dataset import H5TrueDataset
 import watchmal.dataset.data_utils as du
 
-barrel_map_array_idxs = [6, 7, 8, 9, 10, 11, 0, 1, 2, 3, 4, 5, 15, 16, 17, 12, 13, 14, 18]
-pmts_per_mpmt = 19
-
 class CNNmPMTSegmentationDataset(Dataset):
     def __init__(self, digi_dataset_config, true_hits_h5file, digi_truth_mapping_file, valid_parents=(-1, 2, 3),
                  transform_segmentation = True):
