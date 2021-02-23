@@ -29,6 +29,8 @@ class CNNmPMTDataset(H5Dataset):
         
         self.mpmt_positions = np.load(mpmt_positions_file)['mpmt_image_positions']
         self.data_size = np.max(self.mpmt_positions, axis=0) + 1
+        self.barrel_rows = [row for row in range(self.data_size[0]) if
+                            np.count_nonzero(self.mpmt_positions[:,0] == row) == self.data_size[1]]
         n_channels = pmts_per_mpmt
         self.data_size = np.insert(self.data_size, 0, n_channels)
         self.collapse_arrays = collapse_arrays
@@ -55,7 +57,8 @@ class CNNmPMTDataset(H5Dataset):
         data[hit_pmt_in_modules, hit_rows, hit_cols] = hit_data
 
         # fix barrel array indexing to match endcaps in xyz ordering
-        data[:, 12:28, :] = data[barrel_map_array_idxs, 12:28, :]
+        barrel_data = data[:, self.barrel_rows, :]
+        data[:, self.barrel_rows, :] = barrel_data[barrel_map_array_idxs, :, :]
 
         # collapse arrays if desired
         if self.collapse_arrays:
