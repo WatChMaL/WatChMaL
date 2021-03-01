@@ -99,8 +99,50 @@ def collapse_test_output(softmaxes, labels, index_dict, predictions=None, ignore
     
     return new_softmaxes, new_labels
 
+def non_muon_collapse_test_output(softmaxes, labels, index_dict, predictions=None, ignore_type=None):
+    '''
+    Collapse gamma class into electron class to allow more equal comparison to FiTQun
 
-def multi_collapse_test_output(output_softmax_list, actual_labels_list, label_dict, ignore_type=None):
+    Args:
+        softmaxes           ... 2d array of dimension (n,3) corresponding to softmax output
+        labels              ... 1d array of event labels, of length n, taking values in the set of values of 'index_dict'
+        index_dict          ... Dictionary with keys 'gamma','e','mu' pointing to the corresponding integer label taken by 'labels'
+        predictions         ... 1d array of event type predictions, of length n, taking values in the set of values of 'index_dict'   
+        ignore_type         ... single string, name of event type to exclude
+
+    Returns:
+        new_softmaxes       ... 2d array of dimension (n,2) corresponding to softmax output over collapsed classes
+        new_labels          ... 1d array of collapsed classes labels
+        new_predictions     ... 1d array of collapsed classe event type predictions
+    '''
+    if ignore_type is not None:
+        keep_indices = np.where((labels!=index_dict[ignore_type]) & (labels!=3))[0]
+        softmaxes = softmaxes[keep_indices]
+        labels = labels[keep_indices]
+        if predictions is not None:
+            predictions = predictions[keep_indices]
+
+    new_labels = np.ones((softmaxes.shape[0]))*index_dict['$e$']
+    new_softmaxes = np.zeros((labels.shape[0], 3))
+
+    if predictions is not None:
+        new_predictions = np.ones_like(predictions) * 1 #index_dict['$e$']
+    
+    for idx, label in enumerate(labels):
+        if index_dict["$\mu$"] == label: 
+            new_labels[idx] = index_dict["$\mu$"]
+        new_softmaxes[idx,:] = [0, 1 - softmaxes[idx][2], softmaxes[idx][2]]
+        if predictions is not None:
+            if predictions[idx] == index_dict['$\mu$']: 
+                new_predictions[idx] = index_dict['$\mu$']
+
+    if predictions is not None: 
+        return new_softmaxes, new_labels, new_predictions
+    
+    return new_softmaxes, new_labels
+
+
+def multi_collapse_test_output(output_softmax_list, actual_labels_list, label_dict, ignore_type=None, non_muon=False):
     """
     Call collapse_test_output on multiple sets of data
 
@@ -117,7 +159,10 @@ def multi_collapse_test_output(output_softmax_list, actual_labels_list, label_di
     collapsed_class_scores_list, collapsed_class_labels_list = [],[]
 
     for softmaxes, labels in zip(output_softmax_list, actual_labels_list):
-        collapsed_class_scores, collapsed_class_labels = collapse_test_output(softmaxes, labels, label_dict, ignore_type=ignore_type)
+        if non_muon:
+            collapsed_class_scores, collapsed_class_labels = non_muon_collapse_test_output(softmaxes, labels, label_dict, ignore_type=ignore_type)
+        else:
+            collapsed_class_scores, collapsed_class_labels = collapse_test_output(softmaxes, labels, label_dict, ignore_type=ignore_type)
         collapsed_class_scores_list.append(collapsed_class_scores)
         collapsed_class_labels_list.append(collapsed_class_labels)
 

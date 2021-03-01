@@ -609,7 +609,7 @@ def plot_roc(fpr, tpr, thr, true_label_name, false_label_name, fig_list=None, xl
         ax1.set_xlabel(xlabel, fontsize=20)
         ax1.set_ylabel(ylabel, fontsize=20)
         ax1.set_title(title, fontsize=24)
-        ax1.legend(bbox_to_anchor=(1.05, 1), loc='upper left') #loc="upper right",prop={'size': 16})
+        ax1.legend(loc="upper right",prop={'size': 16}) # bbox_to_anchor=(1.05, 1), loc='upper left')
 
         if xlims is not None:
             xlim = next(xlim_iter)

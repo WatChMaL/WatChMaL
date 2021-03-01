@@ -419,15 +419,12 @@ class ClassifierEngine:
                 softmaxes   = np.array(global_eval_results_dict["softmaxes"].cpu())
         
         if self.rank == 0:
-            print("Sorting Outputs...")
-            sorted_indices = np.argsort(indices)
-
             # Save overall evaluation results
             print("Saving Data...")
-            np.save(self.dirpath + "indices.npy", sorted_indices)
-            np.save(self.dirpath + "labels.npy", labels[sorted_indices])
-            np.save(self.dirpath + "predictions.npy", predictions[sorted_indices])
-            np.save(self.dirpath + "softmax.npy", softmaxes[sorted_indices])
+            np.save(self.dirpath + "indices.npy", indices)
+            np.save(self.dirpath + "labels.npy", labels)
+            np.save(self.dirpath + "predictions.npy", predictions)
+            np.save(self.dirpath + "softmax.npy", softmaxes)
 
             # Compute overall evaluation metrics
             val_iterations = np.sum(local_eval_metrics_dict["eval_iterations"])
