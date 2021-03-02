@@ -46,6 +46,7 @@ class DigiTruthMapping:
         dtkeys=[]
         dtvals=[]
         start_time = time.time()
+        j=0
         for i in range(len(dtfiles) ):
             if i%100000==0 and i!=0:
                 cur_time = time.time()
@@ -55,13 +56,15 @@ class DigiTruthMapping:
                 print_time( elapsed_time,   "  time elapsed   =" )
                 print_time( remaining_time, "  remaining time =" )
                                    
-            for j in range( i, len(mcfiles)):
+            for j in range( j, len(mcfiles)):
                 #if mcfiles[j] == dtfiles[i] and mcids[j] == dtids[i]:
                 if mcids[j] == dtids[i]:
                     mckeys.append(i)
                     mcvals.append(j)
                     dtkeys.append(j)
                     dtvals.append(i)
+                    # verify matching root files
+                    assert(dtfiles[i] == mcfiles[j])
                     break
         self.data_for_truth = dict( zip(dtkeys,dtvals) )
         self.truth_for_data = dict( zip(mckeys,mcvals))        
