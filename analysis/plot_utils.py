@@ -533,9 +533,10 @@ def disp_reg_hist(location, title=None, show=False, train_num=0):
         train_num   ... the number of the log_train file from output directory
     """
     val_log = location + '/log_val.csv'
-    train_log = location + '/log_train_'+ train_num +'.csv'
+    train_log = location + '/log_train_'+ str(train_num) +'.csv'
     val_log_df = pd.read_csv(val_log)
     train_log_df = pd.read_csv(train_log)
+    plt.yscale("log")
     plt.plot(train_log_df.epoch, train_log_df.loss, 'g', label='Training loss')
     plt.plot(val_log_df.epoch, val_log_df.loss, 'b', label='Validation loss')
     if title is not None:
