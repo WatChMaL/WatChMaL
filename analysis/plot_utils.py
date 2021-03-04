@@ -69,7 +69,7 @@ def disp_learn_hist(location, title=None, losslim=None, axis=None, show=True):
     if axis is None:
         return fig
 
-def get_aggregated_train_data(location):
+def get_aggregated_train_data(location, include_accuracy=True):
     """
     Aggregate training logs from all processes into a single set of data
 
@@ -95,9 +95,11 @@ def get_aggregated_train_data(location):
         iteration = df_vals[0][0]
         epoch = df_vals[0][1]
         loss = sum([df_val[2] for df_val in df_vals]) / len(df_vals)
-        accuracy = sum([df_val[3] for df_val in df_vals]) / len(df_vals)
+        if include_accuracy:
+          accuracy = sum([df_val[3] for df_val in df_vals]) / len(df_vals)
+          output_df_vals = (iteration, epoch, loss, accuracy)
 
-        output_df_vals = (iteration, epoch, loss, accuracy)
+        output_df_vals = (iteration, epoch, loss)
         train_log_df.iloc[idx] = output_df_vals
 
     return train_log_df
@@ -145,7 +147,7 @@ def disp_learn_hist_smoothed(location, losslim=None, window_train=400, window_va
     ax1.tick_params('x',colors='black',labelsize=18)
     ax1.set_ylabel('Loss', fontsize=24, fontweight='bold',color='b')
     ax1.tick_params('y',colors='b',labelsize=18)
-
+    
     if losslim is not None:
         ax1.set_ylim(0.,losslim)
     
@@ -177,6 +179,68 @@ def disp_learn_hist_smoothed(location, losslim=None, window_train=400, window_va
         return
 
     return fig
+
+def disp_reg_hist_smoothed(location, losslim=None, window_train=400, window_val=40, show=True, log_scale=True):
+    """
+    Plot the loss and accuracy history for a training session with averaging to clean up noise
+    
+    Args: location      ... output directory containing log files
+          losslim       ... sets bound on y axis of loss
+          window_train  ... window to average training data over
+          window_val    ... window to average validation data over
+          show          ... if true then display figure, otherwise return figure
+    """
+    val_log = location + '/log_val.csv'
+    val_log_df   = pd.read_csv(val_log)
+
+    train_log_df = get_aggregated_train_data(location, include_accuracy=False)
+
+    epoch_train    = moving_average(np.array(train_log_df.epoch),window_train)
+    loss_train     = moving_average(np.array(train_log_df.loss),window_train)
+    
+    epoch_val    = moving_average(np.array(val_log_df.epoch),window_val)
+    loss_val     = moving_average(np.array(val_log_df.loss),window_val)
+
+    epoch_val_uns    = np.array(val_log_df.epoch)
+    loss_val_uns     = np.array(val_log_df.loss)
+
+    saved_best      = np.array(val_log_df.saved_best)
+    stored_indices  = np.where(saved_best>1.0e-3)
+    epoch_val_st    = epoch_val_uns[stored_indices]
+    loss_val_st     = loss_val_uns[stored_indices]
+
+    fig, ax1 = plt.subplots(figsize=(12,8), facecolor='w')
+    line11 = ax1.plot(epoch_train, loss_train, linewidth=2, label='Average training loss', color='b', alpha=0.3)
+    line12 = ax1.plot(epoch_val, loss_val, label='Average validation loss', color='blue')
+    line13 = ax1.scatter(epoch_val_st, loss_val_st, label='BEST validation loss',
+                         facecolors='none', edgecolors='blue',marker='o')
+    
+    ax1.set_xlabel('Epoch',fontweight='bold',fontsize=24,color='black')
+    ax1.tick_params('x',colors='black',labelsize=18)
+    ax1.set_ylabel('Loss', fontsize=24, fontweight='bold',color='b')
+    ax1.tick_params('y',colors='b',labelsize=18)
+    
+    if losslim is not None:
+        ax1.set_ylim(0.,losslim)
+    
+    lines  = line11+ line12+ [line13]
+
+    labels = [l.get_label() for l in lines]
+    
+    leg    = ax1.legend(lines, labels, fontsize=16, loc=5, numpoints=1)
+    leg_frame = leg.get_frame()
+    leg_frame.set_facecolor('white')
+
+    if log_scale:
+      plt.yscale("log")
+      
+    if show:
+        plt.grid()
+        plt.show()
+        return
+
+    else:
+        plt.savefig(location + '/loss_vs_epochs_smooth.png')
 
 def moving_average(a, n=3) :
     """
@@ -311,8 +375,9 @@ def plot_classifier_response(softmaxes, labels, particle_names, label_dict,
     if show:
         plt.show()
         return
-
+    
     return fig
+
 
 def separate_particles(input_array_list, labels, index_dict, desired_labels=['gamma','e','mu']):
     '''
