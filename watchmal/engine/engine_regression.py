@@ -136,13 +136,12 @@ class RegressionEngine:
             self.energies = self.energies.to(self.device)
 
             model_out = self.model(self.data)
-            #print(model_out[0])
-            #print(self.energies[0])
 
             self.loss = self.criterion(model_out, self.energies)
 
-        return {'loss': self.loss.detach().cpu().item(),
-                'output': model_out}
+        return {'loss': self.loss,
+                'output': model_out.detach().cpu().numpy(),
+                'raw_output': model_out}
 
     def backward(self):
         """
