@@ -139,7 +139,7 @@ class RegressionEngine:
 
             self.loss = self.criterion(model_out, self.energies)
 
-        return {'loss': self.loss,
+        return {'loss': self.loss.detach().cpu().item(),
                 'output': model_out.detach().cpu().numpy(),
                 'raw_output': model_out}
 
@@ -263,6 +263,8 @@ class RegressionEngine:
                             global_val_metrics[name] = np.array(tensor.cpu())
                     else:
                         global_val_metrics = local_val_metrics
+                        print(type(global_val_metrics["loss"]))
+                        print("not distributed")
 
                     if self.rank == 0:
                         # Save if this is the best model so far
