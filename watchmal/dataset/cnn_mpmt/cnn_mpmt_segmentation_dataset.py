@@ -18,7 +18,7 @@ import watchmal.dataset.data_utils as du
 
 class CNNmPMTSegmentationDataset(Dataset):
     def __init__(self, digi_dataset_config, true_hits_h5file, digi_truth_mapping_file, valid_parents=(-1, 2, 3),
-                 parent_type="max", transform_segmentation = True):
+                 parent_type="max", transform_segmented_labels = True):
         """
         Args:
             digi_dataset_config     ... config for dataset for digitized hits
@@ -28,7 +28,7 @@ class CNNmPMTSegmentationDataset(Dataset):
 
         """
         self.digi_dataset = instantiate(digi_dataset_config)
-        if transform_segmentation:
+        if transform_segmented_labels:
             self.transforms = self.digi_dataset.transforms
             self.digi_dataset.transforms = None
         else:
@@ -89,12 +89,12 @@ class CNNmPMTSegmentationDataset(Dataset):
         self.truth_dataset.__getitem__(truth_item)
         parents = self.get_digi_hit_parent(self.digi_dataset.event_hit_pmts, self.truth_dataset.event_hit_pmts, self.truth_dataset.event_hit_parents)
 
-        segmentation = self.digi_dataset.process_data(self.digi_dataset.event_hit_pmts, parents)
+        segmented_labels = self.digi_dataset.process_data(self.digi_dataset.event_hit_pmts, parents)
 
         if self.transforms is not None:
-            data, segmentation = du.apply_random_transformations(self.transforms, data_dict["data"], segmentation)
+            data, segmented_labels = du.apply_random_transformations(self.transforms, data_dict["data"], segmented_labels)
             data_dict["data"] = data
 
-        data_dict["segmentation"] = segmentation
+        data_dict["segmented_labels"] = segmented_labels
 
         return data_dict

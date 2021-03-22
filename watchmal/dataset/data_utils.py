@@ -66,11 +66,11 @@ def get_transformations(transformations, transform_names):
         return None
 
 
-def apply_random_transformations(transforms, data, segmentation = None):
+def apply_random_transformations(transforms, data, segmented_labels = None):
     if transforms is not None:
         for transformation in transforms:
             if random.getrandbits(1):
                 data = transformation(data)
-                if segmentation is not None:
-                    segmentation = transformation(segmentation)
+                if segmented_labels is not None:
+                    segmented_labels = transformation(segmented_labels)
     return data
