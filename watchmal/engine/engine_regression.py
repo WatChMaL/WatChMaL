@@ -380,7 +380,7 @@ class RegressionEngine:
             self.model.eval()
 
             # Variables for the confusion matrix
-            loss, indices, energies, outputs, positions = [], [], [], []
+            loss, indices, energies, outputs, positions = [], [], [], [], []
 
             # Extract the event data and label from the DataLoader iterator
             for it, eval_data in enumerate(self.data_loaders["test"]):
