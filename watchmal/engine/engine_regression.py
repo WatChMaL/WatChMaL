@@ -11,6 +11,7 @@ from torch import optim
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.parallel import DistributedDataParallel as DDP
+from torch.nn.utils import clip_grad_norm_
 
 # generic imports
 from math import floor, ceil
@@ -128,19 +129,19 @@ class RegressionEngine:
         Returns:
             dict containing loss, and model outputs
         """
+
         with torch.set_grad_enabled(train):
             # Move the data and the labels to the GPU (if using CPU this has no effect)
             self.data = self.data.to(self.device)
             self.energies = self.energies.to(self.device)
 
             model_out = self.model(self.data)
-            #print(model_out[0])
-            #print(self.energies[0])
 
             self.loss = self.criterion(model_out, self.energies)
 
         return {'loss': self.loss.detach().cpu().item(),
-                'output': model_out.detach().cpu().numpy()}
+                'output': model_out.detach().cpu().numpy(),
+                'raw_output': model_out}
 
     def backward(self):
         """
@@ -151,6 +152,7 @@ class RegressionEngine:
         """
         self.optimizer.zero_grad()  # reset accumulated gradient
         self.loss.backward()  # compute new gradient
+        clip_grad_norm_(self.model.parameters(), 1)
         self.optimizer.step()  # step params
 
     # ========================================================================
@@ -186,6 +188,10 @@ class RegressionEngine:
         # set model to training mode
         self.model.train()
 
+        #implement early stopping
+        self.wait = 0
+        patience = 5
+
         # initialize epoch and iteration counters
         epoch = 0.
         self.iteration = 0
@@ -213,7 +219,7 @@ class RegressionEngine:
                 train_loader.sampler.set_epoch(epoch)
 
             # local training loop for batches in a single epoch
-            for i, train_data in enumerate(self.data_loaders["train"]):
+            for i, train_data in enumerate(train_loader):
 
                 # run validation on given intervals
                 if self.iteration % val_interval == 0:
@@ -257,6 +263,8 @@ class RegressionEngine:
                             global_val_metrics[name] = np.array(tensor.cpu())
                     else:
                         global_val_metrics = local_val_metrics
+                        print(type(global_val_metrics["loss"]))
+                        print("not distributed")
 
                     if self.rank == 0:
                         # Save if this is the best model so far
@@ -292,8 +300,9 @@ class RegressionEngine:
                 # Call backward: backpropagate error and update weights using loss = self.loss
                 self.backward()
 
+                old_epoch = epoch
                 # update the epoch and iteration
-                epoch += 1. / len(self.data_loaders["train"])
+                epoch += 1. / len(train_loader)
                 self.iteration += 1
 
                 # get relevant attributes of result for logging
@@ -313,9 +322,22 @@ class RegressionEngine:
                         (self.iteration, epoch, res["loss"],
                          iteration_time - start_time, iteration_time - previous_iteration_time))
 
-                if epoch >= epochs:
-                    break
+                if (floor(epoch) - floor(old_epoch) == 1):
+                    if (res["loss"] < best_val_loss):
+                        self.wait = 1
+                    else:
+                        self.wait += 1
+                        print("No improvement in validation loss")
+                    print(self.wait)
 
+                if epoch >= epochs or self.wait > patience:
+                    return
+
+            if (self.wait > patience):
+                print("Training has stopped due to early stopping, Epoch %1.2f ... Best Val Loss %1.3f ... Time "
+                      "Elapsed %1.3f " % (epoch, best_val_loss,
+                         iteration_time - start_time))
+                break
         self.train_log.close()
         if self.rank == 0:
             self.val_log.close()
@@ -387,7 +409,7 @@ class RegressionEngine:
 
         local_eval_metrics_dict = {"eval_iterations": iterations, "eval_loss": loss}
 
-        indices = np.array(eval_indices)
+        indices = np.array(indices)
         energies = np.array(energies)
         outputs = np.array(outputs)
 
