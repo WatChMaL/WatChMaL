@@ -4,6 +4,8 @@ from scipy.optimize import curve_fit
 import matplotlib.pyplot as plt
 import math
 import random
+import time
+from watchmal.dataset.DigiTruthMapping import print_time
 
 """
 This module provides a class to do digitization of events.
@@ -222,7 +224,6 @@ class Digitizer:
         
         time4 = time.time()
         
-        elapsed_time = cur_time-start_time
         print_time( time1 - start_time,   "Digitizer::digitize_event pe and time dict building =" )
         print_time( time2 - time1,        "Digitizer::digitize_event waveform dictionary building =" )
         print_time( time3 - time2,        "Digitizer::digitize_event t,q digitization building =" )
