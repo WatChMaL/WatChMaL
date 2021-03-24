@@ -27,7 +27,7 @@ def load_fq_output(fq_mapping_path, gamma_file_path, e_file_path, mu_file_path):
     '''
     ###### Load the fiTQun results ######
 
-    with open('./fq_comparison_data/3M_fitqun_mapping.pickle', 'rb') as handle:
+    with open(fq_mapping_path, 'rb') as handle:
         fq_mapping = pickle.load(handle)
 
     gamma_fq_indices = fq_mapping['gamma_fq_indices']
@@ -40,47 +40,138 @@ def load_fq_output(fq_mapping_path, gamma_file_path, e_file_path, mu_file_path):
     mu_file_data    = uproot.open(mu_file_path)['fiTQun;1']
 
     # Load gamma results
-    gamma_set_nll    = gamma_file_data.arrays('fq1rnll')['fq1rnll']
+    gamma_set_nll = gamma_file_data.arrays('fq1rnll')['fq1rnll']
 
-    gamma_set_e_nll  = gamma_set_nll[:, 0, 1]
-    gamma_set_mu_nll = gamma_set_nll[:, 0, 2]
+    gamma_set_e_nll, gamma_set_mu_nll = gamma_set_nll[:, 0, 1], gamma_set_nll[:, 0, 2]
 
     gamma_set_discriminator = np.array(gamma_set_mu_nll - gamma_set_e_nll)
 
     # Load electron results
     e_set_nll    = e_file_data.arrays('fq1rnll')['fq1rnll']
 
-    e_set_e_nll  = e_set_nll[:, 0, 1]
-    e_set_mu_nll = e_set_nll[:, 0, 2]
+    e_set_e_nll, e_set_mu_nll = e_set_nll[:, 0, 1], e_set_nll[:, 0, 2]
 
     e_set_discriminator = np.array(e_set_mu_nll - e_set_e_nll)
 
     # Load mu results
-    mu_set_nll    = mu_file_data.arrays('fq1rnll')['fq1rnll']
+    mu_set_nll   = mu_file_data.arrays('fq1rnll')['fq1rnll']
 
-    mu_set_e_nll  = mu_set_nll[:, 0, 1]
-    mu_set_mu_nll = mu_set_nll[:, 0, 2]
+    mu_set_e_nll, mu_set_mu_nll = mu_set_nll[:, 0, 1], mu_set_nll[:, 0, 2]
 
     mu_set_discriminator = np.array(mu_set_mu_nll - mu_set_e_nll) 
 
-
     # Construct likelihoods
     fq_likelihoods = np.concatenate((e_set_discriminator[e_fq_indices],
-                                     gamma_set_discriminator[gamma_fq_indices],
-                                     mu_set_discriminator[mu_fq_indices]
+                                     mu_set_discriminator[mu_fq_indices],
+                                     gamma_set_discriminator[gamma_fq_indices]
                                      ))
 
-    # Generate scores
+    # Collect scores
     fq_scores = np.zeros((fq_likelihoods.shape[0], 3))
     fq_scores[:, 1] = fq_likelihoods
 
     # Generate labels
     fq_labels = np.concatenate((np.ones_like(e_set_discriminator[e_fq_indices])*1,
-                                np.ones_like(gamma_set_discriminator[gamma_fq_indices])*0,
-                                np.ones_like(mu_set_discriminator[mu_fq_indices])*2
+                                np.ones_like(mu_set_discriminator[mu_fq_indices])*2,
+                                np.ones_like(gamma_set_discriminator[gamma_fq_indices])*0
                                 ))
+    
+    # Collect reconstructed momentum values
+    gamma_set_mom = np.array(gamma_file_data.arrays('fq1rmom')['fq1rmom'][:, 0, 1])
+    e_set_mom     = np.array(e_file_data.arrays('fq1rmom')['fq1rmom'][:, 0, 1])
+    mu_set_mom    = np.array(mu_file_data.arrays('fq1rmom')['fq1rmom'][:, 0, 1])
 
-    return fq_scores, fq_labels
+    fq_mom = np.concatenate((e_set_mom[e_fq_indices],
+                             mu_set_mom[mu_fq_indices],
+                             gamma_set_mom[gamma_fq_indices]
+                             ))
+
+    return fq_scores, fq_labels, fq_mom
+
+def load_gamma_fq_output(fq_mapping_path, gamma_file_path, e_file_path, mu_file_path):
+    # TODO: rework to fit current framework
+    '''
+    load_fq_output(mapping_indices_path, test_idxs, cut_path, cut_list)
+    
+    Purpose : Load FiTQun output matching the desired 
+    
+    Args: mapping_indices_path ... path to .npz list of mapping indices for FiTQun
+          fq_failed_idxs_path  ... path to .npz containing indices of events (in test set ordering) for which FiTQun failed to produce output 
+          test_idxs_path       ... path to .npz containing indices in pointnet set - idx array must be titled 'test_idxs' in the archive
+          cut_path             ... path to pointnet cuts npz file
+          cut_list             ... list of cuts to be applied. Must be an array in the .npz pointed to be cut_path
+    author: Calum Macdonald   
+    August 2020
+    '''
+    ###### Load the fiTQun results ######
+
+    with open(fq_mapping_path, 'rb') as handle:
+        fq_mapping = pickle.load(handle)
+
+    gamma_fq_indices = fq_mapping['gamma_fq_indices']
+    e_fq_indices     = fq_mapping['e_fq_indices']
+    mu_fq_indices    = fq_mapping['mu_fq_indices']
+
+    # Load fiTQun results
+    gamma_file_data = uproot.open(gamma_file_path)['fiTQun;1']
+    e_file_data     = uproot.open(e_file_path)['fiTQun;1']
+    mu_file_data    = uproot.open(mu_file_path)['fiTQun;1']
+
+    # Load gamma results
+    gamma_set_nll = gamma_file_data.arrays('fq1rnll')['fq1rnll']
+
+    gamma_set_e_nll, gamma_set_mu_nll = gamma_set_nll[:, 0, 1], gamma_set_nll[:, 0, 2]
+
+    gamma_set_gamma_nll = gamma_file_data.arrays('fq2elecnll')['fq2elecnll']
+
+    gamma_set_discriminator = np.array(gamma_set_gamma_nll - gamma_set_e_nll)
+
+    # Load electron results
+    e_set_nll    = e_file_data.arrays('fq1rnll')['fq1rnll']
+
+    e_set_e_nll, e_set_mu_nll = e_set_nll[:, 0, 1], e_set_nll[:, 0, 2]
+
+    e_set_gamma_nll    = e_file_data.arrays('fq2elecnll')['fq2elecnll']
+
+    e_set_discriminator = np.array(e_set_gamma_nll - e_set_e_nll)
+
+    # Load mu results
+    mu_set_nll   = mu_file_data.arrays('fq1rnll')['fq1rnll']
+
+    mu_set_e_nll, mu_set_mu_nll = mu_set_nll[:, 0, 1], mu_set_nll[:, 0, 2]
+
+    # NOTE: mu outputs currently don't have 2elec fit
+    # mu_set_gamma_nll   = mu_file_data.arrays('fq2elecnll')['fq2elecnll']
+
+    mu_set_discriminator = np.array( - mu_set_e_nll) 
+
+    # Construct likelihoods
+    fq_likelihoods = np.concatenate((e_set_discriminator[e_fq_indices],
+                                     mu_set_discriminator[mu_fq_indices],
+                                     gamma_set_discriminator[gamma_fq_indices]
+                                     ))
+
+    # Collect scores
+    fq_scores = np.zeros((fq_likelihoods.shape[0], 3))
+    fq_scores[:, 1] = fq_likelihoods
+
+    # Generate labels
+    fq_labels = np.concatenate((np.ones_like(e_set_discriminator[e_fq_indices])*1,
+                                np.ones_like(mu_set_discriminator[mu_fq_indices])*2,
+                                np.ones_like(gamma_set_discriminator[gamma_fq_indices])*0
+                                ))
+    
+    # Collect reconstructed momentum values
+    gamma_set_mom = np.array(gamma_file_data.arrays('fq1rmom')['fq1rmom'][:, 0, 1])
+    e_set_mom     = np.array(e_file_data.arrays('fq1rmom')['fq1rmom'][:, 0, 1])
+    mu_set_mom    = np.array(mu_file_data.arrays('fq1rmom')['fq1rmom'][:, 0, 1])
+
+    fq_mom = np.concatenate((e_set_mom[e_fq_indices],
+                             mu_set_mom[mu_fq_indices],
+                             gamma_set_mom[gamma_fq_indices]
+                             ))
+
+    return fq_scores, fq_labels, fq_mom
 
 def deprecated_load_fq_output(mapping_indices_path, fq_failed_idxs_path, test_idxs_path, cut_path, cut_list):
     # TODO: rework to fit current framework

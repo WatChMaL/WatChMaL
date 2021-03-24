@@ -71,7 +71,7 @@ def multi_compute_roc(softmax_out_val_list, labels_val_list, true_label, false_l
 
     return fprs, tprs, thrs
 
-def multi_plot_roc(fprs, tprs, thrs, true_label_name, false_label_name, fig_list=None, xlims=None, ylims=None, axes=None, linestyles=None, linecolors=None, plot_labels=None, title='', show=False):
+def multi_plot_roc(fprs, tprs, thrs, true_label_name, false_label_name, fig_list=None, xlims=None, ylims=None, axes=None, linestyles=None, linecolors=None, plot_labels=None, title='', font_scale=1., legend_loc='upper right', show=False):
     '''
     Plot multiple ROC curves of background rejection vs signal efficiency. Can plot 'rejection' (1/fpr) or 'fraction' (tpr).
 
@@ -91,7 +91,8 @@ def multi_plot_roc(fprs, tprs, thrs, true_label_name, false_label_name, fig_list
     AUCs = [auc(fpr,tpr) for fpr, tpr in zip(fprs, tprs)]
 
     num_panes = len(fig_list)
-    fig, axes = plt.subplots(num_panes, 1, figsize=(12,8*num_panes), facecolor='w')
+    if axes is None:
+        fig, axes = plt.subplots(num_panes, 1, figsize=(12,8*num_panes), facecolor='w')
     if num_panes > 1:
         fig.suptitle("ROC for {} vs {}".format(true_label_name, false_label_name), fontweight='bold',fontsize=32)
 
@@ -106,6 +107,8 @@ def multi_plot_roc(fprs, tprs, thrs, true_label_name, false_label_name, fig_list
                         linecolor=linecolors[idx]   if linecolors is not None else None,
                         plot_label=plot_labels[idx] if plot_labels is not None else None,
                         title=title,
+                        font_scale=font_scale,
+                        legend_loc=legend_loc,
                         show=False)
 
     return figs

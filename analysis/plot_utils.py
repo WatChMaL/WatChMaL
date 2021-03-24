@@ -232,8 +232,7 @@ def plot_confusion_matrix(labels, predictions, class_names):
    
     plt.show()
 
-def plot_classifier_response(softmaxes, labels, particle_names, label_dict, 
-                            bins=30, linestyles=None, legend_locs=None,
+def plot_classifier_response(softmaxes, labels, particle_names, label_dict, bins=30, linestyles=None, legend_locs=None,
                             extra_panes=[], xlim=None, label_size=14, legend_label_dict=None, title=None, show=True):
     '''
     Plot classifier likelihoods over different classes for events of a given particle type
@@ -525,7 +524,7 @@ def compute_roc(softmax, labels_val, true_label, false_label, normalize=True):
     
     return fpr, tpr, thr
 
-def plot_roc(fpr, tpr, thr, true_label_name, false_label_name, fig_list=None, xlims=None, ylims=None, axes=None, linestyle=None, linecolor=None, plot_label=None, title='', show=False):
+def plot_roc(fpr, tpr, thr, true_label_name, false_label_name, fig_list=None, xlims=None, ylims=None, axes=None, linestyle=None, linecolor=None, plot_label=None, title='', font_scale=1., legend_loc='upper right', show=False):
     """
     Plot ROC curves for a classifier that has been evaluated on a validation set with respect to given labels
     
@@ -561,7 +560,6 @@ def plot_roc(fpr, tpr, thr, true_label_name, false_label_name, fig_list=None, xl
             fig2, ax2 = plt.subplots(figsize=(12,8),facecolor="w")
             figs.append(fig2)
     else:
-        print(axes)
         axes_iter = iter(axes)
         if 0 in fig_list:
             ax0 = next(axes_iter)
@@ -606,10 +604,10 @@ def plot_roc(fpr, tpr, thr, true_label_name, false_label_name, fig_list=None, xl
         ylabel = f'{false_label_name} Background Rejection'
         title = '{} vs {} Rejection '.format(true_label_name, false_label_name) + title
 
-        ax1.set_xlabel(xlabel, fontsize=20)
-        ax1.set_ylabel(ylabel, fontsize=20)
-        ax1.set_title(title, fontsize=24)
-        ax1.legend(loc="upper right",prop={'size': 16}) # bbox_to_anchor=(1.05, 1), loc='upper left')
+        ax1.set_xlabel(xlabel, fontsize=20*font_scale)
+        ax1.set_ylabel(ylabel, fontsize=20*font_scale)
+        ax1.set_title(title, fontsize=24*font_scale)
+        ax1.legend(loc=legend_loc, prop={'size': 16*0.8*font_scale}) # bbox_to_anchor=(1.05, 1), loc='upper left')
 
         if xlims is not None:
             xlim = next(xlim_iter)
