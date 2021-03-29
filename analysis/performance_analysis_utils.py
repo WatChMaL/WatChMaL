@@ -7,6 +7,8 @@ import numpy as np
 from sklearn.utils.extmath import stable_cumsum
 # from sklearn.metrics import det_curve
 
+from textwrap import wrap
+
 from WatChMaL.analysis.multi_plot_utils import multi_compute_roc, multi_plot_roc
 from WatChMaL.analysis.comparison_utils import multi_collapse_test_output
 from WatChMaL.analysis.plot_utils import separate_particles
@@ -15,8 +17,10 @@ def get_idxs_satisfying_bounds(data_values, lower_bound, upper_bound):
     return np.where((lower_bound < data_values) & (data_values <= upper_bound))[0]
 
 
-def plot_binned_performance(softmaxes, labels, binning_features, binning_label, bins, fixed='rejection', operating_point, metric='purity', index_dict, 
-                            label_0, label_1, ax=None,marker='o--', color=None, legend_label_dict=None, title_note=''):
+def plot_binned_performance(softmaxes, labels, binning_features, binning_label, bins,
+                            index_dict, label_0, label_1, 
+                            operating_point, fixed='rejection', metric='purity',
+                            ax=None, marker='o--', color=None, legend_label_dict=None, title_note=''):
     '''
     Plots a performance metric as a function of a physical parameter, at a fixed operating point of another metric.
 
@@ -63,6 +67,7 @@ def plot_binned_performance(softmaxes, labels, binning_features, binning_label, 
 
     # compute efficiency, thresholds, purity per bin
     bin_metrics = []
+    y_err = []
     for bin_idx, data in enumerate(bin_data):
         (softmaxes_0,softmaxes_1), (labels_0,labels_1) = separate_particles([data['softmaxes'],data['labels']],data['labels'],index_dict,desired_labels=[label_0,label_1])
 
@@ -72,7 +77,7 @@ def plot_binned_performance(softmaxes, labels, binning_features, binning_label, 
         fns = tps[-1] - tps
         tns = fps[-1] - fps
 
-        efficiencies = tps/(tps + fns)
+        efficiencies = tps / (tps + fns)
 
         if fixed == 'efficiency':
             fixed_metric = efficiencies
@@ -94,7 +99,34 @@ def plot_binned_performance(softmaxes, labels, binning_features, binning_label, 
         elif metric == 'inverse fpr': 
             performance = np.where(fps != 0, (fps + tns) / fps, fps + tns)
         
-        bin_metrics.append((fixed_metric[operating_point_idx], performance[operating_point_idx], np.sqrt(tns[operating_point_idx])/(tns[operating_point_idx] + fps[operating_point_idx])))
+        """
+        #find metrics for each true momentum bin
+        bin_metrics=[]
+        y_err = []
+        for bin_idxs in true_mom_bin_idxs_list:
+            pred_pos_idxs = np.where(scores[bin_idxs] - thresholds_per_event[bin_idxs] > 0)[0]
+            pred_neg_idxs = np.where(scores[bin_idxs] - thresholds_per_event[bin_idxs] < 0)[0]
+
+            fp = np.where(labels[bin_idxs[pred_pos_idxs]] == index_dict['$\mu$'] )[0].shape[0]
+            tp = np.where(labels[bin_idxs[pred_pos_idxs]] == index_dict['$e$'] )[0].shape[0]
+            fn = np.where(labels[bin_idxs[pred_neg_idxs]] == index_dict['$e$'] )[0].shape[0]
+            tn = np.where(labels[bin_idxs[pred_neg_idxs]] == index_dict['$\mu$'] )[0].shape[0]
+            
+            if metric == 'efficiency':
+                performance = tp/(tp+fn)
+            else:
+                performance = fp/(fp + tn)
+
+            N = len(bin_idxs)
+
+            bin_metrics.append(performance)
+            y_err.append( np.sqrt(performance*(1 - performance) / N))
+        """
+        performance = performance[operating_point_idx]
+
+        bin_metrics.append(performance)
+        y_err.append( np.sqrt(performance*(1 - performance) / N))
+        #bin_metrics.append((fixed_metric[operating_point_idx], performance[operating_point_idx], np.sqrt(tns[operating_point_idx])/(tns[operating_point_idx] + fps[operating_point_idx])))
     
     bin_metrics = np.array(bin_metrics)
 
@@ -110,16 +142,19 @@ def plot_binned_performance(softmaxes, labels, binning_features, binning_label, 
 
     # TODO: fix titling
     title = '{} \n vs {} At Bin {} Signal Efficiency {}{}'.format(metric_name, binning_label, legend_label_dict[label_0], operating_point, title_note)
-    
+    title = "\n".join(wrap(title, 60))
+
     # plot results
     if ax is None:
         fig, ax = plt.subplots(figsize=(12,6))
     
-    ax.errorbar(bin_centers,bin_metrics[:,1],yerr=bin_metrics[:,2],fmt=marker,color=color,ecolor='k',elinewidth=0.5,capsize=4,capthick=1,alpha=0.5, linewidth=2)
+    ax.errorbar(bin_centers, bin_metrics, yerr=y_err,fmt=marker,color=color,ecolor='k',elinewidth=0.5,capsize=4,capthick=1,alpha=0.5, linewidth=2)
     ax.set_ylabel(metric_name, fontsize=label_size)
     ax.set_xlabel(binning_label, fontsize=label_size)
     ax.set_title(title)
     
+    ax.set_xlim([0, 1050])
+
     if metric == 'inverse fpr': 
         ax.set_yscale('log')
 
@@ -134,9 +169,9 @@ def multi_plot_fixed_operating_performance(subset_energies, energy_bins, subset_
         plot_fixed_operating_performance(subset_energies, energy_bins, subset_d_to_wall, d_to_wall_bins, subset_softmax, subset_labels, label_dict, ignore_dict, threshold, axes1, axes2, muon_comparison, use_rejection, 
                                          linecolors[idx], line_titles[idx])
 
-def plot_fixed_operating_performance(scores, labels, fixed_binning_features, plot_binning_features, 
+def plot_fixed_operating_performance(scores, labels, fixed_binning_features, fixed_bin_label, plot_binning_features, plot_bin_label,
                                      fpr_fixed_point, index_dict, fixed_bin_size=50, plot_bins=20, 
-                                     ax=None,marker='o--',color='k',title_note='',metric='efficiency',yrange=None):
+                                     ax=None,marker='o--',color='k',title_note='', metric='efficiency',yrange=None):
     '''
     Plots a metric as a function of a physical parameter, at a fixed operating point of another metric.
 
@@ -169,8 +204,8 @@ def plot_fixed_operating_performance(scores, labels, fixed_binning_features, plo
     scores, labels, plot_binning_features, fixed_binning_features = np.concatenate(scores), np.concatenate(labels), np.concatenate(plot_binning_features), np.concatenate(fixed_binning_features)
 
     # bin by fixed_binning_features
-    fixed_bins = [0. + fixed_bin_size * i for i in range(math.ceil(np.max(fixed_binning_features)/fixed_bin_size))]   
-    fixed_bins = bins[0:-1]
+    fixed_bins_true = [0. + fixed_bin_size * i for i in range(math.ceil(np.max(fixed_binning_features)/fixed_bin_size))]   
+    fixed_bins = fixed_bins_true[0:-1]
 
     recons_mom_bin_assignments = np.digitize(fixed_binning_features, fixed_bins)
     recons_mom_bin_idxs_list = [[]]*len(fixed_bins)
@@ -197,7 +232,9 @@ def plot_fixed_operating_performance(scores, labels, fixed_binning_features, plo
 
     #bin by true momentum
     ns, true_bins = np.histogram(plot_binning_features, bins=plot_bins, range=(np.min(plot_binning_features), np.max(plot_binning_features))) #, range=(200., np.max(plot_binning_features)) if metric=='mu fpr' else (0,1000))
-    bins = true_bins[0:-1]
+    # TODO: Undo fixed binning 
+    bins = fixed_bins_true[0:-1]
+    print(len(bins))
     true_mom_bin_assignments = np.digitize(plot_binning_features, bins)
     true_mom_bin_idxs_list = [[]]*len(bins)
 
@@ -206,7 +243,7 @@ def plot_fixed_operating_performance(scores, labels, fixed_binning_features, plo
         true_mom_bin_idxs_list[bin_idx] = np.where(true_mom_bin_assignments == bin_num)[0]
 
     # find metrics for each true momentum bin
-    bin_metrics=[]
+    bin_metrics, y_err = [],[]
     for bin_idxs in true_mom_bin_idxs_list:
         pred_pos_idxs = np.where(scores[bin_idxs] - thresholds_per_event[bin_idxs] > 0)[0]
         pred_neg_idxs = np.where(scores[bin_idxs] - thresholds_per_event[bin_idxs] < 0)[0]
@@ -218,35 +255,37 @@ def plot_fixed_operating_performance(scores, labels, fixed_binning_features, plo
         
         # TODO: division by zero
         if metric == 'efficiency':
-            bin_metrics.append(tp/(tp+fn))
+            performance = tp/(tp+fn)
         else:
-            bin_metrics.append(fp/(fp + tn))
+            performance = fp/(fp + tn)
+
+        N = len(bin_idxs)
+
+        bin_metrics.append(performance)
+        y_err.append( np.sqrt(performance*(1 - performance) / N))
 
     #plot metrics
-    bin_centers =  (true_bins[:-1] + true_bins[1:]) / 2
+    bin_centers = (true_bins[:-1] + true_bins[1:]) / 2
     
      #[(bins[i+1] - bins[i])/2 + bins[i] for i in range(0,len(bins) - 1)] #range(0,len(bins)-1)]
     #bin_centers.append((np.min(plot_binning_features), np.max(plot_binning_features))#(np.max(plot_binning_features) - bins[-1])/2 + bins[-1] if metric=='mu fpr' else (1000 - bins[-1])/2 + bins[-1])
 
     if metric == 'efficiency':
-        metric_name = 'e- Signal Efficiency'
+        metric_name = '$e$- Signal Efficiency'
     else :
-        metric_name ='\u03BC- Mis-ID Rate'
-    title = '{} \n vs True Momentum At Reconstructed Momentum Bin \u03BC- Mis-ID Rate of {}%{}'.format(metric_name, fpr_fixed_point*100, title_note)
+        metric_name ='$\mu$- Mis-ID Rate'
+    
+    title = '{} vs {} At {} Bin $\mu$- Mis-ID Rate of {}%{}'.format(metric_name, plot_bin_label, fixed_bin_label, fpr_fixed_point*100, title_note)
     
     if ax is None:
         fig, ax = plt.subplots(figsize=(12,6))
-    
-    # Compute errors
-    yerr = np.ones_like(bin_metrics)
-    yerr = np.zeros_like(bin_metrics)
 
     # plot
-    ax.errorbar(bin_centers, bin_metrics, yerr=np.zeros_like(bin_metrics),fmt=marker,color=color,ecolor='k',elinewidth=0.5,capsize=4,capthick=1,alpha=0.5, linewidth=2)
+    ax.errorbar(bin_centers, bin_metrics, yerr=y_err,fmt=marker,color=color,ecolor='k',elinewidth=0.5,capsize=4,capthick=1,alpha=0.5, linewidth=2)
     ax.grid(b=True, which='major', color='gray', linestyle='--')
     # nax = ax.twinx()
     ax.set_ylabel(metric_name)
-    ax.set_xlabel("True Momentum (MeV/c)", fontsize=label_size)
+    ax.set_xlabel("{}".format(plot_bin_label), fontsize=label_size) #"True Momentum (MeV/c)", fontsize=label_size)
     ax.set_title(title)
 
     if yrange is not None: 
@@ -254,7 +293,35 @@ def plot_fixed_operating_performance(scores, labels, fixed_binning_features, plo
 
     return plot_binning_features, thresholds_per_event
 
-def plot_fitqun_binned_performance(scores, labels, true_momentum, reconstructed_momentum, fpr_fixed_point, index_dict, recons_mom_bin_size=50, true_mom_bins=20, 
+
+def plot_fitqun_binned_performance(scores, labels, reconstructed_momentum, fpr_fixed_point, index_dict, recons_mom_bin_size=50, plot_bins=20, 
+                            ax=None,marker='o--',color='k',title_note='',metric='efficiency',yrange=None):
+    '''
+        Purpose: Re-create official FiTQun plots.
+        Args:
+            scores                  ... network scores for each class
+            labels                  ... 1d array of labels
+            true_momentum           ... 1d array of event true momentum
+            reconstructed_momentum  ... 1d array of FQ reconstructed momentum
+            fpr_fixed_point         ... fixed false-positive rate for FQ recons. mom. bins
+            index_dict              ... dictionary with 'e', 'mu' keys pointing to corresponding integer labels
+            recons_mom_bin_size     ... size of reconstructed mom. bin
+            true_mom_bins           ... number of true momentum bins
+            ax                      ... axis to plot on
+            marker                  ... marker for plor
+            color                   ... curve color
+            title_note              ... string to append to title
+            metric                  ... 'efficiency' will give signal efficiency, any other will give FPR
+            yrange                  ... range for the y axis
+    '''
+
+    assert reconstructed_momentum.shape[0] == scores.shape[0], 'Error: reconstructed_momentum must have same length as softmaxes'
+
+    return plot_fixed_operating_performance(scores, labels, reconstructed_momentum, 'Reconstructed Momentum', reconstructed_momentum, 'Reconstructed Momentum',
+                                     fpr_fixed_point, index_dict, recons_mom_bin_size, plot_bins, 
+                                     ax,marker,color,title_note,metric,yrange)
+
+def deprecated_plot_fitqun_binned_performance(scores, labels, true_momentum, reconstructed_momentum, fpr_fixed_point, index_dict, recons_mom_bin_size=50, true_mom_bins=20, 
                             ax=None,marker='o--',color='k',title_note='',metric='efficiency',yrange=None):
     '''
         Purpose: Re-create official FiTQun plots.
@@ -308,7 +375,8 @@ def plot_fitqun_binned_performance(scores, labels, true_momentum, reconstructed_
             thresholds_per_event[bin_idxs] = thresholds[operating_point_idx]
 
     #bin by true momentum
-    ns, bins = np.histogram(true_momentum, bins=true_mom_bins, range=(200., np.max(true_momentum)) if metric=='mu fpr' else (0,1000))
+    ns, bins = np.histogram(true_momentum, bins=bins)#, range=(200., np.max(true_momentum)) if metric=='mu fpr' else (0,1000))
+    true_bins = bins
     bins = bins[0:-1]
     true_mom_bin_assignments = np.digitize(true_momentum, bins)
     true_mom_bin_idxs_list = [[]]*len(bins)
@@ -318,6 +386,7 @@ def plot_fitqun_binned_performance(scores, labels, true_momentum, reconstructed_
 
     #find metrics for each true momentum bin
     bin_metrics=[]
+    y_err = []
     for bin_idxs in true_mom_bin_idxs_list:
         pred_pos_idxs = np.where(scores[bin_idxs] - thresholds_per_event[bin_idxs] > 0)[0]
         pred_neg_idxs = np.where(scores[bin_idxs] - thresholds_per_event[bin_idxs] < 0)[0]
@@ -327,30 +396,43 @@ def plot_fitqun_binned_performance(scores, labels, true_momentum, reconstructed_
         fn = np.where(labels[bin_idxs[pred_neg_idxs]] == index_dict['$e$'] )[0].shape[0]
         tn = np.where(labels[bin_idxs[pred_neg_idxs]] == index_dict['$\mu$'] )[0].shape[0]
         
-        # TODO: division by zero
         if metric == 'efficiency':
-            bin_metrics.append(tp/(tp+fn))
+            performance = tp/(tp+fn)
         else:
-            bin_metrics.append(fp/(fp + tn))
+            performance = fp/(fp + tn)
+
+        N = len(bin_idxs)
+
+        bin_metrics.append(performance)
+        y_err.append( np.sqrt(performance*(1 - performance) / N))
 
     #plot metrics
+    bin_centers = (true_bins[:-1] + true_bins[1:]) / 2
+    
+    """
     bin_centers = [(bins[i+1] - bins[i])/2 + bins[i] for i in range(0,len(bins)-1)]
     bin_centers.append((np.max(true_momentum) - bins[-1])/2 + bins[-1] if metric=='mu fpr' else (1000 - bins[-1])/2 + bins[-1])
+    """
+
     if metric == 'efficiency':
         metric_name = 'e- Signal Efficiency'
     else :
         metric_name ='\u03BC- Mis-ID Rate'
-    title = '{} \n vs True Momentum At Reconstructed Momentum Bin \u03BC- Mis-ID Rate of {}%{}'.format(metric_name, fpr_fixed_point*100, title_note)
     
+    title = '{} vs Reconstructed Momentum At Reconstructed Momentum Bin \u03BC- Mis-ID Rate of {}%{}'.format(metric_name, fpr_fixed_point*100, title_note)
+    title = "\n".join(wrap(title, 60))
+
     if ax is None:
         fig, ax = plt.subplots(figsize=(12,6))
     
-    ax.errorbar(bin_centers[:50],bin_metrics[:50],yerr=np.zeros_like(bin_metrics[:50]),fmt=marker,color=color,ecolor='k',elinewidth=0.5,capsize=4,capthick=1,alpha=0.5, linewidth=2)
+    ax.errorbar(bin_centers[:50],bin_metrics[:50],yerr=y_err,fmt=marker,color=color,ecolor='k',elinewidth=0.5,capsize=4,capthick=1,alpha=0.5, linewidth=2)
     ax.grid(b=True, which='major', color='gray', linestyle='--')
     #nax = ax.twinx()
     ax.set_ylabel(metric_name)
-    ax.set_xlabel("True Momentum (MeV/c)", fontsize=label_size)
+    ax.set_xlabel("Reconstructed Momentum (MeV/c)", fontsize=label_size)
     ax.set_title(title)
+
+    ax.set_xlim([0, 1050])
 
     if yrange is not None: 
         ax.set_ylim(yrange) 
@@ -732,8 +814,9 @@ def plot_binned_response(softmaxes, labels, particle_names, binning_features, bi
     if extra_panes is None: extra_panes=[]
 
     label_size = 18
-    fig, axes = plt.subplots(len(particle_names),noutputs+len(extra_panes),figsize=(12*len(particle_names),12*noutputs+len(extra_panes)))
+    fig, axes = plt.subplots(len(particle_names),noutputs+len(extra_panes),figsize=(12*len(particle_names),12*noutputs+len(extra_panes)), facecolor='w')
 
+    #axes = axes.reshape(-1)
     log_axes = axes.flatten()[log_scales]
 
     #bin by whatever feature
