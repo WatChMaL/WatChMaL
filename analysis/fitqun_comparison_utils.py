@@ -124,7 +124,7 @@ def load_gamma_fq_output(fq_mapping_path, gamma_file_path, e_file_path, mu_file_
 
     gamma_set_gamma_nll = gamma_file_data.arrays('fq2elecnll')['fq2elecnll']
 
-    gamma_set_discriminator = np.array(gamma_set_gamma_nll - gamma_set_e_nll)
+    gamma_set_discriminator = np.array(gamma_set_gamma_nll - gamma_set_mu_nll)
 
     # Load electron results
     e_set_nll    = e_file_data.arrays('fq1rnll')['fq1rnll']
@@ -133,7 +133,7 @@ def load_gamma_fq_output(fq_mapping_path, gamma_file_path, e_file_path, mu_file_
 
     e_set_gamma_nll    = e_file_data.arrays('fq2elecnll')['fq2elecnll']
 
-    e_set_discriminator = np.array(e_set_gamma_nll - e_set_e_nll)
+    e_set_discriminator = np.array(e_set_gamma_nll - e_set_mu_nll)
 
     # Load mu results
     mu_set_nll   = mu_file_data.arrays('fq1rnll')['fq1rnll']
