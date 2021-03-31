@@ -7,7 +7,7 @@ num_val_batches: 32
 
 checkpointing: False
 
-early_stopping: True
+early_stopping: False
 patience: 5
 
 data_loaders:
