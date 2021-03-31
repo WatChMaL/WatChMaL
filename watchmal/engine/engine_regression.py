@@ -466,7 +466,7 @@ class RegressionEngine:
     def restore_best_state(self, placeholder):
         """
         Restore model using best model found in current directory
-        Args:validation
+        Args:
             placeholder     ... extraneous; hydra configs are not allowed to be empty
         Outputs: model params are now those loaded from best model file
         """
