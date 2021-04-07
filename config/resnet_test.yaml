@@ -4,8 +4,8 @@ gpu_list:
 seed: null
 dump_path: './outputs/'
 defaults:
-    - data: iwcd_postveto_nomichel
-    - data/dataset: iwcd_cnn
+    - data: iwcd_short
+    - data/dataset: iwcd_cnn_short
     - model: classifier
     - model/feature_extractor: resnet18
     - model/classification_network: resnet_fc
