@@ -69,7 +69,7 @@ class DigiTruthMapping:
         self.data_for_truth = dict( zip(dtkeys,dtvals) )
         self.truth_for_data = dict( zip(mckeys,mcvals))  
 
-        self.save_mappings()      
+        #self.save_mappings()      
             
     def save_mappings(slef):
         self.save_object( 'truth_for_data.pkl', self.truth_for_data )
