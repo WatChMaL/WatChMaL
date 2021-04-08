@@ -23,7 +23,7 @@ class LinearRegression(nn.Module):
         self.cl_fc1 = nn.Linear(num_inputs, int(num_inputs // 2))
         self.cl_fc2 = nn.Linear(int(num_inputs // 2), int(num_inputs // 4))
         self.cl_fc3 = nn.Linear(int(num_inputs // 4), int(num_inputs // 8))
-        self.cl_fc4 = nn.Linear(int(num_inputs // 8), 1)
+        self.cl_fc4 = nn.Linear(int(num_inputs // 8), 3)
         self.relu = nn.ReLU(inplace=True)
 
     def forward(self, x):
