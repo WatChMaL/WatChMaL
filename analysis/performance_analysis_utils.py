@@ -18,18 +18,7 @@ def remove_indices(array, cut_idxs):
     return np.delete(array, cut_idxs, 0)
 
 
-def multi_plot_fixed_operating_performance(subset_energies, energy_bins, subset_d_to_wall, d_to_wall_bins, subset_softmax_list, subset_labels_list,
-                             label_dict, ignore_dict, threshold,muon_comparison=False, use_rejection=False, linecolors=None, line_titles=None):
-    fig1, axes1 = plt.subplots(3, 3, figsize=(25, 25), facecolor='w')
-    fig2, axes2 = plt.subplots(3, 3, figsize=(25*1.5, 25), facecolor='w')
-
-    for idx, (subset_softmax, subset_labels) in enumerate(zip(subset_softmax_list, subset_labels_list)):
-        # TODO: fix args
-        plot_fixed_operating_performance(subset_energies, energy_bins, subset_d_to_wall, d_to_wall_bins, subset_softmax, subset_labels, label_dict, ignore_dict, threshold, axes1, axes2, muon_comparison, use_rejection, 
-                                         linecolors[idx], line_titles[idx])
-
-
-def compute_fixed_operating_performance(scores, labels, fixed_binning_features, plot_binning_features, fpr_fixed_point, index_dict, fixed_bin_size=50, plot_bins=20, metric='efficiency'):
+def compute_fixed_operating_performance(scores, labels, fixed_binning_features, plot_binning_features, fpr_fixed_point, index_dict, fixed_bin_size=50, plot_bins=20, metric='efficiency', desired_labels=['$e$','$\mu$']):
     '''
     Plots a metric as a function of a physical parameter, at a fixed operating point of another metric.
 
@@ -58,7 +47,7 @@ def compute_fixed_operating_performance(scores, labels, fixed_binning_features, 
     label_size = 14
 
     # Remove gamma events
-    scores, labels, plot_binning_features, fixed_binning_features = separate_particles([scores, labels, plot_binning_features, fixed_binning_features],labels,index_dict,desired_labels=['$e$','$\mu$'])
+    scores, labels, plot_binning_features, fixed_binning_features = separate_particles([scores, labels, plot_binning_features, fixed_binning_features],labels,index_dict, desired_labels=desired_labels) #,desired_labels=['$e$','$\mu$'])
     scores, labels, plot_binning_features, fixed_binning_features = np.concatenate(scores), np.concatenate(labels), np.concatenate(plot_binning_features), np.concatenate(fixed_binning_features)
 
     # Bin by fixed_binning_features
@@ -200,13 +189,13 @@ def compute_multi_var_fixed_operating_performance(
                              fixed_binning_features, fixed_bin_size,
                              binning_features, binning_bin_size, 
                              plot_binning_features, plot_bins,
-                             index_dict, ignore_dict, threshold, axes1=None, axes2=None, 
+                             index_dict, ignore_dict, axes1=None, axes2=None, 
                              muon_comparison=False, use_rejection=False, linecolor='b', line_title=None,
                              metric='efficiency', ax=None, cmap=None):
     '''
     Plot performance as a function of a single variable
     '''
-
+    """
     fpr_fixed_point        = 0.005
     fixed_bin_label        = 'Reconstructed Momentum'
     binning_bin_label      = 'Energy'
@@ -218,6 +207,7 @@ def compute_multi_var_fixed_operating_performance(
     xrange                 = [0, 1000]
     verbose                = False
 
+    """
     """
     fpr_fixed_point        = 0.005
     fixed_bin_label        = 'Reconstructed Momentum'
@@ -231,8 +221,7 @@ def compute_multi_var_fixed_operating_performance(
     verbose                = False
 
     """
-
-    """
+    
     fpr_fixed_point        = 0.005
     fixed_bin_label        = 'Reconstructed Momentum'
     binning_bin_label      = 'Azimuth'
@@ -243,7 +232,6 @@ def compute_multi_var_fixed_operating_performance(
     yrange                 = None
     xrange                 = None
     verbose                = False
-    """
     
 
     assert plot_binning_features.shape[0]  == scores.shape[0], 'Error: plot_binning_features must have same length as softmaxes'
@@ -328,12 +316,14 @@ def compute_multi_var_fixed_operating_performance(
         all_bin_metrics.append(bin_metrics)
         all_yerr.append(y_err)
 
-    plot_multi_var_fixed_operating_performance(all_true_plotting_bins, all_bin_metrics, all_yerr, true_bins, marker, cmap, fixed_bin_label, binning_bin_label, plot_bin_label, 
-                                     fpr_fixed_point, title_note, metric, yrange, xrange, ax)
+    return all_true_plotting_bins, all_bin_metrics, all_yerr, true_bins
+
+    #plot_multi_var_fixed_operating_performance(all_true_plotting_bins, all_bin_metrics, all_yerr, true_bins, marker, cmap, fixed_bin_label, binning_bin_label, plot_bin_label, 
+    #                                 fpr_fixed_point, title_note, metric, yrange, xrange, ax)
 
 def plot_multi_var_fixed_operating_performance(all_true_plotting_bins, all_bin_metrics, all_yerr, true_bins, marker, cmap, fixed_bin_label, binning_bin_label, plot_bin_label, 
                                      fpr_fixed_point, title_note, metric=None, yrange=None, xrange=None, ax=None):
-    
+
     label_size = 14
     c = cmap(np.linspace(0.4,1,len(all_true_plotting_bins)))
     

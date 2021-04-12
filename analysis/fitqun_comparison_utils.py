@@ -16,15 +16,15 @@ def load_mu_fq_output(fq_mapping_path, gamma_file_path, e_file_path, mu_file_pat
     return load_fq_output(fq_mapping_path, gamma_file_path, e_file_path, mu_file_path, pion_file_path, comparison='e_v_mu')
 
 
-def load_gamma_fq_output(fq_mapping_path, gamma_file_path, e_file_path, mu_file_path, pion_file_path):
-    return load_fq_output(fq_mapping_path, gamma_file_path, e_file_path, mu_file_path, pion_file_path, comparison='e_v_gamma')
+def load_gamma_fq_output(fq_mapping_path, gamma_file_path, e_file_path, mu_file_path, pion_file_path, discriminator='e_v_gamma'):
+    return load_fq_output(fq_mapping_path, gamma_file_path, e_file_path, mu_file_path, pion_file_path, comparison='e_v_gamma', discriminator=discriminator)
 
 
 def load_pion_fq_output(fq_mapping_path, gamma_file_path, e_file_path, mu_file_path, pion_file_path):
     return load_fq_output(fq_mapping_path, gamma_file_path, e_file_path, mu_file_path, pion_file_path, comparison='e_v_pion')
 
 
-def load_fq_output(fq_mapping_path, gamma_file_path, e_file_path, mu_file_path, pion_file_path, comparison):
+def load_fq_output(fq_mapping_path, gamma_file_path, e_file_path, mu_file_path, pion_file_path, comparison, discriminator=None):
     # TODO: rework to fit current framework
     '''
     load_fq_output(mapping_indices_path, test_idxs, cut_path, cut_list)
@@ -60,6 +60,8 @@ def load_fq_output(fq_mapping_path, gamma_file_path, e_file_path, mu_file_path, 
 
     gamma_set_e_nll, gamma_set_mu_nll = gamma_set_nll[:, 0, 1], gamma_set_nll[:, 0, 2]
 
+    gamma_set_gamma_nll = gamma_file_data.arrays('fq2elecnll')['fq2elecnll']
+
     gamma_fqpi0mom1 = gamma_file_data.arrays('fqpi0mom1')['fqpi0mom1'][:, 0]
     gamma_fqpi0mom2 = gamma_file_data.arrays('fqpi0mom2')['fqpi0mom2'][:, 0]
     gamma_fqpi0nll  = gamma_file_data.arrays('fqpi0nll')['fqpi0nll'][:, 0]
@@ -69,6 +71,8 @@ def load_fq_output(fq_mapping_path, gamma_file_path, e_file_path, mu_file_path, 
     e_set_nll    = e_file_data.arrays('fq1rnll')['fq1rnll']
 
     e_set_e_nll, e_set_mu_nll = e_set_nll[:, 0, 1], e_set_nll[:, 0, 2]
+
+    e_set_gamma_nll = e_file_data.arrays('fq2elecnll')['fq2elecnll']
 
     e_fqpi0mom1 = e_file_data.arrays('fqpi0mom1')['fqpi0mom1'][:, 0]
     e_fqpi0mom2 = e_file_data.arrays('fqpi0mom2')['fqpi0mom2'][:, 0]
@@ -80,6 +84,8 @@ def load_fq_output(fq_mapping_path, gamma_file_path, e_file_path, mu_file_path, 
 
     mu_set_e_nll, mu_set_mu_nll = mu_set_nll[:, 0, 1], mu_set_nll[:, 0, 2]
 
+    #mu_set_gamma_nll = mu_file_data.arrays('fq2elecnll')['fq2elecnll']
+
     mu_fqpi0mom1 = mu_file_data.arrays('fqpi0mom1')['fqpi0mom1'][:, 0]
     mu_fqpi0mom2 = mu_file_data.arrays('fqpi0mom2')['fqpi0mom2'][:, 0]
     mu_fqpi0nll  = mu_file_data.arrays('fqpi0nll')['fqpi0nll'][:, 0]
@@ -90,12 +96,15 @@ def load_fq_output(fq_mapping_path, gamma_file_path, e_file_path, mu_file_path, 
 
     pion_set_e_nll, pion_set_mu_nll = pion_set_nll[:, 0, 1], pion_set_nll[:, 0, 2]
     
+    #pion_set_gamma_nll = pion_file_data.arrays('fq2elecnll')['fq2elecnll']
+
     pion_fqpi0mom1 = pion_file_data.arrays('fqpi0mom1')['fqpi0mom1'][:, 0]
     pion_fqpi0mom2 = pion_file_data.arrays('fqpi0mom2')['fqpi0mom2'][:, 0]
     pion_fqpi0nll  = pion_file_data.arrays('fqpi0nll')['fqpi0nll'][:, 0]
     pion_fqpi0mass = pion_file_data.arrays('fqpi0mass')['fqpi0mass'][:, 0]
 
     # Define discriminators
+    # (false_label_nll - true_label_nll)
     if comparison == 'e_v_mu':
         e_set_discriminator     = np.array(e_set_mu_nll - e_set_e_nll)
         mu_set_discriminator    = np.array(mu_set_mu_nll - mu_set_e_nll) 
@@ -103,16 +112,26 @@ def load_fq_output(fq_mapping_path, gamma_file_path, e_file_path, mu_file_path, 
         pion_set_discriminator  = np.array(pion_set_mu_nll - pion_set_e_nll)
     elif comparison == 'e_v_gamma':
         # NOTE: mu outputs currently don't have 2elec fit
-        # mu_set_gamma_nll   = mu_file_data.arrays('fq2elecnll')['fq2elecnll']
-        gamma_set_discriminator = np.array(gamma_set_gamma_nll - gamma_set_mu_nll)
-        e_set_discriminator     = np.array(e_set_gamma_nll - e_set_mu_nll)
-        mu_set_discriminator    = np.array( - mu_set_e_nll) 
-        pion_set_discriminator  = np.array(pion_set_gamma_nll - pion_set_mu_nll)
+        if discriminator == 'e_v_gamma':
+            gamma_set_discriminator = np.array(gamma_set_gamma_nll - gamma_set_e_nll)
+            e_set_discriminator     = np.array(e_set_gamma_nll - e_set_e_nll)
+            mu_set_discriminator    = np.array( - mu_set_e_nll) 
+            pion_set_discriminator  = np.array( - pion_set_e_nll)
+        elif discriminator == 'e_v_mu':
+            e_set_discriminator     = np.array(e_set_e_nll - e_set_mu_nll)
+            mu_set_discriminator    = np.array(mu_set_e_nll - mu_set_mu_nll) 
+            gamma_set_discriminator = np.array(gamma_set_e_nll - gamma_set_mu_nll)
+            pion_set_discriminator  = np.array(pion_set_e_nll - pion_set_mu_nll)
+        elif discriminator == 'gamma_v_mu':
+            gamma_set_discriminator = np.array(gamma_set_gamma_nll - gamma_set_mu_nll)
+            e_set_discriminator     = np.array(e_set_gamma_nll - e_set_mu_nll)
+            mu_set_discriminator    = np.array( - mu_set_e_nll) 
+            pion_set_discriminator  = np.array( - pion_set_mu_nll)
     elif comparison == 'e_v_pion':
-        e_set_discriminator     = np.array(e_set_e_nll - e_fqpi0nll)
-        mu_set_discriminator    = np.array(mu_set_e_nll - mu_fqpi0nll) 
         gamma_set_discriminator = np.array(gamma_set_e_nll - gamma_fqpi0nll)
-        pion_set_discriminator  = np.array(pion_set_e_nll - pion_fqpi0nll)
+        e_set_discriminator     = np.array(e_fqpi0nll - e_set_e_nll)
+        mu_set_discriminator    = np.array(mu_fqpi0nll - mu_set_e_nll)
+        pion_set_discriminator  = np.array(pion_fqpi0nll - pion_set_e_nll)
 
     # Construct likelihoods
     fq_likelihoods = np.concatenate((e_set_discriminator[e_fq_indices],
