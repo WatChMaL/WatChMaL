@@ -14,11 +14,102 @@ from WatChMaL.analysis.comparison_utils import multi_collapse_test_output
 from WatChMaL.analysis.plot_utils import separate_particles
 
 
-def remove_indices(array, cut_idxs):
-    return np.delete(array, cut_idxs, 0)
-
 # ========================================================================
 # Single Variable Plot Functions
+
+def compute_metrics(scores, labels, plotting_bin_idxs_list,
+    #plot_bins, plotting_bin_assignments, 
+    thresholds_per_event, index_dict, metric='efficiency'):
+    
+    '''
+    plotting_bin_idxs_list = [[]]*plot_bins
+
+    for bin_idx in range(plot_bins):
+        bin_num = bin_idx + 1 #these are one-indexed for some reason
+        plotting_bin_idxs_list[bin_idx] = np.where(plotting_bin_assignments == bin_num)[0]
+    '''
+
+    # Find metrics for each plot_binning_features bin
+    bin_metrics, y_err = [],[]
+    for bin_idxs in plotting_bin_idxs_list:
+        pred_pos_idxs = np.where(scores[bin_idxs] - thresholds_per_event[bin_idxs] > 0)[0]
+        pred_neg_idxs = np.where(scores[bin_idxs] - thresholds_per_event[bin_idxs] < 0)[0]
+
+        fp = np.where(labels[bin_idxs[pred_pos_idxs]] == index_dict['$\mu$'] )[0].shape[0]
+        tp = np.where(labels[bin_idxs[pred_pos_idxs]] == index_dict['$e$'] )[0].shape[0]
+        fn = np.where(labels[bin_idxs[pred_neg_idxs]] == index_dict['$e$'] )[0].shape[0]
+        tn = np.where(labels[bin_idxs[pred_neg_idxs]] == index_dict['$\mu$'] )[0].shape[0]
+        
+        # TODO: division by zero problem
+        if metric == 'efficiency':
+            performance = tp/(tp + fn + 1e-10)
+        else:
+            performance = fp/(fp + tn + 1e-10)
+
+        N = len(bin_idxs) + 1e-10
+
+        bin_metrics.append(performance)
+        y_err.append( np.sqrt(performance*(1 - performance) / N))
+
+    return bin_metrics, y_err
+
+
+def get_fixed_bin_assignments(fixed_binning_features, fixed_bin_size):
+    '''
+    Bin by fixed_binning_features
+    '''
+    fixed_bins_true = [0. + fixed_bin_size * i for i in range(math.ceil(np.max(fixed_binning_features)/fixed_bin_size))]   
+    fixed_bins = fixed_bins_true[0:-1]
+
+    recons_mom_bin_assignments = np.digitize(fixed_binning_features, fixed_bins)
+    recons_mom_bin_idxs_list = [[]]*len(fixed_bins)
+
+    for bin_idx in range(len(fixed_bins)):
+        bin_num = bin_idx + 1 #these are one-indexed for some reason
+        recons_mom_bin_idxs_list[bin_idx] = np.where(recons_mom_bin_assignments == bin_num)[0]
+    
+    return recons_mom_bin_idxs_list
+
+def get_plot_bin_assignments(plot_binning_features, plot_bins):
+    '''
+    Bin by plot_binning_features
+    '''
+    if isinstance(plot_bins, int):
+        _, true_bins = np.histogram(plot_binning_features, bins=plot_bins, range=(np.min(plot_binning_features), np.max(plot_binning_features)))
+    else:        
+        true_bins = plot_bins
+    
+    bins = true_bins[0:-1]
+
+    true_mom_bin_assignments = np.digitize(plot_binning_features, bins)
+    true_mom_bin_idxs_list = [[]]*len(bins)
+
+    for bin_idx in range(len(bins)):
+        bin_num = bin_idx + 1 #these are one-indexed for some reason
+        true_mom_bin_idxs_list[bin_idx] = np.where(true_mom_bin_assignments == bin_num)[0]
+    
+    return true_bins, true_mom_bin_idxs_list
+
+def get_threshold_assignments(scores, labels, recons_mom_bin_idxs_list, fpr_fixed_point, index_dict):
+    '''
+    Compute thresholds giving fixed fpr per fixed_binning_features bin
+    '''
+    thresholds_per_event = np.ones_like(labels, dtype=float)
+    for bin_idx, bin_idxs in enumerate(recons_mom_bin_idxs_list): 
+        # TODO: include bin only if shape > 0
+        if bin_idxs.shape[0] > 0:
+            fps, tps, thresholds = binary_clf_curve(labels[bin_idxs], scores[bin_idxs], pos_label=index_dict['$e$'])
+
+            fns = tps[-1] - tps
+            tns = fps[-1] - fps
+            fprs = fps/(fps + tns)
+
+            operating_point_idx = (np.abs(fprs - fpr_fixed_point)).argmin()
+            thresholds_per_event[bin_idxs] = thresholds[operating_point_idx]
+        else:
+            print("Empty bin")
+    
+    return thresholds_per_event
 
 def compute_fixed_operating_performance(scores, labels, fixed_binning_features, plot_binning_features, fpr_fixed_point, index_dict, fixed_bin_size=50, plot_bins=20, metric='efficiency', desired_labels=['$e$','$\mu$'], verbose=False):
     '''
@@ -51,10 +142,12 @@ def compute_fixed_operating_performance(scores, labels, fixed_binning_features, 
     # Remove gamma events
     true_label = desired_labels[0]
     false_label = desired_labels[1]
+
     scores, labels, plot_binning_features, fixed_binning_features = separate_particles([scores, labels, plot_binning_features, fixed_binning_features],labels,index_dict, desired_labels=desired_labels) #,desired_labels=['$e$','$\mu$'])
     scores, labels, plot_binning_features, fixed_binning_features = np.concatenate(scores), np.concatenate(labels), np.concatenate(plot_binning_features), np.concatenate(fixed_binning_features)
 
     # Bin by fixed_binning_features
+    '''
     fixed_bins_true = [0. + fixed_bin_size * i for i in range(math.ceil(np.max(fixed_binning_features)/fixed_bin_size))]   
     fixed_bins = fixed_bins_true[0:-1]
 
@@ -64,7 +157,11 @@ def compute_fixed_operating_performance(scores, labels, fixed_binning_features, 
     for bin_idx in range(len(fixed_bins)):
         bin_num = bin_idx + 1 #these are one-indexed for some reason
         recons_mom_bin_idxs_list[bin_idx] = np.where(recons_mom_bin_assignments == bin_num)[0]
+    '''
 
+    recons_mom_bin_idxs_list = get_fixed_bin_assignments(fixed_binning_features, fixed_bin_size)
+
+    '''
     # Compute thresholds giving fixed fpr per fixed_binning_features bin
     thresholds_per_event = np.ones_like(labels, dtype=float)
     for bin_idx, bin_idxs in enumerate(recons_mom_bin_idxs_list): 
@@ -80,7 +177,11 @@ def compute_fixed_operating_performance(scores, labels, fixed_binning_features, 
             thresholds_per_event[bin_idxs] = thresholds[operating_point_idx]
         else:
             print("Empty bin")
+    '''
 
+    thresholds_per_event = get_threshold_assignments(scores, labels, recons_mom_bin_idxs_list, fpr_fixed_point, index_dict)
+
+    '''
     # Bin by plot_binning_features
     if isinstance(plot_bins, int):
         _, true_bins = np.histogram(plot_binning_features, bins=plot_bins, range=(np.min(plot_binning_features), np.max(plot_binning_features)))
@@ -95,7 +196,11 @@ def compute_fixed_operating_performance(scores, labels, fixed_binning_features, 
     for bin_idx in range(len(bins)):
         bin_num = bin_idx + 1 #these are one-indexed for some reason
         true_mom_bin_idxs_list[bin_idx] = np.where(true_mom_bin_assignments == bin_num)[0]
+    '''
 
+    true_bins, true_mom_bin_idxs_list = get_plot_bin_assignments(plot_binning_features, plot_bins)
+
+    '''
     # Find metrics for each plot_binning_features bin
     bin_metrics, yerr = [],[]
     for bin_idxs in true_mom_bin_idxs_list:
@@ -122,6 +227,16 @@ def compute_fixed_operating_performance(scores, labels, fixed_binning_features, 
 
         bin_metrics.append(performance)
         yerr.append( np.sqrt(performance*(1 - performance) / N))
+    '''
+    
+    bin_metrics, yerr = compute_metrics(scores = scores, 
+                                         labels = labels,
+                                         plotting_bin_idxs_list = true_mom_bin_idxs_list,
+                                         thresholds_per_event = thresholds_per_event,
+                                         index_dict = index_dict,
+                                         metric = metric)
+
+    #scores, labels, plot_bins, true_mom_bin_idxs_list, thresholds_per_event, index_dict, metric='efficiency')
 
     # Plot metrics
     bin_centers = (true_bins[:-1] + true_bins[1:]) / 2
@@ -169,38 +284,6 @@ def plot_fixed_operating_performance(bin_centers, bin_metrics, yerr, marker, col
 
 # ========================================================================
 # Multiple Variable Plot Functions
-
-def compute_metrics(scores, labels, plot_bins, plotting_bin_assignments, thresholds_per_event, index_dict, metric='efficiency'):
-    
-    plotting_bin_idxs_list = [[]]*plot_bins
-
-    for bin_idx in range(plot_bins):
-        bin_num = bin_idx + 1 #these are one-indexed for some reason
-        plotting_bin_idxs_list[bin_idx] = np.where(plotting_bin_assignments == bin_num)[0]
-    
-    # Find metrics for each plot_binning_features bin
-    bin_metrics, y_err = [],[]
-    for bin_idxs in plotting_bin_idxs_list:
-        pred_pos_idxs = np.where(scores[bin_idxs] - thresholds_per_event[bin_idxs] > 0)[0]
-        pred_neg_idxs = np.where(scores[bin_idxs] - thresholds_per_event[bin_idxs] < 0)[0]
-
-        fp = np.where(labels[bin_idxs[pred_pos_idxs]] == index_dict['$\mu$'] )[0].shape[0]
-        tp = np.where(labels[bin_idxs[pred_pos_idxs]] == index_dict['$e$'] )[0].shape[0]
-        fn = np.where(labels[bin_idxs[pred_neg_idxs]] == index_dict['$e$'] )[0].shape[0]
-        tn = np.where(labels[bin_idxs[pred_neg_idxs]] == index_dict['$\mu$'] )[0].shape[0]
-        
-        # TODO: division by zero problem
-        if metric == 'efficiency':
-            performance = tp/(tp + fn + 1e-10)
-        else:
-            performance = fp/(fp + tn + 1e-10)
-
-        N = len(bin_idxs) + 1e-10
-
-        bin_metrics.append(performance)
-        y_err.append( np.sqrt(performance*(1 - performance) / N))
-
-    return bin_metrics, y_err
 
 def compute_multi_var_fixed_operating_performance(
                              scores, labels,
@@ -336,10 +419,6 @@ def plot_multi_var_fixed_operating_performance(all_true_plotting_bins, all_bin_m
         secax = ax.secondary_yaxis('right')
             
         ax.legend(prop={'size': 16}, bbox_to_anchor=(1.05, 1), loc='upper left')
-
-
-
-
 
 
 
@@ -612,6 +691,13 @@ def plot_2d_hist_ratio(dist_1_x,dist_1_y,dist_2_x, dist_2_y,bins=(150,150),fig=N
     if xlabel is not None: ax.set_xlabel(xlabel)
     if ylabel is not None: ax.set_ylabel(ylabel)
     return fig
+
+# ========================================================================
+# Helper Functions
+
+def remove_indices(array, cut_idxs):
+    return np.delete(array, cut_idxs, 0)
+
 
 
 def binary_clf_curve(y_true, y_score, pos_label=None, sample_weight=None):
