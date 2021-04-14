@@ -1,6 +1,5 @@
 gpu_list:
-    - 0
-    - 1
+    - 5
 seed: null
 dump_path: './outputs/'
 defaults:
