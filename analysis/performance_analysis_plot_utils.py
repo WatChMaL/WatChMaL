@@ -8,6 +8,7 @@ import matplotlib
 import numpy as np
 
 from WatChMaL.analysis.performance_analysis_utils import compute_fixed_operating_performance, plot_fixed_operating_performance, compute_multi_var_fixed_operating_performance, plot_multi_var_fixed_operating_performance
+from WatChMaL.analysis.performance_analysis_utils import compute_pion_fixed_operating_performance, plot_pion_fixed_operating_performance
 
 # ========================================================================
 # Single Variable Plotting Functions
@@ -74,6 +75,9 @@ def plot_azimuth_binned_performance(azimuth_features, **kwargs):
 # Multiple Variable Plotting Functions
 
 def legend_without_duplicate_labels(ax):
+    '''
+    Merges legend elements with the same label (eliminates duplicate labels for models plotted with the same energy range)
+    '''
     handles, labels = ax.get_legend_handles_labels()
 
     handle_dict = dict((k, []) for k in labels)
@@ -151,6 +155,33 @@ def plot_zenith_binned_in_azimuth(zenith_features, **kwargs):
 def plot_azimuth_binned_in_zenith(azimuth_features, **kwargs):
     return plot_multi_var_binned_performance(binning_bin_label='Zenith', plot_bin_label='Azimuth', plot_binning_features=azimuth_features, **kwargs)
 
+
+# ========================================================================
+# Define equivalent plotting functions for pions
+
+def plot_single_var_pion_binned_performance(
+                                            scores, labels, 
+                                            fixed_binning_features, fixed_bin_label, 
+                                            plot_binning_features, plot_bin_label,
+                                            p0, p1, pi0mass,
+                                            fpr_fixed_point, index_dict, fixed_bin_size=50, plot_bins=20, 
+                                            marker='o--',color='k',title_note='', metric='efficiency',yrange=None,xrange=None,
+                                            ax = None, show_x_err=True, publication=False):
+
+    bin_centers, bin_metrics, yerr = compute_pion_fixed_operating_performance(
+                                     scores, labels, 
+                                     fixed_binning_features,
+                                     plot_binning_features,
+                                     p0, p1, pi0mass,
+                                     fpr_fixed_point, index_dict, fixed_bin_size, plot_bins, 
+                                     metric)
+
+    plot_pion_fixed_operating_performance(bin_centers, bin_metrics, yerr,
+                                    fixed_bin_label, 
+                                     plot_bin_label,
+                                     fpr_fixed_point, index_dict, fixed_bin_size, plot_bins, 
+                                     marker,color,title_note, metric,yrange,xrange,
+                                     ax, show_x_err, publication)
 # ========================================================================
 # Define helper functions
 

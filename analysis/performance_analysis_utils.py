@@ -338,16 +338,19 @@ def plot_multi_var_fixed_operating_performance(all_true_plotting_bins, all_bin_m
         ax.legend(prop={'size': 16}, bbox_to_anchor=(1.05, 1), loc='upper left')
 
 
-def plot_pion_fixed_operating_performance(
+
+
+
+
+
+def compute_pion_fixed_operating_performance(
                                      scores, labels, 
-                                     fixed_binning_features, fixed_bin_label, 
-                                     plot_binning_features, plot_bin_label,
+                                     fixed_binning_features,  
+                                     plot_binning_features, 
                                      p0, p1, pi0mass,
-                                     fpr_fixed_point, index_dict, fixed_bin_size=50, plot_bins=20, 
-                                     marker='o--',color='k',title_note='', metric='efficiency',yrange=None,xrange=None,
-                                     ax = None, show_x_err=True, publication=False):
+                                     fpr_fixed_point, index_dict, fixed_bin_size=50, plot_bins=20, metric='efficiency'):
     '''
-    Plots a metric as a function of a physical parameter, at a fixed operating point of another metric using pion cuts.
+    Plots a metric as a function of a physical parameter, at a fixed operating point of another metric using pion (2 parameter) cuts.
     TODO: scores must be fq1rnll[0][1] - fqpi0nll[0]
     '''
 
@@ -426,8 +429,18 @@ def plot_pion_fixed_operating_performance(
         bin_metrics.append(performance)
         y_err.append( np.sqrt(performance*(1 - performance) / N))
 
-    # Plot metrics
     bin_centers = (true_bins[:-1] + true_bins[1:]) / 2
+    
+    return bin_centers, bin_metrics, y_err
+
+
+def plot_pion_fixed_operating_performance( bin_centers, bin_metrics, y_err,
+                                     fixed_bin_label, plot_bin_label, fpr_fixed_point, 
+                                     index_dict, fixed_bin_size=50, plot_bins=20, 
+                                     marker='o--',color='k',title_note='', metric='efficiency',yrange=None,xrange=None,
+                                     ax = None, show_x_err=True, publication=False):
+    # Plot metrics
+    label_size = 14
     
     if metric == 'efficiency':
         metric_name = '$e$- Efficiency of $\pi_0$ Rejection Cut'
@@ -461,7 +474,6 @@ def plot_pion_fixed_operating_performance(
     
     secax = ax.secondary_yaxis('right')
 
-    return plot_binning_features, thresholds_per_event
 
 
 def plot_binned_response(softmaxes, labels, particle_names, binning_features, binning_label,efficiency, bins, p_bins, index_dict, extra_panes=None, log_scales=[], legend_label_dict=None, wrap_size=35):
