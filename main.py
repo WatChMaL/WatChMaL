@@ -118,7 +118,11 @@ def main_worker_function(rank, ngpus_per_node, is_distributed, config):
     for task, task_config in config.tasks.items():
         if 'optimizers' in task_config:
             engine.configure_optimizers(task_config.optimizers)
-    
+
+    for task, task_config in config.tasks.items():
+        if 'loss' in task_config:
+            engine.configure_loss(task_config.loss)
+
     # Perform tasks
     for task, task_config in config.tasks.items():
         getattr(engine, task)(task_config)

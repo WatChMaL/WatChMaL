@@ -62,6 +62,7 @@ class RegressionEngine:
         self.rootfiles = None
         self.angles = None
         self.event_ids = None
+        self.positions = None
 
         # logging attributes
         self.train_log = CSVData(self.dirpath + "log_train_{}.csv".format(self.rank))
@@ -69,7 +70,8 @@ class RegressionEngine:
         if self.rank == 0:
             self.val_log = CSVData(self.dirpath + "log_val.csv")
 
-        self.criterion = nn.MSELoss()
+    def configure_loss(self, loss_config):
+        self.criterion = instantiate(loss_config)
 
     def configure_optimizers(self, optimizer_config):
         """
@@ -126,10 +128,11 @@ class RegressionEngine:
             # Move the data and the labels to the GPU (if using CPU this has no effect)
             self.data = self.data.to(self.device)
             self.energies = self.energies.to(self.device)
+            self.positions = torch.squeeze(self.positions).to(self.device)
 
             model_out = self.model(self.data)
 
-            self.loss = self.criterion(model_out, self.energies)
+            self.loss = self.criterion(model_out, self.positions)
 
         return {'loss': self.loss.detach().cpu().item(),
                 'output': model_out.detach().cpu().numpy(),
@@ -231,6 +234,7 @@ class RegressionEngine:
                         self.labels = val_data['labels'].long()
                         self.energies = val_data['energies'].float()
                         self.angles = val_data['angles'].float()
+                        self.positions = val_data['positions'].float()
                         self.event_ids = val_data['event_ids'].float()
 
                         val_res = self.forward(False)
@@ -253,7 +257,6 @@ class RegressionEngine:
                     else:
                         global_val_metrics = local_val_metrics
                         print(type(global_val_metrics["loss"]))
-                        print("not distributed")
 
                     if self.rank == 0:
                         # Save if this is the best model so far
@@ -282,6 +285,7 @@ class RegressionEngine:
                 self.energies = train_data['energies'].float()
                 self.angles = train_data['angles'].float()
                 self.event_ids = train_data['event_ids'].float()
+                self.positions = train_data['positions'].float()
 
                 # Call forward: make a prediction & measure the average error using data = self.data
                 res = self.forward(True)
@@ -361,13 +365,14 @@ class RegressionEngine:
             self.model.eval()
 
             # Variables for the confusion matrix
-            loss, indices, energies, outputs = [], [], [], []
+            loss, indices, energies, outputs, positions = [], [], [], [], []
 
             # Extract the event data and label from the DataLoader iterator
             for it, eval_data in enumerate(self.data_loaders["test"]):
                 # load data
                 self.data = copy.deepcopy(eval_data['data'].float())
                 self.energies = copy.deepcopy(eval_data['energies'].float())
+                self.positions = copy.deepcopy(eval_data['positions'].float())
 
                 eval_indices = copy.deepcopy(eval_data['indices'].long().to("cpu"))
 
@@ -382,7 +387,8 @@ class RegressionEngine:
                 # Add the local result to the final result
                 indices.extend(eval_indices)
                 energies.extend(self.energies)
-                outputs.extend(result['output'])
+                positions.extend(self.positions)
+                outputs.extend(result['output'])                
 
                 print("eval_iteration : " + str(it) + " eval_loss : " + str(
                     result["loss"]))
@@ -399,6 +405,7 @@ class RegressionEngine:
 
         indices = np.array(indices)
         energies = np.array(energies)
+        positions = np.array(positions)
         outputs = np.array(outputs)
 
         local_eval_results_dict = {"indices": indices, "energies": energies, "outputs": outputs}
@@ -415,6 +422,7 @@ class RegressionEngine:
 
                 indices = np.array(global_eval_results_dict["indices"].cpu())
                 energies = np.array(global_eval_results_dict["energies"].cpu())
+                positions = np.array(global_eval_results_dict["positions"].cpu())
                 outputs = np.array(global_eval_results_dict["outputs"].cpu())
 
         if self.rank == 0:
@@ -425,6 +433,7 @@ class RegressionEngine:
             print("Saving Data...")
             np.save(self.dirpath + "indices.npy", sorted_indices)
             np.save(self.dirpath + "predictions.npy", outputs[sorted_indices])
+            np.save(self.dirpath + "positions.npy", positions[sorted_indices])
 
             # Compute overall evaluation metrics
             val_iterations = np.sum(local_eval_metrics_dict["eval_iterations"])
