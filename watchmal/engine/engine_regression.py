@@ -14,7 +14,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.nn.utils import clip_grad_norm_
 
 # generic imports
-from math import floor, ceil
+from math import floor, ceil, log
 import numpy as np
 from numpy import savez
 import os
@@ -141,12 +141,35 @@ class RegressionEngine:
             self.transverse = np.sqrt(np.power(x_position, 2) + np.power(z_position, 2))
 
             model_out = self.model(self.data)
+            self.pos_scale = self.scale_positions(self.positions).to(self.device)
 
+<<<<<<< Updated upstream
             self.loss = self.criterion(model_out, self.transverse)
+=======
+            self.loss = self.criterion(model_out, self.pos_scale)
+>>>>>>> Stashed changes
 
         return {'loss': self.loss.detach().cpu().item(),
                 'output': model_out.detach().cpu().numpy(),
                 'raw_output': model_out}
+
+    def scale_positions(self, data):
+        x_positions = [data[index][0].cpu().numpy() for index in range(len(data))]
+        y_positions = [data[index][1].cpu().numpy() for index in range(len(data))]
+        z_positions = [data[index][2].cpu().numpy() for index in range(len(data))]
+        x_pos_scale = self.fit_transform(x_positions)
+        y_pos_scale = self.fit_transform(y_positions)
+        z_pos_scale = self.fit_transform(z_positions)
+        x_pos_scale += 0.5 * log(np.var(x_pos_scale))
+        y_pos_scale += 0.5 * log(np.var(y_pos_scale))
+        z_pos_scale += 0.5 * log(np.var(z_pos_scale))
+        coordinates = np.column_stack((tuple(x_pos_scale), tuple(y_pos_scale), tuple(z_pos_scale))).astype(np.float32)
+        return torch.from_numpy(coordinates).float()
+
+    def fit_transform(self, data):
+        mean = np.mean(data)
+        sd = np.std(data)
+        return (data - mean) / sd
 
     def backward(self):
         """
