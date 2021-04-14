@@ -47,13 +47,17 @@ def load_fq_output(fq_mapping_path, gamma_file_path, e_file_path, mu_file_path, 
     gamma_fq_indices = fq_mapping['gamma_fq_indices']
     e_fq_indices     = fq_mapping['e_fq_indices']
     mu_fq_indices    = fq_mapping['mu_fq_indices']
+    
     pion_fq_indices  = fq_mapping['pion_fq_indices']
+    
 
     # Load fiTQun results
     gamma_file_data = uproot.open(gamma_file_path)['fiTQun;1']
     e_file_data     = uproot.open(e_file_path)['fiTQun;1']
     mu_file_data    = uproot.open(mu_file_path)['fiTQun;1']
+    
     pion_file_data  = uproot.open(pion_file_path)['fiTQun;1']
+    
 
     # Load gamma results
     gamma_set_nll = gamma_file_data.arrays('fq1rnll')['fq1rnll']
@@ -92,6 +96,7 @@ def load_fq_output(fq_mapping_path, gamma_file_path, e_file_path, mu_file_path, 
     mu_fqpi0mass = mu_file_data.arrays('fqpi0mass')['fqpi0mass'][:, 0]
 
     # Load pion results
+    
     pion_set_nll   = pion_file_data.arrays('fq1rnll')['fq1rnll']
 
     pion_set_e_nll, pion_set_mu_nll = pion_set_nll[:, 0, 1], pion_set_nll[:, 0, 2]
@@ -102,6 +107,7 @@ def load_fq_output(fq_mapping_path, gamma_file_path, e_file_path, mu_file_path, 
     pion_fqpi0mom2 = pion_file_data.arrays('fqpi0mom2')['fqpi0mom2'][:, 0]
     pion_fqpi0nll  = pion_file_data.arrays('fqpi0nll')['fqpi0nll'][:, 0]
     pion_fqpi0mass = pion_file_data.arrays('fqpi0mass')['fqpi0mass'][:, 0]
+    
 
     # Define discriminators
     # (false_label_nll - true_label_nll)
@@ -109,24 +115,32 @@ def load_fq_output(fq_mapping_path, gamma_file_path, e_file_path, mu_file_path, 
         e_set_discriminator     = np.array(e_set_mu_nll - e_set_e_nll)
         mu_set_discriminator    = np.array(mu_set_mu_nll - mu_set_e_nll) 
         gamma_set_discriminator = np.array(gamma_set_mu_nll - gamma_set_e_nll)
+        
         pion_set_discriminator  = np.array(pion_set_mu_nll - pion_set_e_nll)
+        
     elif comparison == 'e_v_gamma':
         # NOTE: mu outputs currently don't have 2elec fit
         if discriminator == 'e_v_gamma':
             gamma_set_discriminator = np.array(gamma_set_gamma_nll - gamma_set_e_nll)
             e_set_discriminator     = np.array(e_set_gamma_nll - e_set_e_nll)
             mu_set_discriminator    = np.array( - mu_set_e_nll) 
+            
             pion_set_discriminator  = np.array( - pion_set_e_nll)
+            
         elif discriminator == 'e_v_mu':
             e_set_discriminator     = np.array(e_set_e_nll - e_set_mu_nll)
             mu_set_discriminator    = np.array(mu_set_e_nll - mu_set_mu_nll) 
             gamma_set_discriminator = np.array(gamma_set_e_nll - gamma_set_mu_nll)
+            
             pion_set_discriminator  = np.array(pion_set_e_nll - pion_set_mu_nll)
+            
         elif discriminator == 'gamma_v_mu':
             gamma_set_discriminator = np.array(gamma_set_gamma_nll - gamma_set_mu_nll)
             e_set_discriminator     = np.array(e_set_gamma_nll - e_set_mu_nll)
             mu_set_discriminator    = np.array( - mu_set_e_nll) 
+            
             pion_set_discriminator  = np.array( - pion_set_mu_nll)
+            
     elif comparison == 'e_v_pion':
         gamma_set_discriminator = np.array(gamma_set_e_nll - gamma_fqpi0nll)
         e_set_discriminator     = np.array(e_fqpi0nll - e_set_e_nll)
@@ -136,8 +150,10 @@ def load_fq_output(fq_mapping_path, gamma_file_path, e_file_path, mu_file_path, 
     # Construct likelihoods
     fq_likelihoods = np.concatenate((e_set_discriminator[e_fq_indices],
                                      mu_set_discriminator[mu_fq_indices],
-                                     gamma_set_discriminator[gamma_fq_indices],
+                                     gamma_set_discriminator[gamma_fq_indices]
+                                     ,
                                      pion_set_discriminator[pion_fq_indices]
+                                     
                                      ))
 
     # Collect scores
@@ -147,7 +163,8 @@ def load_fq_output(fq_mapping_path, gamma_file_path, e_file_path, mu_file_path, 
     # Generate labels
     fq_labels = np.concatenate((np.ones_like(e_set_discriminator[e_fq_indices])*1,
                                 np.ones_like(mu_set_discriminator[mu_fq_indices])*2,
-                                np.ones_like(gamma_set_discriminator[gamma_fq_indices])*0,
+                                np.ones_like(gamma_set_discriminator[gamma_fq_indices])*0
+                                ,
                                 np.ones_like(pion_set_discriminator[pion_fq_indices])*3
                                 ))
     
@@ -161,11 +178,14 @@ def load_fq_output(fq_mapping_path, gamma_file_path, e_file_path, mu_file_path, 
         gamma_set_mom = np.array(gamma_file_data.arrays('fq1rmom')['fq1rmom'][:, 0, 1])
         e_set_mom     = np.array(e_file_data.arrays('fq1rmom')['fq1rmom'][:, 0, 1])
         mu_set_mom    = np.array(mu_file_data.arrays('fq1rmom')['fq1rmom'][:, 0, 1])
+        
         pion_set_mom  = np.array(pion_file_data.arrays('fq1rmom')['fq1rmom'][:, 0, 1])
+        
 
     fq_mom = np.concatenate((e_set_mom[e_fq_indices],
                              mu_set_mom[mu_fq_indices],
-                             gamma_set_mom[gamma_fq_indices],
+                             gamma_set_mom[gamma_fq_indices]
+                             ,
                              pion_set_mom[pion_fq_indices]
                              ))
     
@@ -173,11 +193,14 @@ def load_fq_output(fq_mapping_path, gamma_file_path, e_file_path, mu_file_path, 
     gamma_set_mass = np.array(gamma_fqpi0mass)
     e_set_mass     = np.array(e_fqpi0mass)
     mu_set_mass    = np.array(mu_fqpi0mass)
+    
     pion_set_mass  = np.array(pion_fqpi0mass)
+    
 
     fq_masses = np.concatenate((e_set_mass[e_fq_indices],
                                 mu_set_mass[mu_fq_indices],
-                                gamma_set_mass[gamma_fq_indices],
+                                gamma_set_mass[gamma_fq_indices]
+                                ,
                                 pion_set_mass[pion_fq_indices]
                                 ))
 

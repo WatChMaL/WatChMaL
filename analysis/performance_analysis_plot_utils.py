@@ -12,7 +12,6 @@ from WatChMaL.analysis.performance_analysis_utils import compute_fixed_operating
 # ========================================================================
 # Single Variable Plotting Functions
 
-
 def plot_fitqun_binned_performance(axes=None, **kwargs):
     '''
         Purpose: Re-create official FiTQun plots.
@@ -27,7 +26,7 @@ def plot_fitqun_binned_performance(axes=None, **kwargs):
 
 def plot_single_var_binned_performance(scores_list, labels_list, reconstructed_momentum, plot_binning_features, fpr_fixed_point, index_dict, recons_mom_bin_size=50, plot_bins=None, 
                             ax=None,marker='o--',colors=None,title_note='',metric='efficiency',yrange=None, xrange=None, names=None,
-                            plot_bin_label=None, desired_labels=['$e$','$\mu$']):
+                            plot_bin_label=None, plot_bin_units=None, desired_labels=['$e$','$\mu$'], show_x_err=False):
     
     if ax is None:
         fig, ax = plt.subplots(1,1,figsize=(9,5), facecolor='w')
@@ -36,9 +35,9 @@ def plot_single_var_binned_performance(scores_list, labels_list, reconstructed_m
         bin_centers, bin_metrics, yerr = compute_fixed_operating_performance(scores_list[idx], labels_list[idx], reconstructed_momentum, plot_binning_features,
                                                                              fpr_fixed_point, index_dict, recons_mom_bin_size, plot_bins, metric, desired_labels)
         plot_fixed_operating_performance(bin_centers, bin_metrics, yerr, 
-                                    marker, colors[idx], 'Reconstructed Momentum', plot_bin_label, 
+                                    marker, colors[idx], 'Reconstructed Momentum', plot_bin_label, plot_bin_units,
                                     fpr_fixed_point, title_note, metric, 
-                                    yrange, xrange, ax)
+                                    yrange, xrange, ax, show_x_err=show_x_err)
     ax.legend(names)
 
 
@@ -50,27 +49,29 @@ def plot_momentum_binned_performance(**kwargs):
     if plot_bins is None:
         kwargs['plot_bins'] = np.array([0. + recons_mom_bin_size * i for i in range(math.ceil(np.max(reconstructed_momentum)/recons_mom_bin_size))])
     
-    return plot_single_var_binned_performance(plot_bin_label='Reconstructed Momentum', plot_binning_features=reconstructed_momentum, **kwargs)
+    return plot_single_var_binned_performance(plot_bin_label='Reconstructed Momentum', plot_bin_units='MeV/c', plot_binning_features=reconstructed_momentum, **kwargs)
+
+def plot_true_momentum_binned_performance(momentum_features, **kwargs):
+    return plot_single_var_binned_performance(plot_bin_label='True Momentum',  plot_bin_units='MeV/c', plot_binning_features=momentum_features, **kwargs)
 
 
 def plot_energy_binned_performance(energy_features, **kwargs):
-    return plot_single_var_binned_performance(plot_bin_label='Energy', plot_binning_features=energy_features, **kwargs)
+    return plot_single_var_binned_performance(plot_bin_label='Energy', plot_bin_units='MeV/$c^2$', plot_binning_features=energy_features, **kwargs)
 
 
 def plot_to_wall_binned_performance(to_wall_features, **kwargs):
-    return plot_single_var_binned_performance(plot_bin_label='To Wall', plot_binning_features=to_wall_features, **kwargs)
+    return plot_single_var_binned_performance(plot_bin_label='To Wall',  plot_bin_units='cm', plot_binning_features=to_wall_features, **kwargs)
 
 
 def plot_zenith_binned_performance(zenith_features, **kwargs):
-    return plot_single_var_binned_performance(plot_bin_label='Zenith', plot_binning_features=zenith_features, **kwargs)
+    return plot_single_var_binned_performance(plot_bin_label='Zenith',  plot_bin_units='Radians', plot_binning_features=zenith_features, **kwargs)
 
 
 def plot_azimuth_binned_performance(azimuth_features, **kwargs):
-    return plot_single_var_binned_performance(plot_bin_label='Azimuth', plot_binning_features=azimuth_features, **kwargs)
+    return plot_single_var_binned_performance(plot_bin_label='Azimuth',  plot_bin_units='Radians$', plot_binning_features=azimuth_features, **kwargs)
 
 # ========================================================================
 # Multiple Variable Plotting Functions
-
 
 def legend_without_duplicate_labels(ax):
     handles, labels = ax.get_legend_handles_labels()
@@ -125,7 +126,8 @@ def plot_multi_var_binned_performance(
                                                                                         ignore_dict            = index_dict,
                                                                                         muon_comparison        = False, 
                                                                                         use_rejection          = False,
-                                                                                        metric                 = 'efficiency',)
+                                                                                        metric                 = 'efficiency',
+                                                                                        fpr_fixed_point        = fpr_fixed_point)
 
         plot_multi_var_fixed_operating_performance(all_true_plotting_bins, all_bin_metrics, all_yerr, true_bins, 
                                                    marker, cmap, 
@@ -148,3 +150,9 @@ def plot_zenith_binned_in_azimuth(zenith_features, **kwargs):
 
 def plot_azimuth_binned_in_zenith(azimuth_features, **kwargs):
     return plot_multi_var_binned_performance(binning_bin_label='Zenith', plot_bin_label='Azimuth', plot_binning_features=azimuth_features, **kwargs)
+
+# ========================================================================
+# Define helper functions
+
+def plot_joint_legend(fig_list):
+    return -1

@@ -17,8 +17,10 @@ from WatChMaL.analysis.plot_utils import separate_particles
 def remove_indices(array, cut_idxs):
     return np.delete(array, cut_idxs, 0)
 
+# ========================================================================
+# Single Variable Plot Functions
 
-def compute_fixed_operating_performance(scores, labels, fixed_binning_features, plot_binning_features, fpr_fixed_point, index_dict, fixed_bin_size=50, plot_bins=20, metric='efficiency', desired_labels=['$e$','$\mu$']):
+def compute_fixed_operating_performance(scores, labels, fixed_binning_features, plot_binning_features, fpr_fixed_point, index_dict, fixed_bin_size=50, plot_bins=20, metric='efficiency', desired_labels=['$e$','$\mu$'], verbose=False):
     '''
     Plots a metric as a function of a physical parameter, at a fixed operating point of another metric.
 
@@ -47,6 +49,8 @@ def compute_fixed_operating_performance(scores, labels, fixed_binning_features, 
     label_size = 14
 
     # Remove gamma events
+    true_label = desired_labels[0]
+    false_label = desired_labels[1]
     scores, labels, plot_binning_features, fixed_binning_features = separate_particles([scores, labels, plot_binning_features, fixed_binning_features],labels,index_dict, desired_labels=desired_labels) #,desired_labels=['$e$','$\mu$'])
     scores, labels, plot_binning_features, fixed_binning_features = np.concatenate(scores), np.concatenate(labels), np.concatenate(plot_binning_features), np.concatenate(fixed_binning_features)
 
@@ -98,10 +102,15 @@ def compute_fixed_operating_performance(scores, labels, fixed_binning_features, 
         pred_pos_idxs = np.where(scores[bin_idxs] - thresholds_per_event[bin_idxs] > 0)[0]
         pred_neg_idxs = np.where(scores[bin_idxs] - thresholds_per_event[bin_idxs] < 0)[0]
 
-        fp = np.where(labels[bin_idxs[pred_pos_idxs]] == index_dict['$\mu$'] )[0].shape[0]
-        tp = np.where(labels[bin_idxs[pred_pos_idxs]] == index_dict['$e$'] )[0].shape[0]
-        fn = np.where(labels[bin_idxs[pred_neg_idxs]] == index_dict['$e$'] )[0].shape[0]
-        tn = np.where(labels[bin_idxs[pred_neg_idxs]] == index_dict['$\mu$'] )[0].shape[0]
+
+        fp = np.where(labels[bin_idxs[pred_pos_idxs]] == index_dict[false_label])[0].shape[0]
+        tp = np.where(labels[bin_idxs[pred_pos_idxs]] == index_dict[true_label] )[0].shape[0]
+        fn = np.where(labels[bin_idxs[pred_neg_idxs]] == index_dict[true_label] )[0].shape[0]
+        tn = np.where(labels[bin_idxs[pred_neg_idxs]] == index_dict[false_label])[0].shape[0]
+
+        if verbose:
+            print(str(fp) + ' | ' + str(tp) + ' | ' + str(fn) + ' | ' + str(tn))
+        
         
         # TODO: division by zero problem
         if metric == 'efficiency':
@@ -120,8 +129,8 @@ def compute_fixed_operating_performance(scores, labels, fixed_binning_features, 
     return bin_centers, bin_metrics, yerr
 
 
-def plot_fixed_operating_performance(bin_centers, bin_metrics, yerr, marker, color, fixed_bin_label, plot_bin_label, 
-                                     fpr_fixed_point, title_note, metric=None, yrange=None, xrange=None, ax=None):
+def plot_fixed_operating_performance(bin_centers, bin_metrics, yerr, marker, color, fixed_bin_label, plot_bin_label, plot_bin_units,
+                                     fpr_fixed_point, title_note, metric=None, yrange=None, xrange=None, ax=None, publication=True, show_x_err=False):
 
     label_size = 14
 
@@ -130,18 +139,25 @@ def plot_fixed_operating_performance(bin_centers, bin_metrics, yerr, marker, col
     else :
         metric_name ='$\mu$- Mis-ID Rate'
     
-    title = '{} vs {} At {} Bin $\mu$- Mis-ID Rate of {}%{}'.format(metric_name, plot_bin_label, fixed_bin_label, fpr_fixed_point*100, title_note)
+    #title = '{} vs {} At {} Bin $\mu$- Mis-ID Rate of {}%{}'.format(metric_name, plot_bin_label, fixed_bin_label, fpr_fixed_point*100, title_note)
+    title = '{} vs {} At {} Fixed Bin $\mu$- Mis-ID Rate {}'.format(metric_name, plot_bin_label, fixed_bin_label, title_note)
     title = "\n".join(wrap(title, 60))
 
     if ax is None:
         fig, ax = plt.subplots(figsize=(12,6))
 
-    ax.errorbar(bin_centers, bin_metrics, yerr=yerr,fmt=marker,color=color,ecolor='k',elinewidth=0.5,capsize=4,capthick=1,alpha=0.5, linewidth=2)
-    ax.grid(b=True, which='major', color='gray', linestyle='--')
+    if show_x_err:
+        x_err = (bin_centers[1] - bin_centers[0])/2*np.ones_like(yerr)
+    else:
+        x_err = np.zeros_like(yerr)
 
-    ax.set_ylabel(metric_name)
-    ax.set_xlabel("{}".format(plot_bin_label), fontsize=label_size)
-    ax.set_title(title)
+    ax.errorbar(bin_centers, bin_metrics, yerr=yerr, xerr=x_err, fmt=marker,color=color,ecolor='k',elinewidth=0.5,capsize=4,capthick=1,alpha=0.5, linewidth=2)
+    if not publication:
+        ax.grid(b=True, which='major', color='gray', linestyle='--')
+
+    ax.set_ylabel(metric_name, fontsize=label_size)
+    ax.set_xlabel("{} [{}]".format(plot_bin_label, plot_bin_units), fontsize=label_size)
+    ax.set_title(title, fontsize=1.1*label_size)
 
     if yrange is not None: 
         ax.set_ylim(yrange) 
@@ -151,6 +167,8 @@ def plot_fixed_operating_performance(bin_centers, bin_metrics, yerr, marker, col
     
     secax = ax.secondary_yaxis('right')
 
+# ========================================================================
+# Multiple Variable Plot Functions
 
 def compute_metrics(scores, labels, plot_bins, plotting_bin_assignments, thresholds_per_event, index_dict, metric='efficiency'):
     
@@ -189,50 +207,12 @@ def compute_multi_var_fixed_operating_performance(
                              fixed_binning_features, fixed_bin_size,
                              binning_features, binning_bin_size, 
                              plot_binning_features, plot_bins,
-                             index_dict, ignore_dict, axes1=None, axes2=None, 
+                             index_dict, ignore_dict, fpr_fixed_point, axes1=None, axes2=None, 
                              muon_comparison=False, use_rejection=False, linecolor='b', line_title=None,
                              metric='efficiency', ax=None, cmap=None):
     '''
     Plot performance as a function of a single variable
     '''
-    """
-    fpr_fixed_point        = 0.005
-    fixed_bin_label        = 'Reconstructed Momentum'
-    binning_bin_label      = 'Energy'
-    plot_bin_label         = 'To Wall'
-    title_note             = ' in Bins of {}'.format(plot_bin_label)
-    marker                 = 'o--'
-    color                  = 'k'
-    yrange                 = [0.5, 1.1]
-    xrange                 = [0, 1000]
-    verbose                = False
-
-    """
-    """
-    fpr_fixed_point        = 0.005
-    fixed_bin_label        = 'Reconstructed Momentum'
-    binning_bin_label      = 'Zenith'
-    plot_bin_label         = 'Azimuth'
-    title_note             = ' in Bins of Zenith'
-    marker                 = 'o--'
-    color                  = 'k'
-    yrange                 = None
-    xrange                 = None
-    verbose                = False
-
-    """
-    
-    fpr_fixed_point        = 0.005
-    fixed_bin_label        = 'Reconstructed Momentum'
-    binning_bin_label      = 'Azimuth'
-    plot_bin_label         = 'Zenith'
-    title_note             = ' in Bins of Azimuth'
-    marker                 = 'o--'
-    color                  = 'k'
-    yrange                 = None
-    xrange                 = None
-    verbose                = False
-    
 
     assert plot_binning_features.shape[0]  == scores.shape[0], 'Error: plot_binning_features must have same length as softmaxes'
     assert binning_features.shape[0]  == scores.shape[0], 'Error: binning_features must have same length as softmaxes'
@@ -318,8 +298,6 @@ def compute_multi_var_fixed_operating_performance(
 
     return all_true_plotting_bins, all_bin_metrics, all_yerr, true_bins
 
-    #plot_multi_var_fixed_operating_performance(all_true_plotting_bins, all_bin_metrics, all_yerr, true_bins, marker, cmap, fixed_bin_label, binning_bin_label, plot_bin_label, 
-    #                                 fpr_fixed_point, title_note, metric, yrange, xrange, ax)
 
 def plot_multi_var_fixed_operating_performance(all_true_plotting_bins, all_bin_metrics, all_yerr, true_bins, marker, cmap, fixed_bin_label, binning_bin_label, plot_bin_label, 
                                      fpr_fixed_point, title_note, metric=None, yrange=None, xrange=None, ax=None):
@@ -366,12 +344,12 @@ def plot_pion_fixed_operating_performance(
                                      plot_binning_features, plot_bin_label,
                                      p0, p1, pi0mass,
                                      fpr_fixed_point, index_dict, fixed_bin_size=50, plot_bins=20, 
-                                     marker='o--',color='k',title_note='', metric='efficiency',yrange=None,xrange=None):
+                                     marker='o--',color='k',title_note='', metric='efficiency',yrange=None,xrange=None,
+                                     ax = None, show_x_err=True, publication=False):
     '''
     Plots a metric as a function of a physical parameter, at a fixed operating point of another metric using pion cuts.
     TODO: scores must be fq1rnll[0][1] - fqpi0nll[0]
     '''
-    ax = None
 
     assert plot_binning_features.shape[0]  == scores.shape[0], 'Error: plot_binning_features must have same length as softmaxes'
     assert fixed_binning_features.shape[0] == scores.shape[0], 'Error: fixed_binning_features must have same length as softmaxes'
@@ -452,22 +430,28 @@ def plot_pion_fixed_operating_performance(
     bin_centers = (true_bins[:-1] + true_bins[1:]) / 2
     
     if metric == 'efficiency':
-        metric_name = '$e$- Signal Efficiency'
+        metric_name = '$e$- Efficiency of $\pi_0$ Rejection Cut'
     else :
         metric_name ='$\mu$- Mis-ID Rate'
     
-    title = '{} vs {} At {} Bin $\mu$- Mis-ID Rate of {}%{}'.format(metric_name, plot_bin_label, fixed_bin_label, fpr_fixed_point*100, title_note)
+    title = '{} vs {} At {} Bin $\pi_0$ Mis-ID Rate of {}%{}'.format(metric_name, plot_bin_label, fixed_bin_label, fpr_fixed_point*100, title_note)
     title = "\n".join(wrap(title, 60))
 
     if ax is None:
         fig, ax = plt.subplots(figsize=(12,6), facecolor='w')
 
-    ax.errorbar(bin_centers, bin_metrics, yerr=y_err,fmt=marker,color=color,ecolor='k',elinewidth=0.5,capsize=4,capthick=1,alpha=0.5, linewidth=2)
-    ax.grid(b=True, which='major', color='gray', linestyle='--')
+    if show_x_err:
+        x_err = (bin_centers[1] - bin_centers[0])/2*np.ones_like(y_err)
+    else:
+        x_err = np.zeros_like(y_err)
 
-    ax.set_ylabel(metric_name)
-    ax.set_xlabel("{}".format(plot_bin_label), fontsize=label_size)
-    ax.set_title(title)
+    ax.errorbar(bin_centers, bin_metrics, yerr=y_err, xerr=x_err, fmt=marker,color=color,ecolor='k',elinewidth=0.5,capsize=4,capthick=1,alpha=0.5, linewidth=2)
+    if not publication:
+        ax.grid(b=True, which='major', color='gray', linestyle='--')
+
+    ax.set_ylabel(metric_name, fontsize=label_size)
+    ax.set_xlabel("{} [MeV/c]".format(plot_bin_label), fontsize=label_size)
+    ax.set_title(title, fontsize=1.1*label_size)
 
     if yrange is not None: 
         ax.set_ylim(yrange) 
