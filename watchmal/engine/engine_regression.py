@@ -70,7 +70,8 @@ class RegressionEngine:
         if self.rank == 0:
             self.val_log = CSVData(self.dirpath + "log_val.csv")
 
-        self.criterion = nn.MSELoss()
+    def configure_loss(self, loss_config):
+        self.criterion = instantiate(loss_config)
 
     def configure_optimizers(self, optimizer_config):
         """
@@ -135,19 +136,12 @@ class RegressionEngine:
             # Move the data and the labels to the GPU (if using CPU this has no effect)
             self.data = self.data.to(self.device)
             self.energies = self.energies.to(self.device)
-            self.positions = self.positions.to(self.device)
-            x_position = self.positions[0][0]
-            z_position = self.positions[0][2]
-            self.transverse = np.sqrt(np.power(x_position, 2) + np.power(z_position, 2))
+            self.positions = torch.squeeze(self.positions).to(self.device)
 
             model_out = self.model(self.data)
             self.pos_scale = self.scale_positions(self.positions).to(self.device)
 
-<<<<<<< Updated upstream
-            self.loss = self.criterion(model_out, self.transverse)
-=======
             self.loss = self.criterion(model_out, self.pos_scale)
->>>>>>> Stashed changes
 
         return {'loss': self.loss.detach().cpu().item(),
                 'output': model_out.detach().cpu().numpy(),
@@ -293,7 +287,6 @@ class RegressionEngine:
                     else:
                         global_val_metrics = local_val_metrics
                         print(type(global_val_metrics["loss"]))
-                        print("not distributed")
 
                     if self.rank == 0:
                         # Save if this is the best model so far
