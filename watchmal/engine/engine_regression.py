@@ -14,7 +14,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.nn.utils import clip_grad_norm_
 
 # generic imports
-from math import floor, ceil
+from math import floor, ceil, log
 import numpy as np
 from numpy import savez
 import os
@@ -76,6 +76,7 @@ class RegressionEngine:
     def configure_optimizers(self, optimizer_config):
         """
         Set up optimizers from optimizer config
+
         Args:
             optimizer_config    ... hydra config specifying optimizer object
         """
@@ -84,11 +85,13 @@ class RegressionEngine:
     def configure_data_loaders(self, data_config, loaders_config, is_distributed, seed):
         """
         Set up data loaders from loaders config
+
         Args:
             data_config     ... hydra config specifying dataset
             loaders_config  ... hydra config specifying dataloaders
             is_distributed  ... boolean indicating if running in multiprocessing mode
             seed            ... seed to use to initialize dataloaders
+
         Parameters:
             self should have dict attribute data_loaders
         """
@@ -99,8 +102,10 @@ class RegressionEngine:
     def get_synchronized_metrics(self, metric_dict):
         """
         Gathers metrics from multiple processes using pytorch distributed operations
+
         Args:
             metric_dict         ... dict containing values that are tensor outputs of a single process
+
         Returns:
             global_metric_dict  ... dict containing concatenated list of tensor values gathered from all processes
         """
@@ -116,10 +121,13 @@ class RegressionEngine:
     def forward(self, train=True):
         """
         Compute predictions and metrics for a batch of data
+
         Args:
             train   ... whether to compute gradients for backpropagation
+
         Parameters:
             self should have attributes data, labels, model, criterion, softmax
+
         Returns:
             dict containing loss, and model outputs
         """
@@ -131,16 +139,36 @@ class RegressionEngine:
             self.positions = torch.squeeze(self.positions).to(self.device)
 
             model_out = self.model(self.data)
+            self.pos_scale = self.scale_positions(self.positions).to(self.device)
 
-            self.loss = self.criterion(model_out, self.positions)
+            self.loss = self.criterion(model_out, self.pos_scale)
 
         return {'loss': self.loss.detach().cpu().item(),
                 'output': model_out.detach().cpu().numpy(),
                 'raw_output': model_out}
 
+    def scale_positions(self, data):
+        x_positions = [data[index][0].cpu().numpy() for index in range(len(data))]
+        y_positions = [data[index][1].cpu().numpy() for index in range(len(data))]
+        z_positions = [data[index][2].cpu().numpy() for index in range(len(data))]
+        x_pos_scale = self.fit_transform(x_positions)
+        y_pos_scale = self.fit_transform(y_positions)
+        z_pos_scale = self.fit_transform(z_positions)
+        x_pos_scale += 0.5 * log(np.var(x_pos_scale))
+        y_pos_scale += 0.5 * log(np.var(y_pos_scale))
+        z_pos_scale += 0.5 * log(np.var(z_pos_scale))
+        coordinates = np.column_stack((tuple(x_pos_scale), tuple(y_pos_scale), tuple(z_pos_scale))).astype(np.float32)
+        return torch.from_numpy(coordinates).float()
+
+    def fit_transform(self, data):
+        mean = np.mean(data)
+        sd = np.std(data)
+        return (data - mean) / sd
+
     def backward(self):
         """
         Backward pass using the loss computed for a mini-batch
+
         Parameters:
             self should have attributes loss, optimizer
         """
@@ -155,13 +183,17 @@ class RegressionEngine:
     def train(self, train_config):
         """
         Train the model on the training set
+
         Args:
             train_config    ... config specigying training parameters
+
         Parameters:
             self should have attributes model, data_loaders
+
         Outputs:
             val_log      ... csv log containing iteration, epoch, loss, accuracy for each iteration on validation set
             train_logs   ... csv logs containing iteration, epoch, loss, accuracy for each iteration on training set
+
         Returns: None
         """
         # initialize training params
@@ -170,11 +202,6 @@ class RegressionEngine:
         val_interval = train_config.val_interval
         num_val_batches = train_config.num_val_batches
         checkpointing = train_config.checkpointing
-        early_stopping = train_config.early_stopping
-        patience = train_config.patience
-
-        # implement early stopping
-        self.wait = 0
 
         # set the iterations at which to dump the events and their metrics
         if self.rank == 0:
@@ -183,6 +210,9 @@ class RegressionEngine:
         # set model to training mode
         self.model.train()
 
+        #implement early stopping
+        self.wait = 0
+        patience = 5
 
         # initialize epoch and iteration counters
         epoch = 0.
@@ -314,26 +344,23 @@ class RegressionEngine:
                         "... Iteration %d ... Epoch %1.2f ... Training Loss %1.3f ... Time Elapsed %1.3f ... Iteration Time %1.3f" %
                         (self.iteration, epoch, res["loss"],
                          iteration_time - start_time, iteration_time - previous_iteration_time))
-                if early_stopping:
-                    if (floor(epoch) - floor(old_epoch) == 1):
-                        if (res["loss"] < best_val_loss):
-                            self.wait = 1
-                        else:
-                            self.wait += 1
-                            print("No improvement in validation loss")
-                        print(self.wait)
 
-                    if epoch >= epochs or self.wait > patience:
-                        return
-                else:
-                    if epoch >= epochs:
-                        break
-            if early_stopping:
-                if (self.wait > patience):
-                    print("Training has stopped due to early stopping, Epoch %1.2f ... Best Val Loss %1.3f ... Time "
-                          "Elapsed %1.3f " % (epoch, best_val_loss,
-                             iteration_time - start_time))
-                    break
+                if (floor(epoch) - floor(old_epoch) == 1):
+                    if (res["loss"] < best_val_loss):
+                        self.wait = 1
+                    else:
+                        self.wait += 1
+                        print("No improvement in validation loss")
+                    print(self.wait)
+
+                if epoch >= epochs or self.wait > patience:
+                    return
+
+            if (self.wait > patience):
+                print("Training has stopped due to early stopping, Epoch %1.2f ... Best Val Loss %1.3f ... Time "
+                      "Elapsed %1.3f " % (epoch, best_val_loss,
+                         iteration_time - start_time))
+                break
         self.train_log.close()
         if self.rank == 0:
             self.val_log.close()
@@ -341,15 +368,19 @@ class RegressionEngine:
     def evaluate(self, test_config):
         """
         Evaluate the performance of the trained model on the test set
+
         Args:
             test_config ... hydra config specifying evaluation parameters
+
         Parameters:
             self should have attributes model, data_loaders, dirpath
+
         Outputs:
             indices     ... index in dataset of each event
             labels      ... actual label of each event
             predictions ... predicted label of each event
             softmax     ... softmax output over classes for each event
+
         Returns: None
         """
         print("evaluating in directory: ", self.dirpath)
@@ -447,10 +478,13 @@ class RegressionEngine:
     def save_state(self, best=False):
         """
         Save model weights to a file.
+
         Args:
             best    ... if true, save as best model found, else save as checkpoint
+
         Outputs:
             dict containing iteration, optimizer state dict, and model state dict
+
         Returns: filename
         """
         filename = "{}{}{}{}".format(self.dirpath,
@@ -475,8 +509,10 @@ class RegressionEngine:
     def restore_best_state(self, placeholder):
         """
         Restore model using best model found in current directory
+
         Args:
             placeholder     ... extraneous; hydra configs are not allowed to be empty
+
         Outputs: model params are now those loaded from best model file
         """
         best_validation_path = "{}{}{}{}".format(self.dirpath,
@@ -492,8 +528,10 @@ class RegressionEngine:
     def restore_state_from_file(self, weight_file):
         """
         Restore model using weights stored from a previous run
+
         Args:
             weight_file     ... path to weights to load
+
         Outputs: model params are now those loaded from file
         """
         # Open a file in read-binary mode
