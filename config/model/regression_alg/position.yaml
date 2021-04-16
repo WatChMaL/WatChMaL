@@ -1,3 +1,4 @@
 # @package _group_
 _target_: watchmal.model.regression.LinearRegression
 num_outputs: 3
+output: 'position'

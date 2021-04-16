@@ -1,1 +1,1 @@
-_target_: torch.nn.MSE
+_target_: torch.nn.MSELoss

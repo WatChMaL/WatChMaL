@@ -137,11 +137,14 @@ class RegressionEngine:
             self.data = self.data.to(self.device)
             self.energies = self.energies.to(self.device)
             self.positions = torch.squeeze(self.positions).to(self.device)
-
+            loss = None
+            if self.model.regression_network.output == 'position':
+                loss = self.scale_positions(self.positions).to(self.device)
+            elif self.model.regression_network.output == 'energies':
+                loss = self.fit_transform(self.energies).to(self.device)
             model_out = self.model(self.data)
-            self.pos_scale = self.scale_positions(self.positions).to(self.device)
 
-            self.loss = self.criterion(model_out, self.pos_scale)
+            self.loss = self.criterion(model_out, loss)
 
         return {'loss': self.loss.detach().cpu().item(),
                 'output': model_out.detach().cpu().numpy(),
@@ -154,16 +157,13 @@ class RegressionEngine:
         x_pos_scale = self.fit_transform(x_positions)
         y_pos_scale = self.fit_transform(y_positions)
         z_pos_scale = self.fit_transform(z_positions)
-        x_pos_scale += 0.5 * log(np.var(x_pos_scale))
-        y_pos_scale += 0.5 * log(np.var(y_pos_scale))
-        z_pos_scale += 0.5 * log(np.var(z_pos_scale))
         coordinates = np.column_stack((tuple(x_pos_scale), tuple(y_pos_scale), tuple(z_pos_scale))).astype(np.float32)
         return torch.from_numpy(coordinates).float()
 
     def fit_transform(self, data):
         mean = np.mean(data)
         sd = np.std(data)
-        return (data - mean) / sd
+        return torch.from_numpy((data - mean) / sd).float()
 
     def backward(self):
         """
