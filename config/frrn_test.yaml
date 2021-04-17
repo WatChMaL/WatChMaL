@@ -1,0 +1,13 @@
+gpu_list:
+    - 1
+seed: null
+dump_path: './outputs/'
+defaults:
+    - data: iwcd_segmentation
+    - data/dataset: iwcd_segmentation
+    - model: segmentation
+    - engine: segmentation
+    - tasks/restore_state: restore_state_segmentation
+    - tasks/evaluate: test
+    - sampler@tasks.evaluate.data_loaders.test.sampler: subset_sequential
+
