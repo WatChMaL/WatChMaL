@@ -428,7 +428,11 @@ class SegmentationEngine:
                 self.labels = self.labels.to("cpu")
 
                 #Plot event defined in test config file
-                self.plot_event_views(eval_data, result, test_config["save_event_plots"]["startId"], test_config["save_event_plots"]["endId"], it)
+                try:
+                    self.plot_event_views(eval_data, result, test_config["save_event_plots"]["startId"], test_config["save_event_plots"]["endId"], it)
+                except:
+                    #No test config parameters were provided
+
 
                 # Add the local result to the final result
                 indices.extend(eval_indices)
