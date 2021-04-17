@@ -39,7 +39,6 @@ class CNNmPMTDataset(H5Dataset):
     def process_data(self, hit_pmts, hit_data):
         """
         Returns event data from dataset associated with a specific index
-
         Args:
             hit_pmts                ... array of ids of hit pmts
             hid_data                ... array of data associated with hits
@@ -70,7 +69,7 @@ class CNNmPMTDataset(H5Dataset):
 
         data_dict = super().__getitem__(item)
 
-        processed_data = from_numpy(self.process_data(data_dict["data"]["hit_pmts"], data_dict["data"]["hit_charges"]))
+        processed_data = from_numpy(self.process_data(self.event_hit_pmts, self.event_hit_charges))
         processed_data = du.apply_random_transformations(self.transforms, processed_data)
 
         data_dict["data"] = processed_data
@@ -80,22 +79,19 @@ class CNNmPMTDataset(H5Dataset):
     def retrieve_event_data(self, item):
         """
         Returns event data from dataset associated with a specific index
-
         Args:
             item                    ... index of event
-
         Returns:
             hit_pmts                ... array of ids of hit pmts
             pmt_charge_data         ... array of charge of hits
             pmt_time_data           ... array of times of hits
-
         """
         data_dict = super().__getitem__(item)
 
         # construct charge data with barrel array indexing to match endcaps in xyz ordering
-        pmt_charge_data = self.process_data(data_dict["data"]["hit_pmts"], data_dict["data"]["hit_charges"]).flatten()
+        pmt_charge_data = self.process_data(self.event_hit_pmts, self.event_hit_charges).flatten()
 
         # construct time data with barrel array indexing to match endcaps in xyz ordering
-        pmt_time_data = self.process_data(data_dict["data"]["hit_pmts"], data_dict["data"]["hit_times"]).flatten()
+        pmt_time_data = self.process_data(self.event_hit_pmts, self.event_hit_times).flatten()
 
-        return data_dict["data"]["hit_pmts"], pmt_charge_data, pmt_time_data
+        return self.event_hit_pmts, pmt_charge_data, pmt_time_data

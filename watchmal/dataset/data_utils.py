@@ -23,7 +23,6 @@ from watchmal.dataset.samplers import DistributedSamplerWrapper
 def get_data_loader(dataset, batch_size, sampler, num_workers, is_distributed, seed, split_path=None, split_key=None, transforms=None):
     """
     Returns data loaders given dataset and sampler configs
-
     Args:
         dataset         ... hydra config specifying dataset object
         batch_size      ... batch size
@@ -43,6 +42,7 @@ def get_data_loader(dataset, batch_size, sampler, num_workers, is_distributed, s
         split_indices = np.load(split_path, allow_pickle=True)[split_key]
         sampler = instantiate(sampler, split_indices)
     else:
+        print("Couldnt find split file") #FRRN cant handle this case, there must be a split file
         sampler = instantiate(sampler)
     
     if is_distributed:
@@ -53,8 +53,7 @@ def get_data_loader(dataset, batch_size, sampler, num_workers, is_distributed, s
         sampler = DistributedSamplerWrapper(sampler=sampler, seed=seed)
     
     # TODO: added drop_last, should decide if we want to keep this
-    return DataLoader(dataset, sampler=sampler, batch_size=batch_size, num_workers=num_workers, drop_last=False)
-
+    return DataLoader(dataset, sampler=sampler, batch_size=batch_size, num_workers=num_workers, drop_last=True)
 
 def get_transformations(transformations, transform_names):
     if transform_names is not None:
@@ -66,9 +65,11 @@ def get_transformations(transformations, transform_names):
         return None
 
 
-def apply_random_transformations(transforms, data):
+def apply_random_transformations(transforms, data, segmentation = None):
     if transforms is not None:
         for transformation in transforms:
             if random.getrandbits(1):
                 data = transformation(data)
+                if segmentation is not None:
+                    segmentation = transformation(segmentation)
     return data
