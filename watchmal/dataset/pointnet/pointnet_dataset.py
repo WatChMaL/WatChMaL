@@ -28,21 +28,18 @@ class PointNetDataset(H5Dataset):
     def  __getitem__(self, item):
 
         data_dict = super().__getitem__(item)
-        hit_pmts = data_dict["data"]["hit_pmts"]
-        hit_charges = data_dict["data"]["hit_charges"]
-        hit_times = data_dict["data"]["hit_times"]
 
-        hit_positions = self.geo_positions[hit_pmts, :]
-        n_hits = min(self.n_points, hit_pmts.shape[0])
+        hit_positions = self.geo_positions[self.event_hit_pmts, :]
+        n_hits = min(self.n_points, self.event_hit_pmts.shape[0])
         if not self.use_orientations:
             data = np.zeros((5, self.n_points))
         else:
-            hit_orientations = self.geo_orientations[hit_pmts[:n_hits], :]
+            hit_orientations = self.geo_orientations[self.event_hit_pmts[:n_hits], :]
             data = np.zeros((7, self.n_points))
             data[3:5, :n_hits] = hit_orientations.T
         data[:3, :n_hits] = hit_positions[:n_hits].T
-        data[-2, :n_hits] = hit_charges[:n_hits]
-        data[-1, :n_hits] = hit_times[:n_hits]
+        data[-2, :n_hits] = self.event_hit_charges[:n_hits]
+        data[-1, :n_hits] = self.event_hit_times[:n_hits]
 
         data = du.apply_random_transformations(self.transforms, data)
 
