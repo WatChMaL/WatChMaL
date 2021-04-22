@@ -39,7 +39,6 @@ class CNNmPMTDataset(H5Dataset):
     def process_data(self, hit_pmts, hit_data):
         """
         Returns event data from dataset associated with a specific index
-
         Args:
             hit_pmts                ... array of ids of hit pmts
             hid_data                ... array of data associated with hits
@@ -80,15 +79,12 @@ class CNNmPMTDataset(H5Dataset):
     def retrieve_event_data(self, item):
         """
         Returns event data from dataset associated with a specific index
-
         Args:
             item                    ... index of event
-
         Returns:
             hit_pmts                ... array of ids of hit pmts
             pmt_charge_data         ... array of charge of hits
             pmt_time_data           ... array of times of hits
-
         """
         data_dict = super().__getitem__(item)
 

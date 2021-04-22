@@ -2,20 +2,20 @@
 epochs: 20
 
 report_interval: 10
-val_interval: 10
-num_val_batches: 32
+val_interval: 30
+num_val_batches: 16
 
 checkpointing: False
 
 data_loaders:
   train:
     split_key: train_idxs
-    batch_size: 512
-    num_workers: 4
+    batch_size: 64
+    num_workers: 8
     transforms:
       - horizontal_flip
       - vertical_flip
   validation:
     split_key: val_idxs
-    batch_size: 512
-    num_workers: 4
+    batch_size: 64
+    num_workers: 8
