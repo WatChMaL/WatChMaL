@@ -7,7 +7,7 @@ defaults:
     - data/dataset: iwcd_cnn_short
     - model: regression
     - model/feature_extractor: resnet18
-    - model/regression_alg: position
+    - model/regression_alg: linear
     - engine: regression
     - tasks/train: train_reg_resnet
     - optimizers@tasks.train.optimizers: adam

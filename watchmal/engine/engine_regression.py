@@ -29,7 +29,7 @@ from watchmal.utils.logging_utils import CSVData
 
 
 class RegressionEngine:
-    def __init__(self, model, rank, gpu, dump_path):
+    def __init__(self, output_type, model, rank, gpu, dump_path):
         """
         Args:
             model       ... model object that engine will use in training or evaluation
@@ -42,6 +42,7 @@ class RegressionEngine:
         self.rank = rank
         self.model = model
         self.device = torch.device(gpu)
+        self.output_type = output_type
 
         # Setup the parameters to save given the model type
         if isinstance(self.model, DDP):
@@ -138,9 +139,9 @@ class RegressionEngine:
             self.energies = self.energies.to(self.device)
             self.positions = torch.squeeze(self.positions).to(self.device)
             loss = None
-            if self.model.regression_network.output == 'position':
+            if self.output_type == 'position':
                 loss = self.scale_positions(self.positions).to(self.device)
-            elif self.model.regression_network.output == 'energies':
+            elif self.output_type == 'energies':
                 loss = self.fit_transform(self.energies).to(self.device)
             model_out = self.model(self.data)
 
