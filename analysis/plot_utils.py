@@ -592,11 +592,17 @@ def plot_roc(fpr, tpr, thr, true_label_name, false_label_name, fig_list=None, xl
     
     if 1 in fig_list: 
         ax1.tick_params(axis="both", labelsize=20*font_scale)
-        # TODO: reverse log
         ax1.set_yscale(scale)
         if not publication:
             ax1.grid(b=True, which='major', color='gray', linestyle='-')
             ax1.grid(b=True, which='minor', color='gray', linestyle='--')
+
+        random_classifier_tpr = np.linspace(0, 1, len(tpr))
+        random_classifier_fpr = np.linspace(0, 1, len(tpr))
+        random_classifier_rejection = 1 / (random_classifier_fpr + 1e-10)
+        random_classifier_AUC = auc(random_classifier_fpr, random_classifier_tpr)
+        ax1.plot(random_classifier_tpr, random_classifier_rejection, linestyle=':', color='k')
+
         ax1.plot(tpr, rejection, 
                     label=plot_label + ', AUC={:.3f}'.format(roc_AUC)  if plot_label is not None else r'{} VS {} ROC, AUC={:.3f}'.format(true_label_name, false_label_name, roc_AUC),
                     linestyle=linestyle  if linestyle is not None else None,
@@ -609,7 +615,7 @@ def plot_roc(fpr, tpr, thr, true_label_name, false_label_name, fig_list=None, xl
         ax1.set_xlabel(xlabel, fontsize=20*font_scale)
         ax1.set_ylabel(ylabel, fontsize=20*font_scale)
         ax1.set_title(title, fontsize=24*font_scale)
-        ax1.legend(loc=legend_loc, prop={'size': 20*font_scale}) # bbox_to_anchor=(1.05, 1), loc='upper left')
+        ax1.legend(loc=legend_loc, prop={'size': 16*font_scale}) # bbox_to_anchor=(1.05, 1), loc='upper left')
 
         if xlims is not None:
             xlim = next(xlim_iter)
