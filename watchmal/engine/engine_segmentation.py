@@ -431,6 +431,7 @@ class SegmentationEngine:
                 try:
                     self.plot_event_views(eval_data, result, test_config["save_event_plots"]["startId"], test_config["save_event_plots"]["endId"], it)
                 except:
+                    pass
                     #No test config parameters were provided
 
 

@@ -22,7 +22,7 @@ import watchmal.dataset.data_utils as du
 
 class CNNmPMTSegmentationDataset(Dataset):
     def __init__(self, digi_dataset_config, true_hits_h5file, digi_truth_mapping_file, valid_parents=(1, 2, 3),
-                 parent_type="max", transform_segmented_labels = True, is_distributed = False):
+                 parent_type="max", transforms = True, is_distributed = False):
         """
         Args:
             digi_dataset_config     ... config for dataset for digitized hits
@@ -32,7 +32,7 @@ class CNNmPMTSegmentationDataset(Dataset):
         """
         self.digi_dataset = instantiate(digi_dataset_config, is_distributed=is_distributed)
         self.mpmt_positions = self.digi_dataset.mpmt_positions
-        if transform_segmented_labels:
+        if transforms:
             self.transforms = self.digi_dataset.transforms
             self.digi_dataset.transforms = None
         else:
