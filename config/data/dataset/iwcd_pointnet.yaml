@@ -1,6 +1,0 @@
-# @package _group_
-_target_: watchmal.dataset.pointnet.pointnet_dataset.PointNetDataset
-geometry_file: /home/mattStubbs/watchmal/NeutronGNN/preprocessing/full_geo_dump.npz
-use_orientations: False
-n_points: 4000
-is_graph: False
