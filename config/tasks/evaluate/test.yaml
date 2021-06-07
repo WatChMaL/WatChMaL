@@ -3,5 +3,5 @@ report_test_metrics: false
 data_loaders:
   test:
     split_key: test_idxs
-    batch_size: 512
+    batch_size: 64
     num_workers: 4

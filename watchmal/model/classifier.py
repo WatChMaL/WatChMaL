@@ -1,5 +1,12 @@
 import torch.nn as nn
+import torch
 from hydra.utils import instantiate
+from torch_geometric.nn import global_max_pool, global_add_pool, global_mean_pool
+from torch.nn import Sequential, Linear, ReLU, Dropout, BatchNorm1d as BN
+import torch.nn.functional as F
+
+# WatChMaL imports
+from watchmal.model.dgcnn import pn_MLP
 
 
 class Classifier(nn.Module):
@@ -57,3 +64,26 @@ class PointNetFullyConnected(nn.Module):
         x = self.relu(self.bn2(self.dropout(self.fc2(x))))
         x = self.fc3(x)
         return x
+    
+    
+    
+class DGCNNFullyConnected(torch.nn.Module):
+    
+    def __init__(self, num_inputs, num_classes, k=20, aggr='max'):
+        super().__init__()
+
+        self.num_inputs = num_inputs
+        self.lin1 = pn_MLP([128 + 64, 1024])
+        self.mlp = Sequential(
+            pn_MLP([1024, 512]), Dropout(0.01), pn_MLP([512, 256]), Dropout(0.01),
+            Linear(256, num_classes))
+
+
+    def forward(self, x):
+        
+        x, batch = x[0], x[1]
+        
+        x = self.lin1(x)
+        x = global_max_pool(x, batch)
+        x = self.mlp(x)
+        return F.log_softmax(x, dim=1)

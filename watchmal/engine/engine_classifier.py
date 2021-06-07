@@ -12,6 +12,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.parallel import DistributedDataParallel as DDP
 
+import torch_geometric.data as tgd
+
 # generic imports
 from math import floor, ceil
 import numpy as np
@@ -60,6 +62,7 @@ class ClassifierEngine:
         self.rootfiles = None
         self.angles    = None
         self.event_ids = None
+        self.edge_index = None
         
         # logging attributes
         self.train_log = CSVData(self.dirpath + "log_train_{}.csv".format(self.rank))
@@ -79,7 +82,7 @@ class ClassifierEngine:
         """
         self.optimizer = instantiate(optimizer_config, params=self.model_accs.parameters())
 
-    def configure_data_loaders(self, data_config, loaders_config, is_distributed, seed):
+    def configure_data_loaders(self, data_config, loaders_config, is_distributed, seed, is_graph):
         """
         Set up data loaders from loaders config
 
@@ -88,12 +91,13 @@ class ClassifierEngine:
             loaders_config  ... hydra config specifying dataloaders
             is_distributed  ... boolean indicating if running in multiprocessing mode
             seed            ... seed to use to initialize dataloaders
+            is_graph        ... boolean indicating if using a graph network
         
         Parameters:
             self should have dict attribute data_loaders
         """
         for name, loader_config in loaders_config.items():
-            self.data_loaders[name] = get_data_loader(**data_config, **loader_config, is_distributed=is_distributed, seed=seed)
+            self.data_loaders[name] = get_data_loader(**data_config, **loader_config, is_distributed=is_distributed, seed=seed, is_graph=is_graph)
     
     def get_synchronized_metrics(self, metric_dict):
         """
@@ -164,10 +168,29 @@ class ClassifierEngine:
     # ========================================================================
     # Training and evaluation loops
     
+    def train_graph(self, train_config):
+        """
+        Train the graph model on the training set
+
+        Args:
+            train_config    ... config specifying training parameters
+        
+        Parameters:
+            self should have attributes model, data_loaders
+        
+        Outputs:
+            val_log      ... csv log containing iteration, epoch, loss, accuracy for each iteration on validation set
+            train_logs   ... csv logs containing iteration, epoch, loss, accuracy for each iteration on training set
+            
+        Returns: None
+        """
+        
+    
+    
+    
     def train(self, train_config):
         """
         Train the model on the training set
-
         Args:
             train_config    ... config specigying training parameters
         
@@ -186,7 +209,8 @@ class ClassifierEngine:
         val_interval    = train_config.val_interval
         num_val_batches = train_config.num_val_batches
         checkpointing   = train_config.checkpointing
-
+        is_graph = train_config['is_graph']
+        
         # set the iterations at which to dump the events and their metrics
         if self.rank == 0:
             print(f"Training... Validation Interval: {val_interval}")
@@ -206,130 +230,294 @@ class ClassifierEngine:
         val_iter = iter(self.data_loaders["validation"])
 
         # global training loop for multiple epochs
-        while (floor(epoch) < epochs):
-            if self.rank == 0:
-                print('Epoch',floor(epoch), 'Starting @', strftime("%Y-%m-%d %H:%M:%S", localtime()))
-            
-            times = []
-
-            start_time = time()
-            iteration_time = start_time
-
-            train_loader = self.data_loaders["train"]
-
-            # update seeding for distributed samplers
-            if self.is_distributed:
-                train_loader.sampler.set_epoch(epoch)
-
-            # local training loop for batches in a single epoch
-            for i, train_data in enumerate(self.data_loaders["train"]):
-                
-                # run validation on given intervals
-                if self.iteration % val_interval == 0:
-                    # set model to eval mode
-                    self.model.eval()
-
-                    val_metrics = {"iteration": self.iteration, "epoch": epoch, "loss": 0., "accuracy": 0., "saved_best": 0}
-
-                    for val_batch in range(num_val_batches):
-                        try:
-                            val_data = next(val_iter)
-                        except StopIteration:
-                            del val_iter
-                            print("Fetching new validation iterator...")
-                            val_iter = iter(self.data_loaders["validation"])
-                            val_data = next(val_iter)
-                        
-                        # extract the event data from the input data tuple
-                        self.data      = val_data['data'].float()
-                        self.labels    = val_data['labels'].long()
-                        self.energies  = val_data['energies'].float()
-                        self.angles    = val_data['angles'].float()
-                        self.event_ids = val_data['event_ids'].float()
-
-                        val_res = self.forward(False)
-                        
-                        val_metrics["loss"] += val_res["loss"]
-                        val_metrics["accuracy"] += val_res["accuracy"]
-                    
-                    # return model to training mode
-                    self.model.train()
-
-                    # record the validation stats to the csv
-                    val_metrics["loss"] /= num_val_batches
-                    val_metrics["accuracy"] /= num_val_batches
-
-                    local_val_metrics = {"loss": np.array([val_metrics["loss"]]), "accuracy": np.array([val_metrics["accuracy"]])}
-
-                    if self.is_distributed:
-                        global_val_metrics = self.get_synchronized_metrics(local_val_metrics)
-                        for name, tensor in zip(global_val_metrics.keys(), global_val_metrics.values()):
-                            global_val_metrics[name] = np.array(tensor.cpu())
-                    else:
-                        global_val_metrics = local_val_metrics
-
-                    if self.rank == 0:
-                        # Save if this is the best model so far
-                        global_val_loss = np.mean(global_val_metrics["loss"])
-                        global_val_accuracy = np.mean(global_val_metrics["accuracy"])
-
-                        val_metrics["loss"] = global_val_loss
-                        val_metrics["accuracy"] = global_val_accuracy
-
-                        if val_metrics["loss"] < best_val_loss:
-                            print('best validation loss so far!: {}'.format(best_val_loss))
-                            self.save_state(best=True)
-                            val_metrics["saved_best"] = 1
-
-                            best_val_loss = val_metrics["loss"]
-
-                        # Save the latest model if checkpointing
-                        if checkpointing:
-                            self.save_state(best=False)
-                                        
-                        self.val_log.record(val_metrics)
-                        self.val_log.write()
-                        self.val_log.flush()
-                
-                # Train on batch
-                self.data      = train_data['data'].float()
-                self.labels    = train_data['labels'].long()
-                self.energies  = train_data['energies'].float()
-                self.angles    = train_data['angles'].float()
-                self.event_ids = train_data['event_ids'].float()
-
-                # Call forward: make a prediction & measure the average error using data = self.data
-                res = self.forward(True)
-
-                #Call backward: backpropagate error and update weights using loss = self.loss
-                self.backward()
-
-                # update the epoch and iteration
-                epoch          += 1./len(self.data_loaders["train"])
-                self.iteration += 1
-                
-                # get relevant attributes of result for logging
-                train_metrics = {"iteration": self.iteration, "epoch": epoch, "loss": res["loss"], "accuracy": res["accuracy"]}
-                
-                # record the metrics for the mini-batch in the log
-                self.train_log.record(train_metrics)
-                self.train_log.write()
-                self.train_log.flush()
-                
-                # print the metrics at given intervals
-                if self.rank == 0 and self.iteration % report_interval == 0:
-                    previous_iteration_time = iteration_time
-                    iteration_time = time()
-                    print("... Iteration %d ... Epoch %1.2f ... Training Loss %1.3f ... Training Accuracy %1.3f ... Time Elapsed %1.3f ... Iteration Time %1.3f" %
-                          (self.iteration, epoch, res["loss"], res["accuracy"], iteration_time - start_time, iteration_time - previous_iteration_time))
-                
-                if epoch >= epochs:
-                    break
         
-        self.train_log.close()
-        if self.rank == 0:
-            self.val_log.close()
+        '''
+        *************************************
+        NON-GRAPH MODELS
+        *************************************
+        '''
+        
+        if not is_graph:
+                
+            while (floor(epoch) < epochs):
+                if self.rank == 0:
+                    print('Epoch',floor(epoch), 'Starting @', strftime("%Y-%m-%d %H:%M:%S", localtime()))
+        
+                times = []
 
+                start_time = time()
+                iteration_time = start_time
+
+                train_loader = self.data_loaders["train"]
+
+                # update seeding for distributed samplers
+                if self.is_distributed:
+                    train_loader.sampler.set_epoch(epoch)
+
+                # local training loop for batches in a single epoch
+                for i, train_data in enumerate(self.data_loaders["train"]):
+
+                    # run validation on given intervals
+                    if self.iteration % val_interval == 0:
+                        # set model to eval mode
+                        self.model.eval()
+
+                        val_metrics = {"iteration": self.iteration, "epoch": epoch, "loss": 0., "accuracy": 0., "saved_best": 0}
+
+                        for val_batch in range(num_val_batches):
+                            try:
+                                val_data = next(val_iter)
+                            except StopIteration:
+                                del val_iter
+                                print("Fetching new validation iterator...")
+                                val_iter = iter(self.data_loaders["validation"])
+                                val_data = next(val_iter)
+
+                            # extract the event data from the input data tuple
+                            self.data      = val_data['data'].float()
+                            self.labels    = val_data['labels'].long()
+                            self.energies  = val_data['energies'].float()
+                            self.angles    = val_data['angles'].float()
+                            self.event_ids = val_data['event_ids'].float()
+
+                            val_res = self.forward(False)
+
+                            val_metrics["loss"] += val_res["loss"]
+                            val_metrics["accuracy"] += val_res["accuracy"]
+
+                        # return model to training mode
+                        self.model.train()
+
+                        # record the validation stats to the csv
+                        val_metrics["loss"] /= num_val_batches
+                        val_metrics["accuracy"] /= num_val_batches
+
+                        local_val_metrics = {"loss": np.array([val_metrics["loss"]]), "accuracy": np.array([val_metrics["accuracy"]])}
+
+                        if self.is_distributed:
+                            global_val_metrics = self.get_synchronized_metrics(local_val_metrics)
+                            for name, tensor in zip(global_val_metrics.keys(), global_val_metrics.values()):
+                                global_val_metrics[name] = np.array(tensor.cpu())
+                        else:
+                            global_val_metrics = local_val_metrics
+
+                        if self.rank == 0:
+                            # Save if this is the best model so far
+                            global_val_loss = np.mean(global_val_metrics["loss"])
+                            global_val_accuracy = np.mean(global_val_metrics["accuracy"])
+
+                            val_metrics["loss"] = global_val_loss
+                            val_metrics["accuracy"] = global_val_accuracy
+
+                            if val_metrics["loss"] < best_val_loss:
+                                print('best validation loss so far!: {}'.format(best_val_loss))
+                                self.save_state(best=True)
+                                val_metrics["saved_best"] = 1
+
+                                best_val_loss = val_metrics["loss"]
+
+                            # Save the latest model if checkpointing
+                            if checkpointing:
+                                self.save_state(best=False)
+
+                            self.val_log.record(val_metrics)
+                            self.val_log.write()
+                            self.val_log.flush()
+
+                    # Train on batch
+                    self.data      = train_data['data'].float()
+                    self.labels    = train_data['labels'].long()
+                    self.energies  = train_data['energies'].float()
+                    self.angles    = train_data['angles'].float()
+                    self.event_ids = train_data['event_ids'].float()
+
+                    # Call forward: make a prediction & measure the average error using data = self.data
+                    res = self.forward(True)
+
+                    #Call backward: backpropagate error and update weights using loss = self.loss
+                    self.backward()
+
+                    # update the epoch and iteration
+                    epoch          += 1./len(self.data_loaders["train"])
+                    self.iteration += 1
+
+                    # get relevant attributes of result for logging
+                    train_metrics = {"iteration": self.iteration, "epoch": epoch, "loss": res["loss"], "accuracy": res["accuracy"]}
+
+                    # record the metrics for the mini-batch in the log
+                    self.train_log.record(train_metrics)
+                    self.train_log.write()
+                    self.train_log.flush()
+
+                    # print the metrics at given intervals
+                    if self.rank == 0 and self.iteration % report_interval == 0:
+                        previous_iteration_time = iteration_time
+                        iteration_time = time()
+                        print("... Iteration %d ... Epoch %1.2f ... Training Loss %1.3f ... Training Accuracy %1.3f ... Time Elapsed %1.3f ... Iteration Time %1.3f" %
+                              (self.iteration, epoch, res["loss"], res["accuracy"], iteration_time - start_time, iteration_time - previous_iteration_time))
+
+                    if epoch >= epochs:
+                        break
+            
+            self.train_log.close()
+            if self.rank == 0:
+                self.val_log.close()
+        
+        
+        '''
+        *************************************
+        GRAPH MODELS
+        *************************************
+        '''
+        
+        if is_graph:
+            # initialize training params
+            epochs          = train_config.epochs
+            report_interval = train_config.report_interval
+            val_interval    = train_config.val_interval
+            num_val_batches = train_config.num_val_batches
+            checkpointing   = train_config.checkpointing
+
+            # set the iterations at which to dump the events and their metrics
+            if self.rank == 0:
+                print(f"Training... Validation Interval: {val_interval}")
+
+            # set model to training mode
+            self.model.train()
+
+            # initialize epoch and iteration counters
+            epoch = 0.
+            self.iteration = 0
+
+            # keep track of the validation accuracy
+            best_val_acc = 0.0
+            best_val_loss = 1.0e6
+
+            # initialize the iterator over the validation set
+            val_iter = iter(self.data_loaders["validation"])
+
+            # global training loop for multiple epochs
+            while (floor(epoch) < epochs):
+                if self.rank == 0:
+                    print('Epoch',floor(epoch), 'Starting @', strftime("%Y-%m-%d %H:%M:%S", localtime()))
+
+                times = []
+
+                start_time = time()
+                iteration_time = start_time
+
+                train_loader = self.data_loaders["train"]
+
+                # update seeding for distributed samplers
+                if self.is_distributed:
+                    train_loader.sampler.set_epoch(epoch)
+
+
+                # local training loop for batches in a single epoch
+                for data in self.data_loaders["train"]:
+
+                    # run validation on given intervals
+                    if self.iteration % val_interval == 0:
+                        # set model to eval mode
+                        self.model.eval()
+
+                        val_metrics = {"iteration": self.iteration, "epoch": epoch, "loss": 0., "accuracy": 0., "saved_best": 0}
+
+                        for val_batch in range(num_val_batches):
+                            try:
+                                val_data = next(val_iter)
+                            except StopIteration:
+                                del val_iter
+                                print("Fetching new validation iterator...")
+                                val_iter = iter(self.data_loaders["validation"])
+                                val_data = next(val_iter)
+
+                            # extract the event data                   
+                            self.data = val_data
+                            self.labels = self.data.y
+
+                            val_res = self.forward(False)
+
+                            val_metrics["loss"] += val_res["loss"]
+                            val_metrics["accuracy"] += val_res["accuracy"]
+
+                        # return model to training mode
+                        self.model.train()
+
+                        # record the validation stats to the csv
+                        val_metrics["loss"] /= num_val_batches
+                        val_metrics["accuracy"] /= num_val_batches
+
+                        local_val_metrics = {"loss": np.array([val_metrics["loss"]]), "accuracy": np.array([val_metrics["accuracy"]])}
+
+                        if self.is_distributed:
+                            global_val_metrics = self.get_synchronized_metrics(local_val_metrics)
+                            for name, tensor in zip(global_val_metrics.keys(), global_val_metrics.values()):
+                                global_val_metrics[name] = np.array(tensor.cpu())
+                        else:
+                            global_val_metrics = local_val_metrics
+
+                        if self.rank == 0:
+                            # Save if this is the best model so far
+                            global_val_loss = np.mean(global_val_metrics["loss"])
+                            global_val_accuracy = np.mean(global_val_metrics["accuracy"])
+
+                            val_metrics["loss"] = global_val_loss
+                            val_metrics["accuracy"] = global_val_accuracy
+
+                            if val_metrics["loss"] < best_val_loss:
+                                print('best validation loss so far!: {}'.format(best_val_loss))
+                                self.save_state(best=True)
+                                val_metrics["saved_best"] = 1
+
+                                best_val_loss = val_metrics["loss"]
+
+                            # Save the latest model if checkpointing
+                            if checkpointing:
+                                self.save_state(best=False)
+
+                            self.val_log.record(val_metrics)
+                            self.val_log.write()
+                            self.val_log.flush()
+
+                    # Train on batch
+                    self.data = data
+                    self.labels = self.data.y
+
+                    # Call forward: make a prediction & measure the average error using data = self.data
+                    res = self.forward(True)
+
+                    #Call backward: backpropagate error and update weights using loss = self.loss
+                    self.backward()
+
+                    # update the epoch and iteration
+                    epoch          += 1./len(self.data_loaders["train"])
+                    self.iteration += 1
+
+                    # get relevant attributes of result for logging
+                    train_metrics = {"iteration": self.iteration, "epoch": epoch, "loss": res["loss"], "accuracy": res["accuracy"]}
+
+                    # record the metrics for the mini-batch in the log
+                    self.train_log.record(train_metrics)
+                    self.train_log.write()
+                    self.train_log.flush()
+
+                    # print the metrics at given intervals
+                    if self.rank == 0 and self.iteration % report_interval == 0:
+                        previous_iteration_time = iteration_time
+                        iteration_time = time()
+                        print("... Iteration %d ... Epoch %1.2f ... Training Loss %1.3f ... Training Accuracy %1.3f ... Time Elapsed %1.3f ... Iteration Time %1.3f" %
+                              (self.iteration, epoch, res["loss"], res["accuracy"], iteration_time - start_time, iteration_time - previous_iteration_time))
+
+                    if epoch >= epochs:
+                        break
+
+            self.train_log.close()
+            if self.rank == 0:
+                self.val_log.close()
+
+    
+    
     def evaluate(self, test_config):
         """
         Evaluate the performance of the trained model on the test set
@@ -366,8 +554,15 @@ class ClassifierEngine:
             # Variables for the confusion matrix
             loss, accuracy, indices, labels, predictions, softmaxes= [],[],[],[],[],[]
             
-            # Extract the event data and label from the DataLoader iterator
-            for it, eval_data in enumerate(self.data_loaders["test"]):
+            '''
+            *************************************
+            NON-GRAPH MODELS
+            *************************************
+            '''
+            
+            if not is_graph:
+                
+                for it, eval_data in enumerate(self.data_loaders["test"]):
                 
                 # load data
                 self.data = copy.deepcopy(eval_data['data'].float())
@@ -397,7 +592,40 @@ class ClassifierEngine:
                     print("eval_iteration : " + str(it))
 
                 eval_iterations += 1
+            
+            '''
+            *************************************
+            GRAPH MODELS
+            *************************************
+            '''
         
+            elif is_graph:
+                
+                for data in self.data_loaders["test"]:
+                        
+                self.data = data
+                self.labels = self.data.y
+                result = self.forward(train=False, return_metrics=report_test_metrics)
+
+                if report_test_metrics:
+                    eval_loss += result['loss']
+                    eval_acc  += result['accuracy']
+                
+                # Copy the tensors back to the CPU
+                self.labels = self.labels.to("cpu")
+
+                labels.extend(self.labels)
+                predictions.extend(result['predicted_labels'])
+                softmaxes.extend(result["softmax"])
+
+                if report_test_metrics:
+                    print("eval_loss : " + str(result["loss"]) + " eval_accuracy : " + str(result["accuracy"]))
+                
+
+                eval_iterations += 1
+        
+       
+    
         # convert arrays to torch tensors
         print("loss : " + str(eval_loss/eval_iterations) + " accuracy : " + str(eval_acc/eval_iterations))
 
@@ -412,9 +640,9 @@ class ClassifierEngine:
         predictions = np.array(predictions)
         softmaxes   = np.array(softmaxes)
         
-        local_eval_results_dict = {"indices":indices, "labels":labels, "predictions":predictions, "softmaxes":softmaxes}
-
-        if self.is_distributed:
+        if not is_graph:
+            
+            if self.is_distributed:
             # Gather results from all processes
             global_eval_metrics_dict = self.get_synchronized_metrics(local_eval_metrics_dict)
             global_eval_results_dict = self.get_synchronized_metrics(local_eval_results_dict)
@@ -446,6 +674,41 @@ class ClassifierEngine:
 
             print("\nAvg eval loss : " + str(val_loss/val_iterations),
                   "\nAvg eval acc : "  + str(val_acc/val_iterations))
+        
+        elif is_graph:
+            local_eval_results_dict = {"labels":labels, "predictions":predictions, "softmaxes":softmaxes}
+
+        if self.is_distributed:
+            # Gather results from all processes
+            global_eval_metrics_dict = self.get_synchronized_metrics(local_eval_metrics_dict)
+            global_eval_results_dict = self.get_synchronized_metrics(local_eval_results_dict)
+            
+            if self.rank == 0:
+                
+                
+                for name, tensor in zip(global_eval_metrics_dict.keys(), global_eval_metrics_dict.values()):
+                    local_eval_metrics_dict[name] = np.array(tensor.cpu())
+                
+                labels      = np.array(global_eval_results_dict["labels"].cpu())
+                predictions = np.array(global_eval_results_dict["predictions"].cpu())
+                softmaxes   = np.array(global_eval_results_dict["softmaxes"].cpu())
+        
+        if self.rank == 0:
+            print("Saving Data...")
+            np.save(self.dirpath + "labels.npy", labels)
+            np.save(self.dirpath + "predictions.npy", predictions)
+            np.save(self.dirpath + "softmax.npy", softmaxes)
+
+            # Compute overall evaluation metrics
+            val_iterations = np.sum(local_eval_metrics_dict["eval_iterations"])
+            val_loss = np.sum(local_eval_metrics_dict["eval_loss"])
+            val_acc = np.sum(local_eval_metrics_dict["eval_acc"])
+
+            print("\nAvg eval loss : " + str(val_loss/val_iterations),
+                  "\nAvg eval acc : "  + str(val_acc/val_iterations))
+        
+
+        
         
     # ========================================================================
     # Saving and loading models

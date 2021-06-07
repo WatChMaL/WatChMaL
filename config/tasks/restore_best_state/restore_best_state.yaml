@@ -1,2 +1,20 @@
 # @package _group_
-placeholder: "configs can't be empty"
+epochs: 15
+
+report_interval: 50
+val_interval: 100
+num_val_batches: 32
+is_graph: True
+
+checkpointing: False
+
+data_loaders:
+  train:
+    split_key: train_idxs
+    batch_size: 64
+    num_workers: 4
+
+  validation:
+    split_key: val_idxs
+    batch_size: 64
+    num_workers: 4

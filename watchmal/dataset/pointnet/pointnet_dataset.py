@@ -15,7 +15,7 @@ import watchmal.dataset.data_utils as du
 
 class PointNetDataset(H5Dataset):
 
-    def __init__(self, h5file, geometry_file, is_distributed, use_orientations=False, n_points=4000, transforms=None):
+    def __init__(self, h5file, geometry_file, is_distributed, use_orientations=False, n_points=4000, transforms=None, is_graph=False):
         super().__init__(h5file, is_distributed)
         geo_file = np.load(geometry_file, 'r')
         self.geo_positions = torch.from_numpy(geo_file["position"]).float()

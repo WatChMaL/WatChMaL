@@ -1,2 +1,2 @@
 # @package _group_
-_target_: watchmal.model.classifier.PointNetFullyConnected
+_target_: watchmal.model.classifier.DGCNNFullyConnected
