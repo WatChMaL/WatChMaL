@@ -22,16 +22,16 @@ label_size = 14
 # ========================================================================
 # Single Variable Plotting Functions
 
-def plot_fitqun_binned_performance(axes=None, **kwargs):
+def plot_fitqun_binned_performance(axes=None, eff_yrange=[0.5, 1.05], rej_yrange=[0, 0.006], **kwargs):
     '''
         Purpose: Re-create official FiTQun plots.
     '''
     if axes is None:
         fig, axes = plt.subplots(1,2,figsize=(18,9), facecolor='w')
 
-    plot_momentum_binned_performance(metric='efficiency', yrange=[0.7, 1.1], xrange=[0, 1000], plot_bins=None, ax=axes[0], **kwargs)
+    plot_momentum_binned_performance(metric='efficiency', yrange=eff_yrange, xrange=[0, 1000], plot_bins=None, ax=axes[0], **kwargs)
 
-    plot_momentum_binned_performance(metric='fpr', yrange=[0, 0.01], xrange=[0, 1000], plot_bins=None, ax=axes[1], **kwargs)
+    plot_momentum_binned_performance(metric='fpr', yrange=rej_yrange, xrange=[0, 1000], plot_bins=None, ax=axes[1], **kwargs)
 
 
 def plot_single_var_binned_performance(scores_list, labels_list, reconstructed_momentum, plot_binning_features, fpr_fixed_point, index_dict, recons_mom_bin_size=50, plot_bins=None, 

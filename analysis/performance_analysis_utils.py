@@ -315,8 +315,7 @@ def plot_fixed_operating_performance(bin_centers, bin_metrics, yerr, marker, col
     
     secax = ax.secondary_yaxis('right')
 
-    if not show_legend:
-        ax.legend(handlelength=5.0 if not (marker == 'o') else None)#, prop={'size': label_size})
+    ax.legend(handlelength=5.0 if not (marker == 'o') else None)#, prop={'size': label_size})
 
 # ========================================================================
 # Multiple Variable Plot Functions
@@ -550,7 +549,7 @@ def plot_multi_var_fixed_operating_performance(all_true_plotting_bins, all_bin_m
         secax = ax.secondary_yaxis('right')
             
         ax.legend(prop={'size': 16}, bbox_to_anchor=(1.05, 1), handlelength=5.0, loc='upper left')
-    
+
 
 def compute_2D_hist():
     pass
@@ -660,7 +659,7 @@ def plot_binned_response(softmaxes, labels, particle_names, binning_features, bi
                 extra_output_label = reduce(lambda x,y: x + ' + ' + f"P({y})", [f'P({legend_label_dict[name]})' if i==0 else legend_label_dict[name] for i, name in enumerate(extra_pane_particle_names)])
                 ax.set_ylabel(extra_output_label,fontsize=label_size)
                 ax.set_title('\n'.join(wrap('{} Density For {} Events vs {}'.format(extra_output_label, legend_label_dict[particle_name],binning_label),wrap_size)),fontsize=label_size)
-            
+
 
 def plot_2d_hist_ratio(dist_1_x,dist_1_y,dist_2_x, dist_2_y,bins=(150,150),fig=None,ax=None,
                   title=None, xlabel=None, ylabel=None, ratio_range=None):
