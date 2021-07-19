@@ -1,2 +1,2 @@
 # @package _group_
-weight_file: '/home/jtindall/short_tank/short_tank_run_1/outputs/ClassifierBEST.pth'
+weight_file: '/home/zpatel/zp_analysis_notebooks/JT_4_class_training/ClassifierBEST.pth'

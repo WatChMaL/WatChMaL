@@ -66,13 +66,17 @@ class CNNmPMTDataset(H5Dataset):
         
         return data
 
-    def  __getitem__(self, item):
+    def  __getitem__(self, item, pad=True):
 
         data_dict = super().__getitem__(item)
 
         processed_data = from_numpy(self.process_data(self.event_hit_pmts, self.event_hit_charges))
         processed_data = du.apply_random_transformations(self.transforms, processed_data)
-
+        
+        # Add padding
+        if pad:
+            processed_data = transformations.mpmtPadding(processed_data, self.barrel_rows)
+            
         data_dict["data"] = processed_data
 
         return data_dict

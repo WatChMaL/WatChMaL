@@ -1,0 +1,4 @@
+# @package _group_
+split_path: /home/hlahiouel/physics_samples_five_thousand_files_apr28.npz
+dataset:
+  h5file: /fast_scratch/WatChMaL/data/physics_samples_five_thousand_files_apr28.h5

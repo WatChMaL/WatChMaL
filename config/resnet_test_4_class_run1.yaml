@@ -3,7 +3,7 @@ gpu_list:
 seed: null
 dump_path: './outputs/'
 defaults:
-    - data: iwcd_short
+    - data: 4_class_test_run1
     - data/dataset: iwcd_cnn_short
     - model: classifier
     - model/feature_extractor: resnet18

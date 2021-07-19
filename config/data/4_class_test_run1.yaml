@@ -1,4 +1,4 @@
 # @package _group_
-split_path: /fast_scratch/WatChMaL/data/IWCD_mPMT_Short_4_class_3M_emgp0_idxs.npz
+split_path: /fast_scratch/WatChMaL/data/IWCD_mPMT_Short_4_class_3M_emgp0_OD_veto_idxs.npz
 dataset:
   h5file: /fast_scratch/WatChMaL/data/IWCD_mPMT_Short_emgp0_E0to1000MeV_digihits.h5

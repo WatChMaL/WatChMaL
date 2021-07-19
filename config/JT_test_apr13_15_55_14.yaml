@@ -1,0 +1,35 @@
+gpu_list:
+- 1
+seed: null
+dump_path: './outputs/'
+data:
+  split_path: /fast_scratch/WatChMaL/data/IWCD_mPMT_Short/index_lists/4class_e_mu_gamma_pi0/IWCD_mPMT_Short_4_class_3M_emgp0_idxs.npz
+  dataset:
+    h5file: /fast_scratch/WatChMaL/data/IWCD_mPMT_Short/IWCD_mPMT_Short_emgp0_E0to1000MeV_digihits.h5
+    _target_: watchmal.dataset.cnn_mpmt.cnn_mpmt_dataset.CNNmPMTDataset
+    mpmt_positions_file: /data/WatChMaL/data/IWCDshort_mPMT_image_positions.npz
+    collapse_arrays: false
+model:
+  _target_: watchmal.model.classifier.Classifier
+  num_classes: 4
+  feature_extractor:
+    _target_: watchmal.model.resnet.resnet18
+    num_input_channels: 19
+    num_output_channels: 128
+  classification_network:
+    _target_: watchmal.model.classifier.ResNetFullyConnected
+engine:
+  _target_: watchmal.engine.engine_classifier.ClassifierEngine
+tasks:
+  restore_state:
+    weight_file: /home/zpatel/WatChMaL/outputs/2021-07-15/18-11-19/outputs/ClassifierBEST.pth
+  evaluate:
+    report_test_metrics: false
+    data_loaders:
+      test:
+        split_key: test_idxs
+        batch_size: 512
+        num_workers: 4
+        sampler:
+          _target_: watchmal.dataset.samplers.SubsetSequentialSampler
+
