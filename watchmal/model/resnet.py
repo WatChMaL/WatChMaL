@@ -134,7 +134,8 @@ class ResNet(nn.Module):
         self.conv3b = nn.Conv2d(self.unroll_size, self.unroll_size, kernel_size=(1, 4), stride=(1, 1))
         self.conv3c = nn.Conv2d(self.unroll_size, self.unroll_size, kernel_size=(2, 2), stride=(1, 1))
         self.conv3d = nn.Conv2d(self.unroll_size, self.unroll_size, kernel_size=(1, 2), stride=(1, 1))
-        
+        self.conv3e = nn.Conv2d(self.unroll_size, self.unroll_size, kernel_size=(9, 9), stride=(1, 1))
+
         self.bn3 = nn.BatchNorm2d(self.unroll_size)
 
         for m in self.modules():
@@ -208,6 +209,8 @@ class ResNet(nn.Module):
             x = self.conv3c(x)
         elif x.size()[-2:] == (1, 2):
             x = self.conv3d(x)
+        elif x.size()[-2:] == (9, 9):
+            x = self.conv3e(x)
         
         x = self.bn3(x)
         x = self.relu(x)
