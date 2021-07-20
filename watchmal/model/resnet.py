@@ -107,6 +107,7 @@ class Bottleneck(nn.Module):
         return out
 
 
+# +
 class ResNet(nn.Module):
 
     def __init__(self, block, layers, num_input_channels, num_output_channels, zero_init_residual=False):
@@ -123,7 +124,9 @@ class ResNet(nn.Module):
 
         self.layer0 = BasicBlock(64, 64)
         self.layer1 = self._make_layer(block, 64, layers[0], stride=2)
+
         self.layer2 = self._make_layer(block, 64, layers[1], stride=2)
+
         self.layer3 = self._make_layer(block, 64, layers[2], stride=2)
         self.layer4 = self._make_layer(block, 128, layers[3], stride=2)
 
@@ -134,7 +137,9 @@ class ResNet(nn.Module):
         self.conv3b = nn.Conv2d(self.unroll_size, self.unroll_size, kernel_size=(1, 4), stride=(1, 1))
         self.conv3c = nn.Conv2d(self.unroll_size, self.unroll_size, kernel_size=(2, 2), stride=(1, 1))
         self.conv3d = nn.Conv2d(self.unroll_size, self.unroll_size, kernel_size=(1, 2), stride=(1, 1))
-        
+        #padding
+        self.conv3f = nn.Conv2d(self.unroll_size, self.unroll_size, kernel_size=(1, 3), stride=(1, 1))
+
         self.bn3 = nn.BatchNorm2d(self.unroll_size)
 
         for m in self.modules():
@@ -186,19 +191,44 @@ class ResNet(nn.Module):
         return nn.Sequential(*layers)
 
     def forward(self, x):
+#         print(x.shape)
+
         x = self.conv1(x)
+        
+#         print(x.shape)
+
+        
         x = self.bn1(x)
+
+#         print(x.shape)
+
+
         x = self.relu(x)
+#         print(x.shape)
 
         x = self.conv2(x)
+#         print(x.shape)
+
         x = self.bn2(x)
+#         print(x.shape)
+
         x = self.relu(x)
+#         print(x.shape)
 
         x = self.layer0(x)
+#         print(x.shape)
+
         x = self.layer1(x)
+#         print(x.shape)
+
         x = self.layer2(x)
+#         print(x.shape)
+
         x = self.layer3(x)
+#         print(x.shape)
+
         x = self.layer4(x)
+#         print(x.shape)
 
         if x.size()[-2:] == (4, 4):
             x = self.conv3a(x)
@@ -208,17 +238,38 @@ class ResNet(nn.Module):
             x = self.conv3c(x)
         elif x.size()[-2:] == (1, 2):
             x = self.conv3d(x)
-        
+        elif x.size()[-2:] == (1, 3):
+            x = self.conv3f(x)
+            
+#         print(x.shape)
+
         x = self.bn3(x)
+#         print(x.shape)
+
         x = self.relu(x)
-
+#         print(x.shape)
+        
+#         print("DONE")
+#         print(x.shape)
+        
         x = x.view(x.size(0), -1)
+        
+#         print(x.shape) 
+#         print(self.fc1.in_features)
+        
         x = self.relu(self.fc1(x))
-
+        
+        
+        
         if self.bool_deep:
             x = self.relu(self.fc2(x))
+        
+        print(x)
+        
         return x
 
+
+# -
 
 def resnet18(**kwargs):
     """Constructs a ResNet-18 model feature extractor.
