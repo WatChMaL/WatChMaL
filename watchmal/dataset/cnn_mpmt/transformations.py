@@ -22,7 +22,7 @@ def vertical_flip(data):
 def mpmtPadding(data, barrel_rows):
     half_len_index = int(data.shape[2]/2)
     horiz_pad_data = torch.cat((data, torch.zeros_like(data[:, :, :half_len_index])), 2)
-    horiz_pad_data[:, :, 2*half_len_index:] = torch.tensor(np.nan, dtype=torch.float64)
+    horiz_pad_data[:, :, 2*half_len_index:] = torch.tensor(0, dtype=torch.float64)
     horiz_pad_data[:, barrel_rows, 2*half_len_index:] = data[:, barrel_rows, :half_len_index]
     
     l_index = data.shape[2]/2 - 1

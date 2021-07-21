@@ -264,7 +264,7 @@ class ResNet(nn.Module):
         if self.bool_deep:
             x = self.relu(self.fc2(x))
         
-        print(x)
+#         print(x)
         
         return x
 
