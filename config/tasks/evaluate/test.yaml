@@ -1,4 +1,5 @@
 # @package _group_
+report_test_metrics: false
 data_loaders:
   test:
     split_key: test_idxs

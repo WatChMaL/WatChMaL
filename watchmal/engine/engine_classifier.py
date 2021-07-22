@@ -114,7 +114,7 @@ class ClassifierEngine:
         
         return global_metric_dict
 
-    def forward(self, train=True):
+    def forward(self, train=True, return_metrics=True):
         """
         Compute predictions and metrics for a batch of data
 
@@ -133,18 +133,22 @@ class ClassifierEngine:
             self.labels = self.labels.to(self.device)
 
             model_out = self.model(self.data)
-
-            self.loss = self.criterion(model_out, self.labels)
             
             softmax          = self.softmax(model_out)
-            predicted_labels = torch.argmax(model_out,dim=-1)
-            accuracy         = (predicted_labels == self.labels).sum().item() / float(predicted_labels.nelement())
+            predicted_labels = torch.argmax(model_out, dim=-1)
+
+            result = { 'predicted_labels' : predicted_labels.detach().cpu().numpy(),
+                      'softmax'          : softmax.detach().cpu().numpy(),
+                      'raw_pred_labels'  : model_out}
+            
+            if return_metrics:
+                self.loss = self.criterion(model_out, self.labels)
+                accuracy  = (predicted_labels == self.labels).sum().item() / float(predicted_labels.nelement())
+
+                result['loss'] = self.loss.detach().cpu().item()
+                result['accuracy'] = accuracy
         
-        return {'loss'             : self.loss.detach().cpu().item(),
-                'predicted_labels' : predicted_labels.detach().cpu().numpy(),
-                'softmax'          : softmax.detach().cpu().numpy(),
-                'accuracy'         : accuracy,
-                'raw_pred_labels'  : model_out}
+        return result
     
     def backward(self):
         """
@@ -345,6 +349,8 @@ class ClassifierEngine:
         Returns: None
         """
         print("evaluating in directory: ", self.dirpath)
+
+        report_test_metrics = test_config.report_test_metrics
         
         # Variables to output at the end
         eval_loss = 0.0
@@ -368,12 +374,13 @@ class ClassifierEngine:
                 self.labels = copy.deepcopy(eval_data['labels'].long())
                 
                 eval_indices = copy.deepcopy(eval_data['indices'].long().to("cpu"))
-
+                
                 # Run the forward procedure and output the result
-                result = self.forward(False)
+                result = self.forward(train=False, return_metrics=report_test_metrics)
 
-                eval_loss += result['loss']
-                eval_acc += result['accuracy']
+                if report_test_metrics:
+                    eval_loss += result['loss']
+                    eval_acc  += result['accuracy']
                 
                 # Copy the tensors back to the CPU
                 self.labels = self.labels.to("cpu")
@@ -384,7 +391,10 @@ class ClassifierEngine:
                 predictions.extend(result['predicted_labels'])
                 softmaxes.extend(result["softmax"])
 
-                print("eval_iteration : " + str(it) + " eval_loss : " + str(result["loss"]) + " eval_accuracy : " + str(result["accuracy"]))
+                if report_test_metrics:
+                    print("eval_iteration : " + str(it) + " eval_loss : " + str(result["loss"]) + " eval_accuracy : " + str(result["accuracy"]))
+                else:
+                    print("eval_iteration : " + str(it))
 
                 eval_iterations += 1
         

@@ -47,18 +47,18 @@ class H5CommonDataset(Dataset, ABC):
         self.file_descriptor = open(self.h5_path, 'rb')
         self.h5_file = h5py.File(self.file_descriptor, "r")
 
-        self.event_ids          = np.array(self.h5_file["event_ids"])
-        self.root_files         = np.array(self.h5_file["root_files"])
-        self.labels             = np.array(self.h5_file["labels"])
-        self.positions          = np.array(self.h5_file["positions"])
-        self.angles             = np.array(self.h5_file["angles"])
-        self.energies           = np.array(self.h5_file["energies"])
+        self.event_ids  = np.array(self.h5_file["event_ids"])
+        self.root_files = np.array(self.h5_file["root_files"])
+        self.labels     = np.array(self.h5_file["labels"])
+        self.positions  = np.array(self.h5_file["positions"])
+        self.angles     = np.array(self.h5_file["angles"])
+        self.energies   = np.array(self.h5_file["energies"])
         if "veto" in self.h5_file.keys():
-            self.veto               = np.array(self.h5_file["veto"])
-            self.veto2              = np.array(self.h5_file["veto2"])
-        self.event_hits_index   = np.append(self.h5_file["event_hits_index"], self.h5_file["hit_pmt"].shape[0]).astype(np.int64)
+            self.veto  = np.array(self.h5_file["veto"])
+            self.veto2 = np.array(self.h5_file["veto2"])
+        self.event_hits_index = np.append(self.h5_file["event_hits_index"], self.h5_file["hit_pmt"].shape[0]).astype(np.int64)
         
-        self.hdf5_hit_pmt = self.h5_file["hit_pmt"]
+        self.hdf5_hit_pmt  = self.h5_file["hit_pmt"]
         self.hdf5_hit_time = self.h5_file["hit_time"]
 
         self.hit_pmt = np.memmap(self.h5_path, mode="r", shape=self.hdf5_hit_pmt.shape,
@@ -117,14 +117,9 @@ class H5Dataset(H5CommonDataset, ABC):
         start = self.event_hits_index[item]
         stop = self.event_hits_index[item + 1]
 
-        hit_pmts = self.hit_pmt[start:stop].astype(np.int16)
-        hit_charges = self.hit_charge[start:stop]
-        hit_times = self.time[start:stop]
-
-        data = {"hit_pmts" : hit_pmts,
-                "hit_charges" : hit_charges,
-                "hit_times" : hit_times}
-        data_dict["data"] = data
+        self.event_hit_pmts = self.hit_pmt[start:stop].astype(np.int16)
+        self.event_hit_charges = self.hit_charge[start:stop]
+        self.event_hit_times = self.time[start:stop]
 
         return data_dict
 
@@ -133,16 +128,17 @@ class H5TrueDataset(H5CommonDataset, ABC):
     Initializes truehits dataset. Adds access to true photon hits data. These are:
     hit_parent 	(n_hits,) 	float32 	Parent track ID of the true hit, as defined by WCSim's true hit parent. -1 is used for dark noise.
     """
-    def __init__(self, h5_path, transforms=None):
+    def __init__(self, h5_path, transforms=None, digitize_hits=True):
         H5CommonDataset.__init__(self, h5_path, transforms)
-        
+        self.digitize_hits = digitize_hits
+
     def load_hits(self):
         self.all_hit_parent = self.h5_file["hit_parent"]
         self.hit_parent = np.memmap( self.h5_path, mode="r", shape=self.all_hit_parent.shape,
                               offset=self.all_hit_parent.id.get_offset(),
                               dtype=self.all_hit_parent.dtype)
 
-    def digitize(self,truepmts,truetimes,trueparents):
+    def digitize(self, truepmts, truetimes, trueparents):
         """
         Replace below with a real digitization.  For now take time closest to zero as time, and sum of photons as charge.
         """
@@ -162,14 +158,15 @@ class H5TrueDataset(H5CommonDataset, ABC):
         start = self.event_hits_index[item]
         stop = self.event_hits_index[item + 1]
 
-        self.true_pmts    = self.hit_pmt[start:stop].astype(np.int16)
-        self.true_times   = self.time[start:stop]
-        self.true_parents = self.hit_parent[start:stop]
-        hit_pmts, hit_times, hit_charges = self.digitize(self.true_pmts, self.true_times, self.true_parents )
+        true_pmts    = self.hit_pmt[start:stop].astype(np.int16)
+        true_times   = self.time[start:stop]
+        true_parents = self.hit_parent[start:stop]
 
-        data = {"hit_pmts" : hit_pmts,
-                "hit_charges" : hit_charges,
-                "hit_times" : hit_times}
-        data_dict["data"] = data
+        if self.digitize_hits:
+            self.event_hit_pmts, self.event_hit_times, self.event_hit_charges = self.digitize(true_pmts, true_times, true_parents)
+        else:
+            self.event_hit_pmts = true_pmts
+            self.event_hit_times = true_times
+            self.event_hit_parents = true_parents
 
         return data_dict

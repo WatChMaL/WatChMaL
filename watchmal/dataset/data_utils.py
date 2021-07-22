@@ -53,7 +53,7 @@ def get_data_loader(dataset, batch_size, sampler, num_workers, is_distributed, s
         sampler = DistributedSamplerWrapper(sampler=sampler, seed=seed)
     
     # TODO: added drop_last, should decide if we want to keep this
-    return DataLoader(dataset, sampler=sampler, batch_size=batch_size, num_workers=num_workers, drop_last=True)
+    return DataLoader(dataset, sampler=sampler, batch_size=batch_size, num_workers=num_workers, drop_last=False)
 
 
 def get_transformations(transformations, transform_names):
@@ -66,9 +66,11 @@ def get_transformations(transformations, transform_names):
         return None
 
 
-def apply_random_transformations(transforms, data):
+def apply_random_transformations(transforms, data, segmented_labels = None):
     if transforms is not None:
         for transformation in transforms:
             if random.getrandbits(1):
                 data = transformation(data)
+                if segmented_labels is not None:
+                    segmented_labels = transformation(segmented_labels)
     return data
