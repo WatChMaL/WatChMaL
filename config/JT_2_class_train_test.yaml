@@ -1,12 +1,11 @@
-[2021-03-05 08:30:55,462][train][INFO] - Running with the following config:
 gpu_list:
 - 6
 seed: null
 dump_path: './outputs/'
 data:
-  split_path: /home/hlahiouel/IWCD_mPMT_Short_2_class_egamma_full_no_veto_idxs.npz
+  split_path: /fast_scratch/WatChMaL/data/IWCD_mPMT_Short/index_lists/2class_e_gamma/IWCD_mPMT_Short_2_class_eg_9M_idxs.npz
   dataset:
-    h5file: /fast_scratch/WatChMaL/data/IWCD_mPMT_Short/IWCD_mPMT_Short_emgp0_E0to1000MeV_digihits.h5
+    h5file: /fast_scratch/WatChMaL/data/IWCD_mPMT_Short/IWCD_mPMT_Short_emg_E0to1000MeV_digihits.h5
     _target_: watchmal.dataset.cnn_mpmt.cnn_mpmt_dataset.CNNmPMTDataset
     mpmt_positions_file: /data/WatChMaL/data/IWCDshort_mPMT_image_positions.npz
     collapse_arrays: false

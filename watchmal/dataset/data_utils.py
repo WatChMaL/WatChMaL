@@ -66,7 +66,7 @@ def get_transformations(transformations, transform_names):
         return None
 
 
-def apply_random_transformations(transforms, data, segmented_labels = None):
+def apply_random_transformations(transforms, data, segmented_labels = None, barrel_rows):
     if transforms is not None:
         for transformation in transforms:
             if random.getrandbits(1):
