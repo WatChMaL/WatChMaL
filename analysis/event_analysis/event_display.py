@@ -55,3 +55,50 @@ def plot_2d_event(data, positions, pmt_pos, dpi=300, title=None, style="default"
         ax.set_title(title)
 
 
+def plot_3d_event(data, positions, pmt_positions, pmt_orientations, dpi=300, title=None, color_map=plt.cm.jet_r, vertical_axis='y'):
+    """
+    Plots 2D event display from PMT data (time or charge)
+
+    Parameters
+    ----------
+    data : array_like
+        Data to be plotted (e.g. PMT charges)
+    positions : array_like
+        3D (x, y, z) locations of where to plot the data
+    pmt_positions : array_like
+        3D (x, y, z) locations of all PMTs or mPMTs
+    pmt_orientations : array_like
+        2D (x, y, z) orientations of all PMTs or mPMTs
+    dpi : int, default: 300
+        Resolution of the figure
+    title : str, default: None
+        Title of the plot
+    color_map : str or Colormap, default: plt.cm.jet
+        Color map to use when plotting the data
+    vertical_axis : str, default='y'
+        Vertical axis
+    """
+
+    # for very new versions of matplotlib, this can be achieved more cleanly just with:
+    # ax.view_init(vertical_axis=vertical_axis)
+    # so we should change this once that matplotlib version is widely used
+    if vertical_axis == 'y':
+        positions = positions[:, (0, 2, 1)]
+        pmt_positions = pmt_positions[:, (0, 2, 1)]
+        pmt_orientations = pmt_orientations[:, (0, 2, 1)]
+    elif vertical_axis == 'x':
+        positions = positions[:, (2, 1, 0)]
+        pmt_positions = pmt_positions[:, (2, 1, 0)]
+        pmt_orientations = pmt_orientations[:, (2, 1, 0)]
+
+    color_map = copy.copy(color_map)
+    color_map.set_bad(color='white')
+
+    fig = plt.figure(figsize=(20, 12), dpi=dpi)
+    ax = fig.add_subplot(111, projection='3d')
+    ax.scatter3D(*pmt_positions.T, c='gray', marker='o', s=2, alpha=0.1)
+    hits = ax.scatter(*positions.T, c=data, s=2, cmap=color_map)
+    plt.colorbar(hits)
+
+    if title is not None:
+        ax.set_title(title)
