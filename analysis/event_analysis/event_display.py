@@ -79,7 +79,7 @@ def plot_3d_event(data, positions, pmt_positions, pmt_orientations, dpi=300, tit
         Vertical axis
     """
 
-    # for very new versions of matplotlib, this can be achieved more cleanly just with:
+    # for upcoming/new versions of matplotlib, this can be achieved more cleanly just with:
     # ax.view_init(vertical_axis=vertical_axis)
     # so we should change this once that matplotlib version is widely used
     if vertical_axis == 'y':
@@ -96,6 +96,7 @@ def plot_3d_event(data, positions, pmt_positions, pmt_orientations, dpi=300, tit
 
     fig = plt.figure(figsize=(20, 12), dpi=dpi)
     ax = fig.add_subplot(111, projection='3d')
+    # It would be nice to plot circles oriented by their actual orientation, but this is difficult to do with 3D patches
     ax.scatter3D(*pmt_positions.T, c='gray', marker='o', s=2, alpha=0.1)
     hits = ax.scatter(*positions.T, c=data, s=2, cmap=color_map)
     plt.colorbar(hits)
