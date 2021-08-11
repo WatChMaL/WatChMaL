@@ -9,6 +9,7 @@ data:
     _target_: watchmal.dataset.cnn_mpmt.cnn_mpmt_dataset.CNNmPMTDataset
     mpmt_positions_file: /data/WatChMaL/data/IWCDshort_mPMT_image_positions.npz
     collapse_arrays: false
+    pad: false
 model:
   _target_: watchmal.model.classifier.Classifier
   num_classes: 2

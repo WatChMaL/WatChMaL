@@ -1,15 +1,15 @@
-[2021-04-19 09:44:40,686][train][INFO] - Running with the following config:
 gpu_list:
-- 7
+- 6
 seed: null
-dump_path: ./outputs/
+dump_path: './outputs/'
 data:
   split_path: /fast_scratch/WatChMaL/data/IWCD_mPMT_Short/index_lists/2class_e_gamma/IWCD_mPMT_Short_2_class_eg_9M_idxs.npz
   dataset:
-    h5file: /fast_scratch/WatChMaL/data/IWCD_mPMT_Short/IWCD_mPMT_Short_emg_E0to1000MeV_digihits.h5.h5
+    h5file: /fast_scratch/WatChMaL/data/IWCD_mPMT_Short/IWCD_mPMT_Short_emg_E0to1000MeV_digihits.h5
     _target_: watchmal.dataset.cnn_mpmt.cnn_mpmt_dataset.CNNmPMTDataset
     mpmt_positions_file: /data/WatChMaL/data/IWCDshort_mPMT_image_positions.npz
     collapse_arrays: false
+    pad: true
 model:
   _target_: watchmal.model.classifier.Classifier
   num_classes: 2
@@ -23,7 +23,7 @@ engine:
   _target_: watchmal.engine.engine_classifier.ClassifierEngine
 tasks:
   restore_state:
-    weight_file: /home/jtindall/analysis_models/2_class_extra_indices/outputs/ClassifierBEST.pth
+    weight_file: /home/zpatel/WatChMaL/outputs/2021-07-29/13-29-01/outputs/ClassifierBEST.pth
   evaluate:
     report_test_metrics: true
     data_loaders:

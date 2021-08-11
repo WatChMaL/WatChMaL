@@ -213,7 +213,7 @@ class ResNet(nn.Module):
         x = self.layer3(x)
 
         x = self.layer4(x)
-
+        
         if x.size()[-2:] == (4, 4):
             x = self.conv3a(x)
         elif x.size()[-2:] == (1, 1):
