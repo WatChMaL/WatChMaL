@@ -9,7 +9,7 @@ data:
     _target_: watchmal.dataset.cnn_mpmt.cnn_mpmt_dataset.CNNmPMTDataset
     mpmt_positions_file: /data/WatChMaL/data/IWCDshort_mPMT_image_positions.npz
     collapse_arrays: false
-    pad: true
+    pad: false
 model:
   _target_: watchmal.model.classifier.Classifier
   num_classes: 2
@@ -23,7 +23,7 @@ engine:
   _target_: watchmal.engine.engine_classifier.ClassifierEngine
 tasks:
   restore_state:
-    weight_file: /home/zpatel/WatChMaL/outputs/2021-07-29/13-29-01/outputs/ClassifierBEST.pth
+    weight_file: /home/zpatel/WatChMaL/outputs/2021-08-10/11-50-11/outputs/ClassifierBEST.pth
   evaluate:
     report_test_metrics: true
     data_loaders:
