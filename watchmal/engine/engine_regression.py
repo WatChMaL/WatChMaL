@@ -22,6 +22,7 @@ from time import strftime, localtime, time
 import sys
 from sys import stdout
 import copy
+from scipy import stats #For interquartile range
 
 # WatChMaL imports
 from watchmal.dataset.data_utils import get_data_loader
@@ -152,6 +153,9 @@ class RegressionEngine:
                 'raw_output': model_out}
 
     def scale_positions(self, data):
+        #x_positions = data[:,0]
+        #y_positions = data[:,1]
+        #z_positions = data[:,2]
         x_positions = [data[index][0].cpu().numpy() for index in range(len(data))]
         y_positions = [data[index][1].cpu().numpy() for index in range(len(data))]
         z_positions = [data[index][2].cpu().numpy() for index in range(len(data))]
@@ -160,11 +164,18 @@ class RegressionEngine:
         z_pos_scale = self.fit_transform(z_positions)
         coordinates = np.column_stack((tuple(x_pos_scale), tuple(y_pos_scale), tuple(z_pos_scale))).astype(np.float32)
         return torch.from_numpy(coordinates).float()
+        #coordinates = stack(x_pos_scale, y_pos_scale, z_pos_scale, dim=0)
+        #return coordinates
 
     def fit_transform(self, data):
-        mean = np.mean(data)
-        sd = np.std(data)
-        return torch.from_numpy((data - mean) / sd).float()
+       # mean = np.mean(data)
+       # sd = np.std(data)
+        med = np.median(data)
+        IQR = stats.iqr(data, interpolation = 'midpoint') #The interquartile range (IQR) is the difference between the 75th and 25th percentile of the data.
+        #q = torch.tensor([0.25, 0.5, 0.75]).to(self.device)
+        #IQR = ((data-med)/torch.quantile(data, q, dim=0, keepdim=True)).float()   
+        #return torch.from_numpy((data - mean) / sd).float() #StandardScaler
+        return ((data - med) / IQR) #RobustScaler
 
     def backward(self):
         """
@@ -418,8 +429,8 @@ class RegressionEngine:
 
                 # Add the local result to the final result
                 indices.extend(eval_indices)
-                energies.extend(self.energies)
-                positions.extend(self.positions)
+                energies.extend(self.energies.numpy())
+                positions.extend(self.positions.cpu().numpy())
                 outputs.extend(result['output'])                
 
                 print("eval_iteration : " + str(it) + " eval_loss : " + str(
@@ -437,7 +448,11 @@ class RegressionEngine:
 
         indices = np.array(indices)
         energies = np.array(energies)
-        positions = np.array(positions)
+        #positions = positions.numpy()
+        if self.is_distributed:
+            positions = global_eval_results_dict["positions"].cpu().numpy()
+        else:
+            positions = np.array(positions)
         outputs = np.array(outputs)
 
         local_eval_results_dict = {"indices": indices, "energies": energies, "outputs": outputs}
@@ -452,10 +467,10 @@ class RegressionEngine:
                         global_eval_metrics_dict.values()):
                     local_eval_metrics_dict[name] = np.array(tensor.cpu())
 
-                indices = np.array(global_eval_results_dict["indices"].cpu())
-                energies = np.array(global_eval_results_dict["energies"].cpu())
-                positions = np.array(global_eval_results_dict["positions"].cpu())
-                outputs = np.array(global_eval_results_dict["outputs"].cpu())
+                indices = global_eval_results_dict["indices"].cpu().numpy()
+                energies =global_eval_results_dict["energies"].cpu().numpy()
+                positions  =global_eval_results_dict["positions"].cpu().numpy()
+                outputs =global_eval_results_dict["outputs"].cpu().numpy()
 
         if self.rank == 0:
             print("Sorting Outputs...")
@@ -465,7 +480,9 @@ class RegressionEngine:
             print("Saving Data...")
             np.save(self.dirpath + "indices.npy", sorted_indices)
             np.save(self.dirpath + "predictions.npy", outputs[sorted_indices])
+            print(outputs[sorted_indices])
             np.save(self.dirpath + "positions.npy", positions[sorted_indices])
+            print(positions[sorted_indices])
 
             # Compute overall evaluation metrics
             val_iterations = np.sum(local_eval_metrics_dict["eval_iterations"])
