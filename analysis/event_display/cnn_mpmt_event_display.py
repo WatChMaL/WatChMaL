@@ -2,7 +2,7 @@
 Tools for event displays from CNN mPMT dataset
 """
 import numpy as np
-import analysis.event_analysis.event_display as ed
+import analysis.event_display.event_display as ed
 from watchmal.dataset.cnn_mpmt.cnn_mpmt_dataset import CNNmPMTDataset
 
 
