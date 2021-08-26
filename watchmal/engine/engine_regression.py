@@ -1,3 +1,4 @@
+
 """
 Class for training a fully supervised classifier
 """
@@ -140,34 +141,41 @@ class RegressionEngine:
             self.energies = self.energies.to(self.device)
             self.positions = torch.squeeze(self.positions).to(self.device)
             loss = None
+            model_out = self.model(self.data)
             if self.output_type == 'position':
-                loss = self.scale_positions(self.positions).to(self.device)
+               # loss = self.scale_positions(self.positions, model_out)
+                scaled_positions, scaled_model_out = self.scale_positions(self.positions, model_out)
             elif self.output_type == 'energies':
                 loss = self.fit_transform(self.energies).to(self.device)
-            model_out = self.model(self.data)
-
-            self.loss = self.criterion(model_out, loss)
+            
+           # model_out = self.model(self.data)
+           # self.loss = self.criterion(model_out, loss)
+            self.loss = self.criterion(scaled_positions, scaled_model_out)
 
         return {'loss': self.loss.detach().cpu().item(),
                 'output': model_out.detach().cpu().numpy(),
                 'raw_output': model_out}
 
-    def scale_positions(self, data):
+    def scale_positions(self, data, model_out):
         x_positions = data[:,0]
         y_positions = data[:,1]
         z_positions = data[:,2]
+        x_outputs = model_out[:,0]
+        y_outputs = model_out[:,1]
+        z_outputs = model_out[:,2]
        # x_positions = [data[index][0].cpu().numpy() for index in range(len(data))]
        # y_positions = [data[index][1].cpu().numpy() for index in range(len(data))]
        # z_positions = [data[index][2].cpu().numpy() for index in range(len(data))]
-        x_pos_scale = self.fit_transform(x_positions)
-        y_pos_scale = self.fit_transform(y_positions)
-        z_pos_scale = self.fit_transform(z_positions)
+        x_pos_scale, x_out_scale = self.fit_transform(x_positions, x_outputs)
+        y_pos_scale, y_out_scale = self.fit_transform(y_positions, y_outputs)
+        z_pos_scale, z_out_scale = self.fit_transform(z_positions, z_outputs)
         #coordinates = np.column_stack((tuple(x_pos_scale), tuple(y_pos_scale), tuple(z_pos_scale))).astype(np.float32)
         #return torch.from_numpy(coordinates).float()
         coordinates = torch.stack([x_pos_scale, y_pos_scale, z_pos_scale], dim=1)
-        return coordinates
+        model_outputs = torch.stack([x_outputs, y_outputs, z_outputs], dim=1)
+        return coordinates, model_outputs
 
-    def fit_transform(self, data):
+    def fit_transform(self, data, model_out):
        # mean = np.mean(data)
        # sd = np.std(data)
        # med = np.median(data)
@@ -176,8 +184,10 @@ class RegressionEngine:
         q = torch.tensor([0.25, 0.75]).to(self.device)
         IQR = torch.quantile(data, q, dim=0, keepdim=True)
         IQR = IQR[1] - IQR [0]
+        positions_scaled = ((data - med) / IQR)
+        outputs_scaled = ((model_out - med) / IQR) 
         #return torch.from_numpy((data - mean) / sd).float() #StandardScaler
-        return ((data - med) / IQR) #RobustScaler
+        return positions_scaled, outputs_scaled #RobustScaler
 
     def backward(self):
         """
