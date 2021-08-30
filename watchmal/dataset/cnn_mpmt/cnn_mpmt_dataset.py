@@ -4,9 +4,12 @@ Class implementing a mPMT dataset for CNNs in h5 format
 
 # torch imports
 from torch import from_numpy
+from torch import flip
 
 # generic imports
 import numpy as np
+import torch
+import random
 
 # WatChMaL imports
 from watchmal.dataset.h5_dataset import H5Dataset
@@ -35,8 +38,12 @@ class CNNmPMTDataset(H5Dataset):
         n_channels = pmts_per_mpmt
         self.data_size = np.insert(self.data_size, 0, n_channels)
         self.collapse_arrays = collapse_arrays
-        self.transforms = du.get_transformations(transformations, transforms)
+        self.transforms = du.get_transformations(self, transforms)
         self.pad = pad
+        
+        self.horizontal_flip_mpmt_map=[0, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 12, 17, 16, 15, 14, 13, 18]
+        self.vertical_flip_mpmt_map=[6, 5, 4, 3, 2, 1, 0, 11, 10, 9, 8, 7, 15, 14, 13, 12, 17, 16, 18]
+        ################
 
     def process_data(self, hit_pmts, hit_data):
         """
@@ -73,6 +80,7 @@ class CNNmPMTDataset(H5Dataset):
         data_dict = super().__getitem__(item)
 
         processed_data = from_numpy(self.process_data(self.event_hit_pmts, self.event_hit_charges))
+        
         processed_data = du.apply_random_transformations(self.transforms, processed_data)
         
         # Add padding
@@ -82,7 +90,57 @@ class CNNmPMTDataset(H5Dataset):
         data_dict["data"] = processed_data
 
         return data_dict
+    
+    def horizontal_flip(self, data):
+        return flip(data[self.horizontal_flip_mpmt_map, :, :, ], [2])
 
+    def vertical_flip(self, data):
+        return flip(data[self.vertical_flip_mpmt_map, :, :], [1])
+    
+    def rotation180(self, data):
+        transform_data = data.clone()
+        transform_data[:, self.barrel_rows, :] = torch.tensor(np.roll(transform_data[:, self.barrel_rows, :], 20, 2))
+
+        l_index = data.shape[2]/2 - 1
+        r_index = data.shape[2]/2
+
+        l_endcap_ind = int(l_index - 4)
+        r_endcap_ind = int(r_index + 4)
+
+        top_end_cap = data.clone()[:, self.barrel_rows[-1]+1:, l_endcap_ind:r_endcap_ind+1]
+        bot_end_cap = data.clone()[:, :self.barrel_rows[0], l_endcap_ind:r_endcap_ind+1]
+
+        vhflip_top = self.horizontal_flip(self.vertical_flip(top_end_cap))
+        vhlfip_bot = self.horizontal_flip(self.vertical_flip(bot_end_cap))
+
+        transform_data[:, self.barrel_rows[-1]+1:, l_endcap_ind : r_endcap_ind+1] = vhflip_top
+        transform_data[:, :self.barrel_rows[0], l_endcap_ind : r_endcap_ind+1] = vhlfip_bot
+
+        return transform_data
+    
+    def mpmtPadding(self, data):
+        half_len_index = int(data.shape[2]/2)
+        horiz_pad_data = torch.cat((data, torch.zeros_like(data[:, :, :half_len_index])), 2)
+        horiz_pad_data[:, :, 2*half_len_index:] = torch.tensor(0, dtype=torch.float64)
+        horiz_pad_data[:, self.barrel_rows, 2*half_len_index:] = data[:, self.barrel_rows, :half_len_index]
+
+        l_index = data.shape[2]/2 - 1
+        r_index = data.shape[2]/2
+
+        l_endcap_ind = int(l_index - 4)
+        r_endcap_ind = int(r_index + 4)
+
+        top_end_cap = data[:, self.barrel_rows[-1]+1:, l_endcap_ind:r_endcap_ind+1]
+        bot_end_cap = data[:, :self.barrel_rows[0], l_endcap_ind:r_endcap_ind+1]
+
+        vhflip_top = self.horizontal_flip(self.vertical_flip(top_end_cap))
+        vhflip_bot = self.horizontal_flip(self.vertical_flip(bot_end_cap))
+
+        horiz_pad_data[:, self.barrel_rows[-1]+1:, l_endcap_ind + int(data.shape[2]/2) : r_endcap_ind + int(data.shape[2]/2) + 1] = vhflip_top
+        horiz_pad_data[:, :self.barrel_rows[0], l_endcap_ind + int(data.shape[2]/2) : r_endcap_ind + int(data.shape[2]/2) + 1] = vhflip_bot
+
+        return horiz_pad_data
+    
     def retrieve_event_data(self, item):
         """
         Returns event data from dataset associated with a specific index
