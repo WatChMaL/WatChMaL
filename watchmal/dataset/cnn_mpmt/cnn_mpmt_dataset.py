@@ -17,7 +17,7 @@ barrel_map_array_idxs = [6, 7, 8, 9, 10, 11, 0, 1, 2, 3, 4, 5, 15, 16, 17, 12, 1
 pmts_per_mpmt = 19
 
 class CNNmPMTDataset(H5Dataset):
-    def __init__(self, h5file, mpmt_positions_file, is_distributed, transforms=None, collapse_arrays=False):
+    def __init__(self, h5file, mpmt_positions_file, is_distributed, transforms=None, collapse_arrays=False, pad=False):
         """
         Args:
             h5_path             ... path to h5 dataset file
@@ -27,6 +27,7 @@ class CNNmPMTDataset(H5Dataset):
         """
         super().__init__(h5file, is_distributed)
         
+        
         self.mpmt_positions = np.load(mpmt_positions_file)['mpmt_image_positions']
         self.data_size = np.max(self.mpmt_positions, axis=0) + 1
         self.barrel_rows = [row for row in range(self.data_size[0]) if
@@ -35,11 +36,11 @@ class CNNmPMTDataset(H5Dataset):
         self.data_size = np.insert(self.data_size, 0, n_channels)
         self.collapse_arrays = collapse_arrays
         self.transforms = du.get_transformations(transformations, transforms)
+        self.pad = pad
 
     def process_data(self, hit_pmts, hit_data):
         """
         Returns event data from dataset associated with a specific index
-
         Args:
             hit_pmts                ... array of ids of hit pmts
             hid_data                ... array of data associated with hits
@@ -72,7 +73,11 @@ class CNNmPMTDataset(H5Dataset):
 
         processed_data = from_numpy(self.process_data(self.event_hit_pmts, self.event_hit_charges))
         processed_data = du.apply_random_transformations(self.transforms, processed_data)
-
+        
+        # Add padding
+        if self.pad:
+            processed_data = transformations.mpmtPadding(processed_data, self.barrel_rows)
+            
         data_dict["data"] = processed_data
 
         return data_dict
@@ -80,15 +85,12 @@ class CNNmPMTDataset(H5Dataset):
     def retrieve_event_data(self, item):
         """
         Returns event data from dataset associated with a specific index
-
         Args:
             item                    ... index of event
-
         Returns:
             hit_pmts                ... array of ids of hit pmts
             pmt_charge_data         ... array of charge of hits
             pmt_time_data           ... array of times of hits
-
         """
         data_dict = super().__getitem__(item)
 
