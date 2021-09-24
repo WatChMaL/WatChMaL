@@ -1,3 +1,4 @@
+
 """
 Class for training a fully supervised classifier
 """
@@ -22,6 +23,7 @@ from time import strftime, localtime, time
 import sys
 from sys import stdout
 import copy
+from scipy import stats #For interquartile range
 
 # WatChMaL imports
 from watchmal.dataset.data_utils import get_data_loader
@@ -70,6 +72,9 @@ class RegressionEngine:
 
         if self.rank == 0:
             self.val_log = CSVData(self.dirpath + "log_val.csv")
+
+       #self.positions_medians = (list of the values) # for the whole batch values
+       #self.positions_iqr = list of the values
 
     def configure_loss(self, loss_config):
         self.criterion = instantiate(loss_config)
@@ -139,32 +144,40 @@ class RegressionEngine:
             self.energies = self.energies.to(self.device)
             self.positions = torch.squeeze(self.positions).to(self.device)
             loss = None
+            model_out = self.model(self.data)
             if self.output_type == 'position':
-                loss = self.scale_positions(self.positions).to(self.device)
+                scaled_positions, scaled_model_out = self.scale_positions(self.positions, model_out) #Loss with scaling
             elif self.output_type == 'energies':
                 loss = self.fit_transform(self.energies).to(self.device)
-            model_out = self.model(self.data)
-
-            self.loss = self.criterion(model_out, loss)
+            self.loss = self.criterion(scaled_positions, scaled_model_out)
 
         return {'loss': self.loss.detach().cpu().item(),
                 'output': model_out.detach().cpu().numpy(),
                 'raw_output': model_out}
 
-    def scale_positions(self, data):
-        x_positions = [data[index][0].cpu().numpy() for index in range(len(data))]
-        y_positions = [data[index][1].cpu().numpy() for index in range(len(data))]
-        z_positions = [data[index][2].cpu().numpy() for index in range(len(data))]
-        x_pos_scale = self.fit_transform(x_positions)
-        y_pos_scale = self.fit_transform(y_positions)
-        z_pos_scale = self.fit_transform(z_positions)
-        coordinates = np.column_stack((tuple(x_pos_scale), tuple(y_pos_scale), tuple(z_pos_scale))).astype(np.float32)
-        return torch.from_numpy(coordinates).float()
+    def scale_positions(self, data, model_out):
+        x_positions = data[:,0]
+        y_positions = data[:,1]
+        z_positions = data[:,2]
+        x_outputs = model_out[:,0]
+        y_outputs = model_out[:,1]
+        z_outputs = model_out[:,2]
+        x_pos_scale, x_out_scale = self.fit_transform(x_positions, x_outputs)
+        y_pos_scale, y_out_scale = self.fit_transform(y_positions, y_outputs)
+        z_pos_scale, z_out_scale = self.fit_transform(z_positions, z_outputs)
 
-    def fit_transform(self, data):
-        mean = np.mean(data)
-        sd = np.std(data)
-        return torch.from_numpy((data - mean) / sd).float()
+        coordinates = torch.stack([x_pos_scale, y_pos_scale, z_pos_scale], dim=1)
+        model_outputs = torch.stack([x_out_scale, y_out_scale, z_out_scale], dim=1)
+        return coordinates, model_outputs
+
+    def fit_transform(self, data, model_out):
+        med = torch.median(data)
+        q = torch.tensor([0.25, 0.75]).to(self.device)
+        IQR = torch.quantile(data, q, dim=0, keepdim=True)
+        IQR = IQR[1] - IQR [0] #Subtractting the 25th quartile from the 75th quartile
+        positions_scaled = ((data - med) / IQR)
+        outputs_scaled = ((model_out - med) / IQR) #Scaling positions and output values
+        return positions_scaled, outputs_scaled #RobustScaler
 
     def backward(self):
         """
@@ -418,8 +431,8 @@ class RegressionEngine:
 
                 # Add the local result to the final result
                 indices.extend(eval_indices)
-                energies.extend(self.energies)
-                positions.extend(self.positions)
+                energies.extend(self.energies.numpy())
+                positions.extend(self.positions.cpu().numpy())
                 outputs.extend(result['output'])                
 
                 print("eval_iteration : " + str(it) + " eval_loss : " + str(
@@ -437,7 +450,10 @@ class RegressionEngine:
 
         indices = np.array(indices)
         energies = np.array(energies)
-        positions = np.array(positions)
+        if self.is_distributed:
+            positions = global_eval_results_dict["positions"].cpu().numpy()
+        else:
+            positions = np.array(positions)
         outputs = np.array(outputs)
 
         local_eval_results_dict = {"indices": indices, "energies": energies, "outputs": outputs}
@@ -452,10 +468,10 @@ class RegressionEngine:
                         global_eval_metrics_dict.values()):
                     local_eval_metrics_dict[name] = np.array(tensor.cpu())
 
-                indices = np.array(global_eval_results_dict["indices"].cpu())
-                energies = np.array(global_eval_results_dict["energies"].cpu())
-                positions = np.array(global_eval_results_dict["positions"].cpu())
-                outputs = np.array(global_eval_results_dict["outputs"].cpu())
+                indices   = global_eval_results_dict["indices"].cpu().numpy()
+                energies  = global_eval_results_dict["energies"].cpu().numpy()
+                positions = global_eval_results_dict["positions"].cpu().numpy()
+                outputs   = global_eval_results_dict["outputs"].cpu().numpy()
 
         if self.rank == 0:
             print("Sorting Outputs...")
@@ -465,7 +481,9 @@ class RegressionEngine:
             print("Saving Data...")
             np.save(self.dirpath + "indices.npy", sorted_indices)
             np.save(self.dirpath + "predictions.npy", outputs[sorted_indices])
+            print(outputs[sorted_indices])
             np.save(self.dirpath + "positions.npy", positions[sorted_indices])
+            print(positions[sorted_indices])
 
             # Compute overall evaluation metrics
             val_iterations = np.sum(local_eval_metrics_dict["eval_iterations"])
