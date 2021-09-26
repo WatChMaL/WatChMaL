@@ -90,32 +90,78 @@ class CNNmPMTDataset(H5Dataset):
 
         return data_dict
     
+
     def horizontal_flip(self, data):
-        return flip(data[self.horizontal_flip_mpmt_map, :, :, ], [2])
+        return flip(data[self.horizontal_flip_mpmt_map, :, :], [2])
 
     def vertical_flip(self, data):
         return flip(data[self.vertical_flip_mpmt_map, :, :], [1])
-    
-    def rotation180(self, data):
+
+ 
+    def front_back_reflection(self, data):
+        w = data.shape[2]
+        barrel_row_start, barrel_row_end = self.barrel_rows[0], self.barrel_rows[-1]
+        l_endcap_index = w//2 - 5
+        r_endcap_index = w//2 + 4
+        
         transform_data = data.clone()
-        transform_data[:, self.barrel_rows, :] = torch.tensor(np.roll(transform_data[:, self.barrel_rows, :], 20, 2))
 
-        l_index = data.shape[2]/2 - 1
-        r_index = data.shape[2]/2
+        # Take out the left and right halves of the barrel
+        left_barrel = data[:, self.barrel_rows, :w/2]
+        right_barrel = data[:, self.barrel_rows, w/2:]
+        # Horizontal flip of the left and right halves of barrel
+        transform_data[:, self.barrel_rows, :w/2] = self.horizontal_flip(left_barrel)
+        transform_data[:, self.barrel_rows, w/2:] = self.horizontal_flip(right_barrel)
 
-        l_endcap_ind = int(l_index - 4)
-        r_endcap_ind = int(r_index + 4)
+        # Take out the top and bottom endcaps
+        top_endcap = data[:, :barrel_row_start, l_endcap_index:r_endcap_index+1]
+        bottom_endcap = data[:, barrel_row_end+1: , l_endcap_index:r_endcap_index+1]
+        # Vertical flip of the top and bottom endcaps
+        transform_data[:, :barrel_row_start, l_endcap_index:r_endcap_index+1] = self.vertical_flip(top_endcap)
+        transform_data[:, barrel_row_end+1: , l_endcap_index:r_endcap_index+1] = self.vertical_flip(bottom_endcap)
 
-        top_end_cap = data.clone()[:, self.barrel_rows[-1]+1:, l_endcap_ind:r_endcap_ind+1]
-        bot_end_cap = data.clone()[:, :self.barrel_rows[0], l_endcap_ind:r_endcap_ind+1]
 
-        vhflip_top = self.horizontal_flip(self.vertical_flip(top_end_cap))
-        vhlfip_bot = self.horizontal_flip(self.vertical_flip(bot_end_cap))
+    def rotation180(self, data):
+        barrel_row_start, barrel_row_end = self.barrel_rows[0], self.barrel_rows[-1]   # 10,18 respectively
+        l_endcap_index = data.shape[2]//2 - 5   # 15
+        r_endcap_index = data.shape[2]//2 + 4   # 24
 
-        transform_data[:, self.barrel_rows[-1]+1:, l_endcap_ind : r_endcap_ind+1] = vhflip_top
-        transform_data[:, :self.barrel_rows[0], l_endcap_ind : r_endcap_ind+1] = vhlfip_bot
+        transform_data = data.clone()
+
+        # Take out the top and bottom endcaps
+        top_endcap = data[:, :barrel_row_start, l_endcap_index:r_endcap_index+1]
+        bottom_endcap = data[:, barrel_row_end+1: , l_endcap_index:r_endcap_index+1]
+        # Vertical and horizontal flips of the endcaps
+        transform_data[:, :barrel_row_start, l_endcap_index:r_endcap_index+1] = self.horizontal_flip(self.vertical_flip(top_endcap))
+        transform_data[:, barrel_row_end+1: , l_endcap_index:r_endcap_index+1] = self.horizontal_flip(self.vertical_flip(bottom_endcap))
+
+        # Swap the left and right halves of the barrel
+        transform_data[:,self.barrel_rows, :] = torch.roll(transform_data[:, self.barrel_rows, :], 20, 2)
 
         return transform_data
+
+
+    # Zak's Code
+    # def rotation180(self, data):
+    #     transform_data = data.clone()
+    #     transform_data[:, self.barrel_rows, :] = torch.tensor(np.roll(transform_data[:, self.barrel_rows, :], 20, 2))
+
+    #     l_index = data.shape[2]/2 - 1
+    #     r_index = data.shape[2]/2
+
+    #     l_endcap_ind = int(l_index - 4)
+    #     r_endcap_ind = int(r_index + 4)
+
+    #     top_end_cap = data.clone()[:, self.barrel_rows[-1]+1:, l_endcap_ind:r_endcap_ind+1]
+    #     bot_end_cap = data.clone()[:, :self.barrel_rows[0], l_endcap_ind:r_endcap_ind+1]
+
+    #     vhflip_top = self.horizontal_flip(self.vertical_flip(top_end_cap))
+    #     vhlfip_bot = self.horizontal_flip(self.vertical_flip(bot_end_cap))
+
+    #     transform_data[:, self.barrel_rows[-1]+1:, l_endcap_ind : r_endcap_ind+1] = vhflip_top
+    #     transform_data[:, :self.barrel_rows[0], l_endcap_ind : r_endcap_ind+1] = vhlfip_bot
+
+    #     return transform_data
     
     def mpmtPadding(self, data):
         half_len_index = int(data.shape[2]/2)
