@@ -139,29 +139,7 @@ class CNNmPMTDataset(H5Dataset):
         transform_data[:,self.barrel_rows, :] = torch.roll(transform_data[:, self.barrel_rows, :], 20, 2)
 
         return transform_data
-
-
-    # Zak's Code
-    # def rotation180(self, data):
-    #     transform_data = data.clone()
-    #     transform_data[:, self.barrel_rows, :] = torch.tensor(np.roll(transform_data[:, self.barrel_rows, :], 20, 2))
-
-    #     l_index = data.shape[2]/2 - 1
-    #     r_index = data.shape[2]/2
-
-    #     l_endcap_ind = int(l_index - 4)
-    #     r_endcap_ind = int(r_index + 4)
-
-    #     top_end_cap = data.clone()[:, self.barrel_rows[-1]+1:, l_endcap_ind:r_endcap_ind+1]
-    #     bot_end_cap = data.clone()[:, :self.barrel_rows[0], l_endcap_ind:r_endcap_ind+1]
-
-    #     vhflip_top = self.horizontal_flip(self.vertical_flip(top_end_cap))
-    #     vhlfip_bot = self.horizontal_flip(self.vertical_flip(bot_end_cap))
-
-    #     transform_data[:, self.barrel_rows[-1]+1:, l_endcap_ind : r_endcap_ind+1] = vhflip_top
-    #     transform_data[:, :self.barrel_rows[0], l_endcap_ind : r_endcap_ind+1] = vhlfip_bot
-
-    #     return transform_data
+        
     
     def mpmtPadding(self, data):
         half_len_index = int(data.shape[2]/2)
