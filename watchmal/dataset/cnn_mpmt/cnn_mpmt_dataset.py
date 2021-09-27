@@ -114,11 +114,11 @@ class CNNmPMTDataset(H5Dataset):
         transform_data = data.clone()
 
         # Take out the left and right halves of the barrel
-        left_barrel = data[:, self.barrel_rows, :w/2]
-        right_barrel = data[:, self.barrel_rows, w/2:]
+        left_barrel = data[:, self.barrel_rows, :w//2]
+        right_barrel = data[:, self.barrel_rows, w//2:]
         # Horizontal flip of the left and right halves of barrel
-        transform_data[:, self.barrel_rows, :w/2] = self.horizontal_flip(left_barrel)
-        transform_data[:, self.barrel_rows, w/2:] = self.horizontal_flip(right_barrel)
+        transform_data[:, self.barrel_rows, :w//2] = self.horizontal_flip(left_barrel)
+        transform_data[:, self.barrel_rows, w//2:] = self.horizontal_flip(right_barrel)
 
         # Take out the top and bottom endcaps
         top_endcap = data[:, :barrel_row_start, l_endcap_index:r_endcap_index+1]
@@ -126,6 +126,8 @@ class CNNmPMTDataset(H5Dataset):
         # Vertical flip of the top and bottom endcaps
         transform_data[:, :barrel_row_start, l_endcap_index:r_endcap_index+1] = self.vertical_flip(top_endcap)
         transform_data[:, barrel_row_end+1: , l_endcap_index:r_endcap_index+1] = self.vertical_flip(bottom_endcap)
+
+        return transform_data
 
 
     def rotation180(self, data):
