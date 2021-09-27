@@ -99,6 +99,13 @@ class CNNmPMTDataset(H5Dataset):
 
  
     def front_back_reflection(self, data):
+        """
+        Returns an image with horizontal flip of the left and right halves of the barrels and
+        vertical flip of the endcaps
+
+        :param data : torch.tensor
+        :returns transform_data: torch.tensor
+        """
         w = data.shape[2]
         barrel_row_start, barrel_row_end = self.barrel_rows[0], self.barrel_rows[-1]
         l_endcap_index = w//2 - 5
@@ -122,6 +129,13 @@ class CNNmPMTDataset(H5Dataset):
 
 
     def rotation180(self, data):
+        """
+        Returns an image with horizontal and vertical flip of the endcaps and 
+        shifting of the barrel rows by half the width
+
+        :param data : torch.tensor
+        :returns transform_data: torch.tensor
+        """
         barrel_row_start, barrel_row_end = self.barrel_rows[0], self.barrel_rows[-1]   # 10,18 respectively
         l_endcap_index = data.shape[2]//2 - 5   # 15
         r_endcap_index = data.shape[2]//2 + 4   # 24
