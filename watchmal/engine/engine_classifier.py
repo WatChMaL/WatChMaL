@@ -114,7 +114,7 @@ class ClassifierEngine:
         
         return global_metric_dict
 
-    def forward(self, train=True, return_metrics=True):
+    def forward(self, train=True):
         """
         Compute predictions and metrics for a batch of data
 
@@ -141,12 +141,12 @@ class ClassifierEngine:
                       'softmax'          : softmax.detach().cpu().numpy(),
                       'raw_pred_labels'  : model_out}
             
-            if return_metrics:
-                self.loss = self.criterion(model_out, self.labels)
-                accuracy  = (predicted_labels == self.labels).sum().item() / float(predicted_labels.nelement())
+            
+            self.loss = self.criterion(model_out, self.labels)
+            accuracy  = (predicted_labels == self.labels).sum().item() / float(predicted_labels.nelement())
 
-                result['loss'] = self.loss.detach().cpu().item()
-                result['accuracy'] = accuracy
+            result['loss'] = self.loss.detach().cpu().item()
+            result['accuracy'] = accuracy
         
         return result
     
@@ -350,7 +350,6 @@ class ClassifierEngine:
         """
         print("evaluating in directory: ", self.dirpath)
 
-        report_test_metrics = test_config.report_test_metrics
         
         # Variables to output at the end
         eval_loss = 0.0
@@ -376,11 +375,10 @@ class ClassifierEngine:
                 eval_indices = copy.deepcopy(eval_data['indices'].long().to("cpu"))
                 
                 # Run the forward procedure and output the result
-                result = self.forward(train=False, return_metrics=report_test_metrics)
+                result = self.forward(train=False)
 
-                if report_test_metrics:
-                    eval_loss += result['loss']
-                    eval_acc  += result['accuracy']
+                eval_loss += result['loss']
+                eval_acc  += result['accuracy']
                 
                 # Copy the tensors back to the CPU
                 self.labels = self.labels.to("cpu")
@@ -390,12 +388,9 @@ class ClassifierEngine:
                 labels.extend(self.labels)
                 predictions.extend(result['predicted_labels'])
                 softmaxes.extend(result["softmax"])
-
-                if report_test_metrics:
-                    print("eval_iteration : " + str(it) + " eval_loss : " + str(result["loss"]) + " eval_accuracy : " + str(result["accuracy"]))
-                else:
-                    print("eval_iteration : " + str(it))
-
+           
+                print("eval_iteration : " + str(it) + " eval_loss : " + str(result["loss"]) + " eval_accuracy : " + str(result["accuracy"]))
+            
                 eval_iterations += 1
         
         # convert arrays to torch tensors
