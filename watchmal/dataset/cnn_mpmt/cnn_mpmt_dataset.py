@@ -83,7 +83,7 @@ class CNNmPMTDataset(H5Dataset):
         
         # Add padding
         if self.pad:
-            processed_data = transformations.mpmtPadding(processed_data, self.barrel_rows)
+            processed_data = self.mpmtPadding(processed_data)
             
         data_dict["data"] = processed_data
 
