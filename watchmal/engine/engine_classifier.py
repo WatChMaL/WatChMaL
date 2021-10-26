@@ -55,12 +55,7 @@ class ClassifierEngine:
         # define the placeholder attributes
         self.data      = None
         self.labels    = None
-        self.energies  = None
-        self.eventids  = None
-        self.rootfiles = None
-        self.angles    = None
-        self.event_ids = None
-        
+
         # logging attributes
         self.train_log = CSVData(self.dirpath + "log_train_{}.csv".format(self.rank))
 
@@ -241,11 +236,8 @@ class ClassifierEngine:
                             val_data = next(val_iter)
                         
                         # extract the event data from the input data tuple
-                        self.data      = val_data['data'].float()
-                        self.labels    = val_data['labels'].long()
-                        self.energies  = val_data['energies'].float()
-                        self.angles    = val_data['angles'].float()
-                        self.event_ids = val_data['event_ids'].float()
+                        self.data = val_data['data']
+                        self.labels = val_data['labels']
 
                         val_res = self.forward(False)
                         
@@ -292,11 +284,8 @@ class ClassifierEngine:
                         self.val_log.flush()
                 
                 # Train on batch
-                self.data      = train_data['data'].float()
-                self.labels    = train_data['labels'].long()
-                self.energies  = train_data['energies'].float()
-                self.angles    = train_data['angles'].float()
-                self.event_ids = train_data['event_ids'].float()
+                self.data = train_data['data']
+                self.labels = train_data['labels']
 
                 # Call forward: make a prediction & measure the average error using data = self.data
                 res = self.forward(True)
@@ -369,10 +358,10 @@ class ClassifierEngine:
             for it, eval_data in enumerate(self.data_loaders["test"]):
                 
                 # load data
-                self.data = copy.deepcopy(eval_data['data'].float())
-                self.labels = copy.deepcopy(eval_data['labels'].long())
-                
-                eval_indices = copy.deepcopy(eval_data['indices'].long().to("cpu"))
+                self.data = eval_data['data']
+                self.labels = eval_data['labels']
+
+                eval_indices = eval_data['indices']
                 
                 # Run the forward procedure and output the result
                 result = self.forward(train=False)
