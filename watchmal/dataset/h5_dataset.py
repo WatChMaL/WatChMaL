@@ -84,7 +84,7 @@ class H5CommonDataset(Dataset, ABC):
             self.initialize()
 
         data_dict = {
-            "labels": self.labels[item],
+            "labels": self.labels[item].astype(np.int64),
             "energies": self.energies[item],
             "angles": self.angles[item],
             "positions": self.positions[item],
@@ -92,7 +92,6 @@ class H5CommonDataset(Dataset, ABC):
             "root_files": self.root_files[item],
             "indices": item
         }
-
         return data_dict
 
 
