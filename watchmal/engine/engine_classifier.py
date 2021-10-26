@@ -53,8 +53,9 @@ class ClassifierEngine:
         self.data_loaders = {}
 
         # define the placeholder attributes
-        self.data      = None
-        self.labels    = None
+        self.data = None
+        self.labels = None
+        self.loss = None
 
         # logging attributes
         self.train_log = CSVData(self.dirpath + "log_train_{}.csv".format(self.rank))
@@ -124,23 +125,22 @@ class ClassifierEngine:
         """
         with torch.set_grad_enabled(train):
             # Move the data and the labels to the GPU (if using CPU this has no effect)
-            self.data = self.data.to(self.device)
-            self.labels = self.labels.to(self.device)
+            data = self.data.to(self.device)
+            labels = self.labels.to(self.device)
 
-            model_out = self.model(self.data)
+            model_out = self.model(data)
             
-            softmax          = self.softmax(model_out)
+            softmax = self.softmax(model_out)
             predicted_labels = torch.argmax(model_out, dim=-1)
 
-            result = { 'predicted_labels' : predicted_labels.detach().cpu().numpy(),
-                      'softmax'          : softmax.detach().cpu().numpy(),
-                      'raw_pred_labels'  : model_out}
-            
-            
-            self.loss = self.criterion(model_out, self.labels)
-            accuracy  = (predicted_labels == self.labels).sum().item() / float(predicted_labels.nelement())
+            result = {'predicted_labels': predicted_labels.detach().cpu().numpy(),
+                      'softmax': softmax.detach().cpu().numpy(),
+                      'raw_pred_labels': model_out}
 
-            result['loss'] = self.loss.detach().cpu().item()
+            self.loss = self.criterion(model_out, labels)
+            accuracy = (predicted_labels == labels).sum().item() / float(predicted_labels.nelement())
+
+            result['loss'] = self.loss.item()
             result['accuracy'] = accuracy
         
         return result
@@ -368,9 +368,6 @@ class ClassifierEngine:
 
                 eval_loss += result['loss']
                 eval_acc  += result['accuracy']
-                
-                # Copy the tensors back to the CPU
-                self.labels = self.labels.to("cpu")
                 
                 # Add the local result to the final result
                 indices.extend(eval_indices)
