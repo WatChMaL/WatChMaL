@@ -135,8 +135,8 @@ class ClassifierEngine:
             softmax = self.softmax(model_out)
             predicted_labels = torch.argmax(model_out, dim=-1)
 
-            result = {'predicted_labels': predicted_labels.detach().cpu().numpy(),
-                      'softmax': softmax.detach().cpu().numpy(),
+            result = {'predicted_labels': predicted_labels,
+                      'softmax': softmax,
                       'raw_pred_labels': model_out}
 
             self.loss = self.criterion(model_out, labels)
@@ -371,8 +371,8 @@ class ClassifierEngine:
                 # Add the local result to the final result
                 indices.extend(eval_indices)
                 labels.extend(self.labels)
-                predictions.extend(result['predicted_labels'])
-                softmaxes.extend(result["softmax"])
+                predictions.extend(result['predicted_labels'].detach().cpu().numpy())
+                softmaxes.extend(result["softmax"].detach().cpu().numpy())
            
                 print("eval_iteration : " + str(it) + " eval_loss : " + str(result["loss"]) + " eval_accuracy : " + str(result["accuracy"]))
             
