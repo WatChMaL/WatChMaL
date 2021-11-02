@@ -14,3 +14,4 @@ defaults:
     - tasks/restore_best_state: restore_best_state
     - tasks/evaluate: test
     - sampler@tasks.evaluate.data_loaders.test.sampler: subset_sequential
+    - _self_
