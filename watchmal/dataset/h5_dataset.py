@@ -115,7 +115,7 @@ class H5Dataset(H5CommonDataset, ABC):
         start = self.event_hits_index[item]
         stop = self.event_hits_index[item + 1]
 
-        self.event_hit_pmts = self.hit_pmt[start:stop].astype(np.int16)
+        self.event_hit_pmts = self.hit_pmt[start:stop]
         self.event_hit_charges = self.hit_charge[start:stop]
         self.event_hit_times = self.time[start:stop]
 
