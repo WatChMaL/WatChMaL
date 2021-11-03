@@ -5,6 +5,7 @@ Class implementing a mPMT dataset for CNNs in h5 format
 # torch imports
 from torch import from_numpy
 from torch import flip
+from hydra.utils import instantiate
 
 # generic imports
 import numpy as np
@@ -19,7 +20,7 @@ barrel_map_array_idxs = [6, 7, 8, 9, 10, 11, 0, 1, 2, 3, 4, 5, 15, 16, 17, 12, 1
 pmts_per_mpmt = 19
 
 class CNNmPMTDataset(H5Dataset):
-    def __init__(self, h5file, mpmt_positions_file, is_distributed, transforms=None, collapse_arrays=False, pad=False):
+    def __init__(self, h5file, mpmt_positions_file, is_distributed, padding_type, transforms=None, collapse_arrays=False, pad=False):
         """
         Args:
             h5_path             ... path to h5 dataset file
@@ -38,8 +39,7 @@ class CNNmPMTDataset(H5Dataset):
         self.data_size = np.insert(self.data_size, 0, n_channels)
         self.collapse_arrays = collapse_arrays
         self.transforms = du.get_transformations(self, transforms)
-        self.pad = pad
-        
+        self.padding_type = getattr(self, padding_type)
         self.horizontal_flip_mpmt_map=[0, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 12, 17, 16, 15, 14, 13, 18]
         self.vertical_flip_mpmt_map=[6, 5, 4, 3, 2, 1, 0, 11, 10, 9, 8, 7, 15, 14, 13, 12, 17, 16, 18]
         ################
@@ -80,10 +80,8 @@ class CNNmPMTDataset(H5Dataset):
         processed_data = from_numpy(self.process_data(self.event_hit_pmts, self.event_hit_charges))
         
         processed_data = du.apply_random_transformations(self.transforms, processed_data)
-        
-        # Add padding
-        if self.pad:
-            processed_data = self.mpmtPadding(processed_data)
+
+        processed_data = self.padding_type(processed_data)
             
         data_dict["data"] = processed_data
 
@@ -163,27 +161,53 @@ class CNNmPMTDataset(H5Dataset):
         return transform_data
     
     
+    # def mpmtPadding(self, data):
+    #     """
+    #     :param data: torch.tensor
+    #     :returns transform_data: torch.tensor
+    #     """
+    #     w = data.shape[2]
+    #     barrel_row_start, barrel_row_end = self.barrel_rows[0], self.barrel_rows[-1]
+    #     l_endcap_index = w//2 - 5
+    #     r_endcap_index = w//2 + 4
+
+    #     padded_data = torch.cat((data, torch.zeros_like(data[:, :, :w//2])), dim=2)
+    #     padded_data[:, self.barrel_rows, w:] = data[:, self.barrel_rows, :w//2]
+
+    #     # Take out the top and bottom endcaps
+    #     top_endcap = data[:, :barrel_row_start, l_endcap_index:r_endcap_index+1]
+    #     bottom_endcap = data[:, barrel_row_end+1: , l_endcap_index:r_endcap_index+1]
+
+    #     padded_data[:, :barrel_row_start, l_endcap_index+w//2:r_endcap_index+w//2+1] = self.flip_180(top_endcap)
+    #     padded_data[:, barrel_row_end+1:, l_endcap_index+w//2:r_endcap_index+w//2+1] = self.flip_180(bottom_endcap)
+
+    #     return padded_data
+
+
     def mpmtPadding(self, data):
-        """
-        :param data: torch.tensor
-        :returns transform_data: torch.tensor
-        """
-        w = data.shape[2]
-        barrel_row_start, barrel_row_end = self.barrel_rows[0], self.barrel_rows[-1]
-        l_endcap_index = w//2 - 5
-        r_endcap_index = w//2 + 4
+        print('MPMT')
+        half_len_index = int(data.shape[2]/2)
+        horiz_pad_data = torch.cat((data, torch.zeros_like(data[:, :, :half_len_index])), 2)
+        horiz_pad_data[:, :, 2*half_len_index:] = torch.tensor(0, dtype=torch.float64)
+        horiz_pad_data[:, self.barrel_rows, 2*half_len_index:] = data[:, self.barrel_rows, :half_len_index]
 
-        padded_data = torch.cat((data, torch.zeros_like(data[:, :, :w//2])), dim=2)
-        padded_data[:, self.barrel_rows, w:] = data[:, self.barrel_rows, :w//2]
+        l_index = data.shape[2]/2 - 1
+        r_index = data.shape[2]/2
 
-        # Take out the top and bottom endcaps
-        top_endcap = data[:, :barrel_row_start, l_endcap_index:r_endcap_index+1]
-        bottom_endcap = data[:, barrel_row_end+1: , l_endcap_index:r_endcap_index+1]
+        l_endcap_ind = int(l_index - 4)
+        r_endcap_ind = int(r_index + 4)
 
-        padded_data[:, :barrel_row_start, l_endcap_index+w//2:r_endcap_index+w//2+1] = self.flip_180(top_endcap)
-        padded_data[:, barrel_row_end+1:, l_endcap_index+w//2:r_endcap_index+w//2+1] = self.flip_180(bottom_endcap)
+        top_end_cap = data[:, self.barrel_rows[-1]+1:, l_endcap_ind:r_endcap_ind+1]
+        bot_end_cap = data[:, :self.barrel_rows[0], l_endcap_ind:r_endcap_ind+1]
 
-        return padded_data
+        vhflip_top = self.horizontal_flip(self.vertical_flip(top_end_cap))
+        vhflip_bot = self.horizontal_flip(self.vertical_flip(bot_end_cap))
+
+        horiz_pad_data[:, self.barrel_rows[-1]+1:, l_endcap_ind + int(data.shape[2]/2) : r_endcap_ind + int(data.shape[2]/2) + 1] = vhflip_top
+        horiz_pad_data[:, :self.barrel_rows[0], l_endcap_ind + int(data.shape[2]/2) : r_endcap_ind + int(data.shape[2]/2) + 1] = vhflip_bot
+
+        return horiz_pad_data
+
 
 
     def double_cover(self, data):
@@ -193,6 +217,7 @@ class CNNmPMTDataset(H5Dataset):
         param data: torch.tensor
         returns padded_data: torch.tensor
         """
+        print('HELLO')
         w = data.shape[2]                                                                            
         barrel_row_start, barrel_row_end = self.barrel_rows[0], self.barrel_rows[-1]
         radius_endcap = barrel_row_start//2                                                    # 5
