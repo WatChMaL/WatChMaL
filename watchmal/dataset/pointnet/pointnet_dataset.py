@@ -37,7 +37,7 @@ class PointNetDataset(H5Dataset):
 
         n_hits = min(self.n_points, self.event_hit_pmts.shape[0])
         hit_positions = self.geo_positions[self.event_hit_pmts[:n_hits], :]
-        data = np.zeros((self.channels, self.n_points))
+        data = np.zeros((self.channels, self.n_points), dtype=np.float32)
         data[:3, :n_hits] = hit_positions.T
         if self.use_orientations:
             hit_orientations = self.geo_orientations[self.event_hit_pmts[:n_hits], :]

@@ -1,7 +1,5 @@
-# @package _group_
-report_test_metrics: false
 data_loaders:
   test:
     split_key: test_idxs
-    batch_size: 512
+    batch_size: 4096
     num_workers: 4
