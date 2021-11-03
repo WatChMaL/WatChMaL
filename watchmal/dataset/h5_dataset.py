@@ -46,15 +46,15 @@ class H5CommonDataset(Dataset, ABC):
     def initialize(self):
         self.h5_file = h5py.File(self.h5_path, "r")
 
-        self.event_ids  = np.array(self.h5_file["event_ids"])
-        self.root_files = np.array(self.h5_file["root_files"])
+#        self.event_ids  = np.array(self.h5_file["event_ids"])
+#        self.root_files = np.array(self.h5_file["root_files"])
         self.labels     = np.array(self.h5_file["labels"])
-        self.positions  = np.array(self.h5_file["positions"])
-        self.angles     = np.array(self.h5_file["angles"])
-        self.energies   = np.array(self.h5_file["energies"])
-        if "veto" in self.h5_file.keys():
-            self.veto  = np.array(self.h5_file["veto"])
-            self.veto2 = np.array(self.h5_file["veto2"])
+#        self.positions  = np.array(self.h5_file["positions"])
+#        self.angles     = np.array(self.h5_file["angles"])
+#        self.energies   = np.array(self.h5_file["energies"])
+#        if "veto" in self.h5_file.keys():
+#            self.veto  = np.array(self.h5_file["veto"])
+#            self.veto2 = np.array(self.h5_file["veto2"])
         self.event_hits_index = np.append(self.h5_file["event_hits_index"], self.h5_file["hit_pmt"].shape[0]).astype(np.int64)
         
         self.hdf5_hit_pmt  = self.h5_file["hit_pmt"]
@@ -85,11 +85,11 @@ class H5CommonDataset(Dataset, ABC):
 
         data_dict = {
             "labels": self.labels[item].astype(np.int64),
-            "energies": self.energies[item],
-            "angles": self.angles[item],
-            "positions": self.positions[item],
-            "event_ids": self.event_ids[item],
-            "root_files": self.root_files[item],
+#            "energies": self.energies[item],
+#            "angles": self.angles[item],
+#            "positions": self.positions[item],
+#            "event_ids": self.event_ids[item],
+#            "root_files": self.root_files[item],
             "indices": item
         }
         return data_dict
