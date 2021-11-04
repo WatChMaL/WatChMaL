@@ -185,7 +185,6 @@ class CNNmPMTDataset(H5Dataset):
 
 
     def mpmtPadding(self, data):
-        print('MPMT')
         half_len_index = int(data.shape[2]/2)
         horiz_pad_data = torch.cat((data, torch.zeros_like(data[:, :, :half_len_index])), 2)
         horiz_pad_data[:, :, 2*half_len_index:] = torch.tensor(0, dtype=torch.float64)
@@ -217,7 +216,6 @@ class CNNmPMTDataset(H5Dataset):
         param data: torch.tensor
         returns padded_data: torch.tensor
         """
-        print('HELLO')
         w = data.shape[2]                                                                            
         barrel_row_start, barrel_row_end = self.barrel_rows[0], self.barrel_rows[-1]
         radius_endcap = barrel_row_start//2                                                    # 5

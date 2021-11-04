@@ -37,6 +37,7 @@ class ClassifierEngine:
         """
         # create the directory for saving the log and dump files
         self.epoch = 0.
+        self.step = 0
         self.best_validation_loss = 1.0e10
         self.dirpath = dump_path
         self.rank = rank
@@ -194,7 +195,7 @@ class ClassifierEngine:
         # initialize epoch and iteration counters
         self.epoch = 0.
         self.iteration = 0
-
+        self.step = 0
         # keep track of the validation loss
         self.best_validation_loss = 1.0e10
 
@@ -202,9 +203,9 @@ class ClassifierEngine:
         val_iter = iter(self.data_loaders["validation"])
 
         # global training loop for multiple epochs
-        while (floor(self.epoch) < epochs):
+        for self.epoch in range(epochs):
             if self.rank == 0:
-                print('Epoch', floor(self.epoch), 'Starting @', strftime("%Y-%m-%d %H:%M:%S", localtime()))
+                print('Epoch', self.epoch+1, 'Starting @', strftime("%Y-%m-%d %H:%M:%S", localtime()))
             
             times = []
 
@@ -212,13 +213,13 @@ class ClassifierEngine:
             iteration_time = start_time
 
             train_loader = self.data_loaders["train"]
-
+            self.step = 0
             # update seeding for distributed samplers
             if self.is_distributed:
                 train_loader.sampler.set_epoch(self.epoch)
 
-            # local training loop for batches in a single epoch
-            for i, train_data in enumerate(self.data_loaders["train"]):
+            # local training loop for batches in a single epoch 
+            for self.step, train_data in enumerate(train_loader):
                 
                 # run validation on given intervals
                 if self.iteration % val_interval == 0:
@@ -235,7 +236,8 @@ class ClassifierEngine:
                 self.backward()
 
                 # update the epoch and iteration
-                self.epoch += 1. / len(self.data_loaders["train"])
+                # self.epoch += 1. / len(self.data_loaders["train"])
+                self.step += 1
                 self.iteration += 1
                 
                 # get relevant attributes of result for logging
@@ -250,15 +252,17 @@ class ClassifierEngine:
                 if self.rank == 0 and self.iteration % report_interval == 0:
                     previous_iteration_time = iteration_time
                     iteration_time = time()
-                    print("... Iteration %d ... Epoch %1.2f ... Training Loss %1.3f ... Training Accuracy %1.3f ... Time Elapsed %1.3f ... Iteration Time %1.3f" %
-                          (self.iteration, self.epoch, res["loss"], res["accuracy"], iteration_time - start_time, iteration_time - previous_iteration_time))
-                
-                if self.epoch >= epochs:
-                    break
+
+                    print("... Iteration %d ... Epoch %d ... Step %d/%d  ... Training Loss %1.3f ... Training Accuracy %1.3f ... Time Elapsed %1.3f ... Iteration Time %1.3f" %
+                          (self.iteration, self.epoch+1, self.step, len(train_loader), res["loss"], res["accuracy"], iteration_time - start_time, iteration_time - previous_iteration_time))
+              
         
         self.train_log.close()
         if self.rank == 0:
             self.val_log.close()
+
+
+
 
     def validate(self, val_iter, num_val_batches, checkpointing):
         # set model to eval mode
