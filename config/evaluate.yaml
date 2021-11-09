@@ -1,0 +1,38 @@
+gpu_list:
+- 1
+seed: null
+dump_path: ./outputs/
+data:
+  split_path: /fast_scratch/WatChMaL/data/IWCD_mPMT_Short/index_lists/4class_e_mu_gamma_pi0/IWCD_mPMT_Short_4_class_3M_emgp0_idxs.npz
+  dataset:
+    h5file: /fast_scratch/WatChMaL/data/IWCD_mPMT_Short/IWCD_mPMT_Short_emgp0_E0to1000MeV_digihits.h5
+    _target_: watchmal.dataset.cnn_mpmt.cnn_mpmt_dataset.CNNmPMTDataset
+    mpmt_positions_file: /data/WatChMaL/data/IWCDshort_mPMT_image_positions.npz
+    padding_type: double_cover
+    collapse_arrays: false
+    pad: true
+model:
+  _target_: watchmal.model.classifier.Classifier
+  num_classes: 4
+  _recursive_: false
+  feature_extractor:
+    _target_: watchmal.model.resnet.resnet18
+    num_input_channels: 19
+    num_output_channels: 128
+  classification_network:
+    _target_: watchmal.model.classifier.ResNetFullyConnected
+engine:
+  _target_: watchmal.engine.engine_classifier.ClassifierEngine
+tasks:
+  restore_state:
+    weight_file: /home/mittal41/WatChMaL/outputs/2021-11-06/17-09-11/outputs/DistributedDataParallel_epoch_16.pth
+  evaluate:
+    data_loaders:
+      test:
+        split_key: test_idxs
+        batch_size: 512
+        num_workers: 4
+        sampler:
+          _target_: watchmal.dataset.samplers.SubsetSequentialSampler
+
+

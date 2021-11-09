@@ -255,7 +255,8 @@ class ClassifierEngine:
 
                     print("... Iteration %d ... Epoch %d ... Step %d/%d  ... Training Loss %1.3f ... Training Accuracy %1.3f ... Time Elapsed %1.3f ... Iteration Time %1.3f" %
                           (self.iteration, self.epoch+1, self.step, len(train_loader), res["loss"], res["accuracy"], iteration_time - start_time, iteration_time - previous_iteration_time))
-              
+            
+            self.save_state(best=False, name=f'_epoch_{self.epoch+1}')      
         
         self.train_log.close()
         if self.rank == 0:
@@ -434,7 +435,7 @@ class ClassifierEngine:
     # ========================================================================
     # Saving and loading models
 
-    def save_state(self, best=False):
+    def save_state(self, best=False, name=""):
         """
         Save model weights to a file.
         
@@ -448,7 +449,7 @@ class ClassifierEngine:
         """
         filename = "{}{}{}{}".format(self.dirpath,
                                      str(self.model._get_name()),
-                                     ("BEST" if best else ""),
+                                     ("BEST" if best else name),
                                      ".pth")
         
         # Save model state dict in appropriate from depending on number of gpus

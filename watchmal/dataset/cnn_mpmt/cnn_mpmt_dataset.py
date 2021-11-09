@@ -161,52 +161,27 @@ class CNNmPMTDataset(H5Dataset):
         return transform_data
     
     
-    # def mpmtPadding(self, data):
-    #     """
-    #     :param data: torch.tensor
-    #     :returns transform_data: torch.tensor
-    #     """
-    #     w = data.shape[2]
-    #     barrel_row_start, barrel_row_end = self.barrel_rows[0], self.barrel_rows[-1]
-    #     l_endcap_index = w//2 - 5
-    #     r_endcap_index = w//2 + 4
-
-    #     padded_data = torch.cat((data, torch.zeros_like(data[:, :, :w//2])), dim=2)
-    #     padded_data[:, self.barrel_rows, w:] = data[:, self.barrel_rows, :w//2]
-
-    #     # Take out the top and bottom endcaps
-    #     top_endcap = data[:, :barrel_row_start, l_endcap_index:r_endcap_index+1]
-    #     bottom_endcap = data[:, barrel_row_end+1: , l_endcap_index:r_endcap_index+1]
-
-    #     padded_data[:, :barrel_row_start, l_endcap_index+w//2:r_endcap_index+w//2+1] = self.flip_180(top_endcap)
-    #     padded_data[:, barrel_row_end+1:, l_endcap_index+w//2:r_endcap_index+w//2+1] = self.flip_180(bottom_endcap)
-
-    #     return padded_data
-
-
     def mpmtPadding(self, data):
-        half_len_index = int(data.shape[2]/2)
-        horiz_pad_data = torch.cat((data, torch.zeros_like(data[:, :, :half_len_index])), 2)
-        horiz_pad_data[:, :, 2*half_len_index:] = torch.tensor(0, dtype=torch.float64)
-        horiz_pad_data[:, self.barrel_rows, 2*half_len_index:] = data[:, self.barrel_rows, :half_len_index]
+        """
+        :param data: torch.tensor
+        :returns transform_data: torch.tensor
+        """
+        w = data.shape[2]
+        barrel_row_start, barrel_row_end = self.barrel_rows[0], self.barrel_rows[-1]
+        l_endcap_index = w//2 - 5
+        r_endcap_index = w//2 + 4
 
-        l_index = data.shape[2]/2 - 1
-        r_index = data.shape[2]/2
+        padded_data = torch.cat((data, torch.zeros_like(data[:, :, :w//2])), dim=2)
+        padded_data[:, self.barrel_rows, w:] = data[:, self.barrel_rows, :w//2]
 
-        l_endcap_ind = int(l_index - 4)
-        r_endcap_ind = int(r_index + 4)
+        # Take out the top and bottom endcaps
+        top_endcap = data[:, :barrel_row_start, l_endcap_index:r_endcap_index+1]
+        bottom_endcap = data[:, barrel_row_end+1: , l_endcap_index:r_endcap_index+1]
 
-        top_end_cap = data[:, self.barrel_rows[-1]+1:, l_endcap_ind:r_endcap_ind+1]
-        bot_end_cap = data[:, :self.barrel_rows[0], l_endcap_ind:r_endcap_ind+1]
+        padded_data[:, :barrel_row_start, l_endcap_index+w//2:r_endcap_index+w//2+1] = self.flip_180(top_endcap)
+        padded_data[:, barrel_row_end+1:, l_endcap_index+w//2:r_endcap_index+w//2+1] = self.flip_180(bottom_endcap)
 
-        vhflip_top = self.horizontal_flip(self.vertical_flip(top_end_cap))
-        vhflip_bot = self.horizontal_flip(self.vertical_flip(bot_end_cap))
-
-        horiz_pad_data[:, self.barrel_rows[-1]+1:, l_endcap_ind + int(data.shape[2]/2) : r_endcap_ind + int(data.shape[2]/2) + 1] = vhflip_top
-        horiz_pad_data[:, :self.barrel_rows[0], l_endcap_ind + int(data.shape[2]/2) : r_endcap_ind + int(data.shape[2]/2) + 1] = vhflip_bot
-
-        return horiz_pad_data
-
+        return padded_data
 
 
     def double_cover(self, data):

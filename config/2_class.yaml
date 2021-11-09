@@ -1,0 +1,62 @@
+gpu_list:
+- 1
+seed: null
+dump_path: ./outputs/
+data:
+  split_path: /fast_scratch/WatChMaL/data/IWCD_mPMT_Short/index_lists/2class_e_gamma/IWCD_mPMT_Short_2_class_eg_9M_idxs.npz
+  dataset:
+    h5file: /fast_scratch/WatChMaL/data/IWCD_mPMT_Short/IWCD_mPMT_Short_emg_E0to1000MeV_digihits.h5
+    _target_: watchmal.dataset.cnn_mpmt.cnn_mpmt_dataset.CNNmPMTDataset
+    mpmt_positions_file: /data/WatChMaL/data/IWCDshort_mPMT_image_positions.npz
+    collapse_arrays: false
+    pad: true
+model:
+  _target_: watchmal.model.classifier.Classifier
+  num_classes: 2
+  _recursive_: false
+  feature_extractor:
+    _target_: watchmal.model.resnet.resnet18
+    num_input_channels: 19
+    num_output_channels: 128
+  classification_network:
+    _target_: watchmal.model.classifier.ResNetFullyConnected
+engine:
+  _target_: watchmal.engine.engine_classifier.ClassifierEngine
+tasks:
+  train:
+    epochs: 20
+    report_interval: 100
+    val_interval: 100
+    num_val_batches: 32
+    checkpointing: false
+    data_loaders:
+      train:
+        split_key: train_idxs
+        batch_size: 512
+        num_workers: 4
+        # transforms:
+        # - horizontal_flip
+        # - vertical_flip
+        # - front_back_reflection
+        sampler:
+          _target_: torch.utils.data.sampler.SubsetRandomSampler
+      validation:
+        split_key: val_idxs
+        batch_size: 512
+        num_workers: 4
+        sampler:
+          _target_: torch.utils.data.sampler.SubsetRandomSampler
+    optimizers:
+      _target_: torch.optim.Adam
+      lr: 0.0001
+      weight_decay: 0
+  restore_best_state:
+    placeholder: configs can't be empty
+  evaluate:
+    data_loaders:
+      test:
+        split_key: test_idxs
+        batch_size: 512
+        num_workers: 4
+        sampler:
+          _target_: watchmal.dataset.samplers.SubsetSequentialSampler
