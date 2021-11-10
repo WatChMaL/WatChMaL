@@ -20,7 +20,7 @@ barrel_map_array_idxs = [6, 7, 8, 9, 10, 11, 0, 1, 2, 3, 4, 5, 15, 16, 17, 12, 1
 pmts_per_mpmt = 19
 
 class CNNmPMTDataset(H5Dataset):
-    def __init__(self, h5file, mpmt_positions_file, is_distributed, padding_type, transforms=None, collapse_arrays=False, pad=False):
+    def __init__(self, h5file, mpmt_positions_file, is_distributed, padding_type=None, transforms=None, collapse_arrays=False):
         """
         Args:
             h5_path             ... path to h5 dataset file
@@ -39,10 +39,15 @@ class CNNmPMTDataset(H5Dataset):
         self.data_size = np.insert(self.data_size, 0, n_channels)
         self.collapse_arrays = collapse_arrays
         self.transforms = du.get_transformations(self, transforms)
-        self.padding_type = getattr(self, padding_type)
+
+        if padding_type is not None:
+            self.padding_type = getattr(self, padding_type)
+        else:
+            self.padding_type = lambda x : x 
+
         self.horizontal_flip_mpmt_map=[0, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 12, 17, 16, 15, 14, 13, 18]
         self.vertical_flip_mpmt_map=[6, 5, 4, 3, 2, 1, 0, 11, 10, 9, 8, 7, 15, 14, 13, 12, 17, 16, 18]
-        ################
+
 
     def process_data(self, hit_pmts, hit_data):
         """
@@ -84,9 +89,9 @@ class CNNmPMTDataset(H5Dataset):
         processed_data = self.padding_type(processed_data)
             
         data_dict["data"] = processed_data
-
+        
         return data_dict
-    
+        
 
     def horizontal_flip(self, data):
         return flip(data[self.horizontal_flip_mpmt_map, :, :], [2])
@@ -222,7 +227,6 @@ class CNNmPMTDataset(H5Dataset):
         padded_data = torch.cat(concat_order, dim=1)
 
         return padded_data
-
 
 
     def retrieve_event_data(self, item):
