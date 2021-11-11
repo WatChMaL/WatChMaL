@@ -179,11 +179,12 @@ class ClassifierEngine:
         Returns: None
         """
         # initialize training params
-        epochs          = train_config.epochs
-        report_interval = train_config.report_interval
-        val_interval    = train_config.val_interval
-        num_val_batches = train_config.num_val_batches
-        checkpointing   = train_config.checkpointing
+        epochs              = train_config.epochs
+        report_interval     = train_config.report_interval
+        val_interval        = train_config.val_interval
+        num_val_batches     = train_config.num_val_batches
+        checkpointing       = train_config.checkpointing
+        save_interval = train_config.save_interval if 'save_interval' in train_config else None
 
         # set the iterations at which to dump the events and their metrics
         if self.rank == 0:
@@ -256,7 +257,8 @@ class ClassifierEngine:
                     print("... Iteration %d ... Epoch %d ... Step %d/%d  ... Training Loss %1.3f ... Training Accuracy %1.3f ... Time Elapsed %1.3f ... Iteration Time %1.3f" %
                           (self.iteration, self.epoch+1, self.step, len(train_loader), res["loss"], res["accuracy"], iteration_time - start_time, iteration_time - previous_iteration_time))
             
-            self.save_state(best=False, name=f'_epoch_{self.epoch+1}')      
+            if (save_interval is not None) and ((self.epoch+1)%save_interval == 0):
+                self.save_state(best=False, name=f'_epoch_{self.epoch+1}')      
         
         self.train_log.close()
         if self.rank == 0:
