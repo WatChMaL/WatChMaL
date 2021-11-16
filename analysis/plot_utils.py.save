@@ -99,7 +99,7 @@ def get_aggregated_train_data(location, include_accuracy=True):
           accuracy = sum([df_val[3] for df_val in df_vals]) / len(df_vals)
           output_df_vals = (iteration, epoch, loss, accuracy)
 
-        output_df_vals = (iteration, epoch, loss)
+,        output_df_vals = (iteration, epoch, loss)
         train_log_df.iloc[idx] = output_df_vals
 
     return train_log_df
@@ -180,7 +180,7 @@ def disp_learn_hist_smoothed(location, losslim=None, window_train=400, window_va
 
     return fig
 
-def disp_reg_hist_smoothed(location, losslim=None, window_train=400, window_val=40, show=False, log_scale=False):
+def disp_reg_hist_smoothed(location, losslim=None, window_train=400, window_val=40, show=True, log_scale=True):
     """
     Plot the loss and accuracy history for a training session with averaging to clean up noise
     
@@ -233,8 +233,6 @@ def disp_reg_hist_smoothed(location, losslim=None, window_train=400, window_val=
 
     if log_scale:
       plt.yscale("log")
-    else:
-      plt.yscale("linear")
       
     if show:
         plt.grid()

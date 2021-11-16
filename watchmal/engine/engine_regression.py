@@ -148,7 +148,9 @@ class RegressionEngine:
             if self.output_type == 'position':
                 scaled_positions, scaled_model_out = self.scale_positions(self.positions, model_out) #Loss with scaling
             elif self.output_type == 'energies':
-                loss = self.fit_transform(self.energies).to(self.device)
+                scaled_positions = self.energies
+                scaled_model_out = model_out
+                # scaled_positions, scaled_model_out = self.fit_transform(self.energies, model_out)
             self.loss = self.criterion(scaled_positions, scaled_model_out)
 
         return {'loss': self.loss.detach().cpu().item(),
