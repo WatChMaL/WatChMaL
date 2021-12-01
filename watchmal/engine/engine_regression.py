@@ -178,11 +178,6 @@ class RegressionEngine:
         return coordinates, model_outputs
 
     def fit_transform(self, data, model_out, median, IQR):
-        # med = torch.median(data)
-        # print(f'median by batches: {med}')
-        # q = torch.tensor([0.25, 0.75]).to(self.device)
-        # IQR = torch.quantile(data, q, dim=0, keepdim=True)
-        # IQR = IQR[1] - IQR [0] #Subtractting the 25th quartile from the 75th quartile
         positions_scaled = ((data - median) / IQR)
         outputs_scaled = ((model_out - median) / IQR) #Scaling positions and output values
         return positions_scaled, outputs_scaled #RobustScaler
@@ -199,23 +194,14 @@ class RegressionEngine:
         # the concat caused the dataset to be two dimensions deeper
         uwrap_data = data[:,[0][0]]
         x_positions = uwrap_data[:,0]
-        print(f'x_positions: {x_positions}')
         y_positions = uwrap_data[:,1]
-        print(f'y_positions: {y_positions}')
         z_positions = uwrap_data[:,2]
-        print(f'z_positions: {z_positions}')
-        input('press enter')
         
         # median for positions is calculated, but not used as '0' is used instead and declared at the start
         x_positions_median, x_positions_IQR = self.median_and_IQR_calculation(x_positions)
         y_positions_median, y_positions_IQR = self.median_and_IQR_calculation(y_positions)
         z_positions_median, z_positions_IQR = self.median_and_IQR_calculation(z_positions)
-
-        print(f'x position median, IQR: {x_positions_median, x_positions_IQR}')
-        print(f'y position median, IQR: {y_positions_median, y_positions_IQR}')
-        print(f'z position median, IQR: {z_positions_median, z_positions_IQR}')
-        input('press enter')
-
+        
         return [x_positions_IQR, y_positions_IQR, z_positions_IQR]
 
     def backward(self):
@@ -295,14 +281,11 @@ class RegressionEngine:
             else:
                 all_validation_and_train_data = torch.cat((all_validation_and_train_data, data[self.output_type]), 0)
 
-        print(f'All validation and train data: {all_validation_and_train_data}')
-        input('press enter')
 
         if self.output_type == 'positions':
             self.positions_overall_IQR = self.set_positions_IQR(all_validation_and_train_data)
         elif self.output_type == 'energies':
             self.energies_median, self.energies_IQR = self.median_and_IQR_calculation(all_validation_and_train_data)
-            input(f'energies median: {self.energies_median}, IQR: {self.energies_IQR}. Enter to continue...')
 
         # global training loop for multiple epochs
         while (floor(epoch) < epochs):
@@ -491,14 +474,10 @@ class RegressionEngine:
                 else:
                     all_test_data = torch.cat((all_test_data, data[self.output_type]), 0)
 
-            print(f'All test data: {all_test_data}')
-            input('press enter')
-
             if self.output_type == 'positions':
                 self.positions_overall_IQR = self.set_positions_IQR(all_test_data)
             elif self.output_type == 'energies':
                 self.energies_median, self.energies_IQR = self.median_and_IQR_calculation(all_test_data)
-                input(f'energies median: {self.energies_median}, IQR: {self.energies_IQR}. Enter to continue...')
 
             # Extract the event data and label from the DataLoader iterator
             for it, eval_data in enumerate(self.data_loaders["test"]):
