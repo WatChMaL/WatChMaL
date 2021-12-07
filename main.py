@@ -18,6 +18,7 @@ import logging
 import debugpy
 import os
 import numpy as np
+import sys
 
 logger = logging.getLogger('train')
 
@@ -118,6 +119,11 @@ def main_worker_function(rank, ngpus_per_node, is_distributed, config):
     for task, task_config in config.tasks.items():
         if 'optimizers' in task_config:
             engine.configure_optimizers(task_config.optimizers)
+
+    # Configure scheduler
+    for task, task_config in config.tasks.items():
+        if 'scheduler' in task_config:
+            engine.configure_scheduler(task_config.scheduler)
     
     # Perform tasks
     for task, task_config in config.tasks.items():
