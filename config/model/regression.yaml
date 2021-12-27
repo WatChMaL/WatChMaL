@@ -1,2 +1,3 @@
 # @package _group_
 _target_: watchmal.model.regression.Regression
+_recursive_: false

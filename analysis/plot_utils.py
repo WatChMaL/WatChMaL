@@ -180,7 +180,7 @@ def disp_learn_hist_smoothed(location, losslim=None, window_train=400, window_va
 
     return fig
 
-def disp_reg_hist_smoothed(location, losslim=None, window_train=400, window_val=40, show=True, log_scale=True):
+def disp_reg_hist_smoothed(location, losslim=None, window_train=400, window_val=40, show=False, log_scale=False):
     """
     Plot the loss and accuracy history for a training session with averaging to clean up noise
     
@@ -233,6 +233,8 @@ def disp_reg_hist_smoothed(location, losslim=None, window_train=400, window_val=
 
     if log_scale:
       plt.yscale("log")
+    else:
+      plt.yscale("linear")
       
     if show:
         plt.grid()
