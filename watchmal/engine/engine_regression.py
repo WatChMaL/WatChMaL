@@ -153,10 +153,10 @@ class RegressionEngine:
             loss = None
             model_out = self.model(self.data)
             if self.output_type == 'positions':
-                scaled_positions, scaled_model_out = self.scale_positions(self.positions, model_out, self.positions_overall_IQR) #Loss with scaling
+                scaled_values, scaled_model_out = self.scale_positions(self.positions, model_out, self.positions_overall_IQR) #Loss with scaling
             elif self.output_type == 'energies':
-                scaled_positions, scaled_model_out = self.fit_transform(self.energies, model_out, self.energies_median, self.energies_IQR)
-            self.loss = self.criterion(scaled_positions, scaled_model_out)
+                scaled_values, scaled_model_out = self.fit_transform(self.energies, model_out, self.energies_median, self.energies_IQR)
+            self.loss = self.criterion(scaled_values, scaled_model_out)
 
         return {'loss': self.loss.detach().cpu().item(),
                 'output': model_out.detach().cpu().numpy(),
