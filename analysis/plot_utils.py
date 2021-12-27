@@ -265,6 +265,7 @@ def plot_classifier_response(softmaxes, labels, particle_names, label_dict,
     fig, axes = plt.subplots(1,num_panes,figsize=(5*num_panes,5), facecolor='w')
     inverse_label_dict = {value:key for key, value in label_dict.items()}
 
+    label_dict = {k: v for k, v in sorted(label_dict.items(), key=lambda item: item[1])}
     softmaxes_list = separate_particles([softmaxes], labels, label_dict, [name for name in label_dict.keys()])[0]
 
     if isinstance(particle_names[0],str):
@@ -278,7 +279,7 @@ def plot_classifier_response(softmaxes, labels, particle_names, label_dict,
             ax.hist(softmaxes_list[dependent_particle_label][:,independent_particle_label],
                     label=f"{legend_label_dict[inverse_label_dict[dependent_particle_label]]} Events",
                     alpha=0.7,histtype=u'step',bins=bins,density=True,
-                    linestyle=linestyles[dependent_particle_label],linewidth=2)            
+                    linestyle=linestyles[dependent_particle_label] if linestyles is not None else 'solid',linewidth=2)            
         ax.legend(loc=legend_locs[independent_particle_label] if legend_locs is not None else 'best', fontsize=legend_size)
         ax.set_xlabel('P({})'.format(legend_label_dict[inverse_label_dict[independent_particle_label]]), fontsize=label_size)
         ax.set_ylabel('Normalized Density', fontsize=label_size)
@@ -295,7 +296,7 @@ def plot_classifier_response(softmaxes, labels, particle_names, label_dict,
                 ax.hist(reduce(lambda x,y : x+y, [softmaxes_list[dependent_particle_label][:,label_dict[pname]] for pname in extra_pane_particle_names]),
                         label=legend_label_dict[particle_names[-1][dependent_particle_label]],
                         alpha=0.7,histtype=u'step',bins=bins,density=True,
-                        linestyle=linestyles[dependent_particle_label],linewidth=2)         
+                        linestyle=linestyles[dependent_particle_label] if linestyles is not None else 'solid',linewidth=2)         
         ax.legend(loc=legend_locs[-1] if legend_locs is not None else 'best', fontsize=legend_size)
         xlabel = ''
         for list_index, independent_particle_name in enumerate(extra_pane_particle_names):
