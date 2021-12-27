@@ -1,0 +1,5 @@
+# @package _group_
+_target_: watchmal.model.unet3d.UNet3D_2 # 16-channel
+# _target_: watchmal.model.unet3d.UNet3D # 8-channel
+n_channels: 1
+n_classes: 4

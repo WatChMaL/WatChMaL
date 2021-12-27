@@ -1,0 +1,5 @@
+# @package _group_
+split_path: "/fast_scratch/WatChMaL/data/IWCD_fulltank_300_segmentation_idx.npz"
+dataset:
+  true_hits_h5file: /fast_scratch/WatChMaL/data/IWCD_mPMT_Short_pi0_E0to1000MeV_truehits.h5
+  digi_truth_mapping_file: /fast_scratch/WatChMaL/data/IWCD_mPMT_Short_pi0_E0to1000MeV_truth_for_data.pkl

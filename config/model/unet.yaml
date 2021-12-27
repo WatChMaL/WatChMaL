@@ -1,0 +1,4 @@
+# @package _group_
+_target_: watchmal.model.unet.UNet
+n_channels: 19
+n_classes: 4

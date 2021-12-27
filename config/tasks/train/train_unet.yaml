@@ -1,0 +1,21 @@
+# @package _group_
+epochs: 10
+
+report_interval: 10
+val_interval: 10
+num_val_batches: 32
+
+checkpointing: False
+
+data_loaders:
+  train:
+    split_key: train_idxs
+    batch_size: 128
+    num_workers: 4
+    transforms:
+      - horizontal_flip
+      - vertical_flip
+  validation:
+    split_key: val_idxs
+    batch_size: 512
+    num_workers: 4

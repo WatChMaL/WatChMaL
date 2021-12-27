@@ -1,0 +1,10 @@
+# @package _group_
+
+# Double Deep
+weight_file: '/home/bhuckell/WatChMaL_analysis/WatChMaL_folder/outputs/2021-04-07/21-46-15/outputs/doubledeep.pth'
+
+#Unet3D 16-channel
+#weight_file: "/home/leozatum/WatChMaL_analysis_old/outputs/2021-04-08/23-07-06/outputs/UNetBEST3dnew1.pth"
+
+#Unet3D 8-channel
+# weight_file: "/home/leozatum/WatChMaL_analysis_old/outputs/2021-04-06/16-31-39/outputs/UNetBEST3dnew1.pth"
