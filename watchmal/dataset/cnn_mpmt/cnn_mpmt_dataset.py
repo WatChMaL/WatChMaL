@@ -60,7 +60,7 @@ class CNNmPMTDataset(H5Dataset):
         hit_rows = self.mpmt_positions[hit_mpmts, 0]
         hit_cols = self.mpmt_positions[hit_mpmts, 1]
 
-        data = np.zeros(self.data_size)
+        data = np.zeros(self.data_size, dtype=np.float32)
         data[hit_pmt_in_modules, hit_rows, hit_cols] = hit_data
 
         # fix barrel array indexing to match endcaps in xyz ordering

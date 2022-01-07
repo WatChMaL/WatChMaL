@@ -1,4 +1,3 @@
-# @package _group_
 _target_: watchmal.model.pointnet.PointNetFeat
 feature_transform: True
 k: 5
