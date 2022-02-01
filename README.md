@@ -10,9 +10,9 @@ Unified framework for the training, testing and using Machine Learning models fo
 2. [Usage](#usage)
     1. [Basic Usage](#basic-usage)
     2. [Configuration](#configuration)
-        1. [Hydra configuration framework](hydra-configuration-framework)
-        2. [WatChMaL configuration](watchmal-configuration)
-        3. [Configuration example](configuration-example)
+        1. [Hydra configuration framework](#hydra-configuration-framework)
+        2. [WatChMaL configuration](#watchmal-configuration)
+        3. [Configuration example](#configuration-example)
 3. [Development](#development)
 
 # Installation
