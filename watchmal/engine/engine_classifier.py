@@ -23,17 +23,18 @@ from sys import stdout
 import copy
 
 # WatChMaL imports
-from watchmal.dataset.data_utils import get_data_loader
+from watchmal.dataset.graph_io_utils import get_data_loader
 from watchmal.utils.logging_utils import CSVData
 
 class ClassifierEngine:
-    def __init__(self, model, rank, gpu, dump_path):
+    def __init__(self, model, rank, gpu, dump_path, is_graph):
         """
         Args:
             model       ... model object that engine will use in training or evaluation
             rank        ... rank of process among all spawned processes (in multiprocessing mode)
             gpu         ... gpu that this process is running on
             dump_path   ... path to store outputs in
+            is_graph    ... boolean indicating if using a graph network
         """
         # create the directory for saving the log and dump files
         self.epoch = 0.
@@ -42,6 +43,7 @@ class ClassifierEngine:
         self.rank = rank
         self.model = model
         self.device = torch.device(gpu)
+        self.is_graph =is_graph
 
         # Setup the parameters to save given the model type
         if isinstance(self.model, DDP):
@@ -225,8 +227,12 @@ class ClassifierEngine:
                     self.validate(val_iter, num_val_batches, checkpointing)
                 
                 # Train on batch
-                self.data = train_data['data']
-                self.labels = train_data['labels']
+                if self.is_graph:
+                    self.data = train_data
+                    self.labels = train_data.y
+                else:
+                    self.data = train_data['data']
+                    self.labels = train_data['labels']
 
                 # Call forward: make a prediction & measure the average error using data = self.data
                 res = self.forward(True)
@@ -274,8 +280,12 @@ class ClassifierEngine:
                 val_data = next(val_iter)
 
             # extract the event data from the input data tuple
-            self.data = val_data['data']
-            self.labels = val_data['labels']
+            if self.is_graph:
+                self.data = val_data
+                self.labels = val_data.y
+            else:
+                self.data = val_data['data']
+                self.labels = val_data['labels']
 
             val_res = self.forward(False)
 
@@ -357,8 +367,12 @@ class ClassifierEngine:
             for it, eval_data in enumerate(self.data_loaders["test"]):
                 
                 # load data
-                self.data = eval_data['data']
-                self.labels = eval_data['labels']
+                if self.is_graph:
+                    self.data = eval_data
+                    self.labels = eval_data.y
+                else:
+                    self.data = eval_data['data']
+                    self.labels = eval_data['labels']
 
                 eval_indices = eval_data['indices']
                 

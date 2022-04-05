@@ -1,0 +1,2 @@
+_target_: watchmal.dataset.gnn.gnn_dataset.GNN_dataset
+geometry_file: /fast_scratch/WatChMaL/data/geometries/geo_mPMTshort.npz

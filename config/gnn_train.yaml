@@ -1,0 +1,18 @@
+gpu_list:
+    - 0
+    - 1
+    - 2
+    - 3
+is_graph: True
+seed: null
+dump_path: './outputs/'
+defaults:
+    - data: iwcd_short
+    - data/dataset: iwcd_gnn
+    - model: gnn
+    - engine: classifier
+    - tasks/train: train_gnn
+    - optimizers@tasks.train.optimizers: adam
+    - sampler@tasks.train.data_loaders.train.sampler: subset_random
+    - sampler@tasks.train.data_loaders.validation.sampler: subset_random
+    - _self_
