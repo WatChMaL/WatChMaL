@@ -24,7 +24,6 @@ import copy
 
 # WatChMaL imports
 from watchmal.dataset.data_utils import get_data_loader
-from watchmal.dataset.graph_io_utils import get_data_loader as get_graph_data_loader
 from watchmal.utils.logging_utils import CSVData
 
 class ClassifierEngine:
@@ -94,10 +93,7 @@ class ClassifierEngine:
             self should have dict attribute data_loaders
         """
         for name, loader_config in loaders_config.items():
-            if self.is_graph:
-                self.data_loaders[name] = get_graph_data_loader(**data_config, **loader_config, is_distributed=is_distributed, seed=seed)
-            else:
-                self.data_loaders[name] = get_data_loader(**data_config, **loader_config, is_distributed=is_distributed, seed=seed)
+                self.data_loaders[name] = get_data_loader(**data_config, **loader_config, is_distributed=is_distributed, seed=seed, is_graph=self.is_graph)
 
     def get_synchronized_metrics(self, metric_dict):
         """
