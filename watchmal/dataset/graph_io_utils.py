@@ -7,7 +7,7 @@ from hydra.utils import instantiate
 
 # torch imports
 import torch
-from torch_geometric.data import DataLoader as PyGDataLoader
+from torch_geometric.loader import DataLoader as PyGDataLoader
 from torch.utils.data import SubsetRandomSampler
 from torch.utils.data.distributed import DistributedSampler
 from torch.utils.data import DataLoader
@@ -34,23 +34,23 @@ def get_data_loader(dataset, batch_size, sampler, num_workers, is_distributed, s
         split_path      ... path to indices specifying splitting of dataset among train/val/test
         split_key       ... string key to select indices
         transforms      ... list of transforms to apply
-    
+
     Returns: dataloader created with instantiated dataset and (possibly wrapped) sampler
     """
     dataset = instantiate(dataset, transforms=transforms, is_distributed=is_distributed)
-    
+
     if split_path is not None and split_key is not None:
         split_indices = np.load(split_path, allow_pickle=True)[split_key]
         sampler = instantiate(sampler, split_indices)
     else:
         sampler = instantiate(sampler)
-    
+
     if is_distributed:
         ngpus = torch.distributed.get_world_size()
 
         batch_size = int(batch_size/ngpus)
-        
+
         sampler = DistributedSamplerWrapper(sampler=sampler, seed=seed)
-    
+
     # TODO: added drop_last, should decide if we want to keep this
     return PyGDataLoader(dataset, sampler=sampler, batch_size=batch_size, num_workers=num_workers, drop_last=True, pin_memory=True)
