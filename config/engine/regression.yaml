@@ -1,2 +1,2 @@
 _target_: watchmal.engine.engine_regression.RegressionEngine
-output_type: 'position'
+output_type: 'positions'
