@@ -1,4 +1,3 @@
-
 """
 Class for training a fully supervised classifier
 """
@@ -40,6 +39,8 @@ class RegressionEngine:
             dump_path   ... path to store outputs in
         """
         # create the directory for saving the log and dump files
+        self.epoch = 0.
+        self.best_validation_loss = 1.0e10
         self.dirpath = dump_path
         self.rank = rank
         self.model = model
@@ -108,8 +109,7 @@ class RegressionEngine:
             self should have dict attribute data_loaders
         """
         for name, loader_config in loaders_config.items():
-            self.data_loaders[name] = get_data_loader(**data_config, **loader_config,
-                is_distributed=is_distributed, seed=seed)
+            self.data_loaders[name] = get_data_loader(**data_config, **loader_config, is_distributed=is_distributed, seed=seed)
 
     def get_synchronized_metrics(self, metric_dict):
         """
@@ -147,20 +147,18 @@ class RegressionEngine:
 
         with torch.set_grad_enabled(train):
             # Move the data and the labels to the GPU (if using CPU this has no effect)
-            self.data = self.data.to(self.device)
-            self.energies = self.energies.to(self.device)
-            self.positions = torch.squeeze(self.positions).to(self.device)
-            loss = None
-            model_out = self.model(self.data)
+            data = self.data.to(self.device)
+            energies = self.energies.to(self.device)
+            positions = torch.squeeze(self.positions).to(self.device)
+            model_out = self.model(data)
             if self.output_type == 'positions':
-                scaled_values, scaled_model_out = self.scale_positions(self.positions, model_out, self.positions_overall_IQR) #Loss with scaling
+                scaled_values, scaled_model_out = self.scale_positions(positions, model_out, self.positions_overall_IQR) #Loss with scaling
             elif self.output_type == 'energies':
-                scaled_values, scaled_model_out = self.fit_transform(self.energies, model_out, self.energies_median, self.energies_IQR)
+                scaled_values, scaled_model_out = self.fit_transform(energies, model_out, self.energies_median, self.energies_IQR)
             self.loss = self.criterion(scaled_values, scaled_model_out)
 
-        return {'loss': self.loss.detach().cpu().item(),
-                'output': model_out.detach().cpu().numpy(),
-                'raw_output': model_out}
+        return {'loss': self.loss.item(),
+                'output': model_out}
 
     def scale_positions(self, data, model_out, positions_overall_IQR):
         x_positions = data[:,0]
@@ -213,7 +211,7 @@ class RegressionEngine:
         """
         self.optimizer.zero_grad()  # reset accumulated gradient
         self.loss.backward()  # compute new gradient
-        clip_grad_norm_(self.model.parameters(), 1)
+        clip_grad_norm_(self.model.parameters(), 1) # TODO: check if this is necessary
         self.optimizer.step()  # step params
 
     # ========================================================================
@@ -249,16 +247,12 @@ class RegressionEngine:
         # set model to training mode
         self.model.train()
 
-        #implement early stopping
-        self.wait = 0
-        patience = 5
-
         # initialize epoch and iteration counters
-        epoch = 0.
+        self.epoch = 0.
         self.iteration = 0
 
-        # keep track of the validation accuracy
-        best_val_loss = 1.0e6
+        # keep track of the validation loss
+        self.best_validation_loss = 1.0e10
 
         # initialize the iterator over the validation set
         val_iter = iter(self.data_loaders["validation"])
@@ -288,98 +282,35 @@ class RegressionEngine:
             self.energies_median, self.energies_IQR = self.median_and_IQR_calculation(all_validation_and_train_data)
 
         # global training loop for multiple epochs
-        while (floor(epoch) < epochs):
+        while (floor(self.epoch) < epochs):
             if self.rank == 0:
-                print('Epoch', floor(epoch), 'Starting @',
-                    strftime("%Y-%m-%d %H:%M:%S", localtime()))
+                print('Epoch', floor(self.epoch), 'Starting @', strftime("%Y-%m-%d %H:%M:%S", localtime()))
+
             times = []
 
             start_time = time()
             iteration_time = start_time
 
             train_loader = self.data_loaders["train"]
-        
+
             # update seeding for distributed samplers
             if self.is_distributed:
-                train_loader.sampler.set_epoch(epoch)
+                train_loader.sampler.set_epoch(self.epoch)
 
             # local training loop for batches in a single epoch
             for i, train_data in enumerate(train_loader):
 
                 # run validation on given intervals
                 if self.iteration % val_interval == 0:
-                    # set model to eval mode
-                    self.model.eval()
-
-                    val_metrics = {"iteration": self.iteration, "epoch": epoch, "loss": 0., "saved_best": 0}
-                    
-
-                    for val_batch in range(num_val_batches):
-                        try:
-                            val_data = next(val_iter)
-                        except StopIteration:
-                            del val_iter
-                            print("Fetching new validation iterator...")
-                            val_iter = iter(self.data_loaders["validation"])
-                            val_data = next(val_iter)
-
-                        # extract the event data from the input data tuple
-                        self.data = val_data['data'].float()
-                        self.labels = val_data['labels'].long()
-                        self.energies = val_data['energies'].float()
-                        self.angles = val_data['angles'].float()
-                        self.positions = val_data['positions'].float()
-                        self.event_ids = val_data['event_ids'].float()
-
-                        val_res = self.forward(False)
-
-                        val_metrics["loss"] += val_res["loss"]
-
-                    # return model to training mode
-                    self.model.train()
-
-                    # record the validation stats to the csv
-                    val_metrics["loss"] /= num_val_batches
-
-                    local_val_metrics = {"loss": np.array([val_metrics["loss"]])}
-
-                    if self.is_distributed:
-                        global_val_metrics = self.get_synchronized_metrics(local_val_metrics)
-                        for name, tensor in zip(global_val_metrics.keys(),
-                                global_val_metrics.values()):
-                            global_val_metrics[name] = np.array(tensor.cpu())
-                    else:
-                        global_val_metrics = local_val_metrics
-                        print(type(global_val_metrics["loss"]))
-
-                    if self.rank == 0:
-                        # Save if this is the best model so far
-                        global_val_loss = np.mean(global_val_metrics["loss"])
-
-                        val_metrics["loss"] = global_val_loss
-
-                        if val_metrics["loss"] < best_val_loss:
-                            print('best validation loss so far!: {}'.format(best_val_loss))
-                            self.save_state(best=True)
-                            val_metrics["saved_best"] = 1
-
-                            best_val_loss = val_metrics["loss"]
-
-                        # Save the latest model if checkpointing
-                        if checkpointing:
-                            self.save_state(best=False)
-
-                        self.val_log.record(val_metrics)
-                        self.val_log.write()
-                        self.val_log.flush()
+                    self.validate(val_iter, num_val_batches, checkpointing)
 
                 # Train on batch
-                self.data = train_data['data'].float()
-                self.labels = train_data['labels'].long()
-                self.energies = train_data['energies'].float()
-                self.angles = train_data['angles'].float()
-                self.event_ids = train_data['event_ids'].float()
-                self.positions = train_data['positions'].float()
+                self.data = train_data['data']
+                self.labels = train_data['labels']
+                self.energies = train_data['energies']
+                self.angles = train_data['angles']
+                self.event_ids = train_data['event_ids']
+                self.positions = train_data['positions']
 
                 # Call forward: make a prediction & measure the average error using data = self.data
                 res = self.forward(True)
@@ -387,13 +318,12 @@ class RegressionEngine:
                 # Call backward: backpropagate error and update weights using loss = self.loss
                 self.backward()
 
-                old_epoch = epoch
                 # update the epoch and iteration
-                epoch += 1. / len(train_loader)
+                self.epoch += 1. / len(train_loader)
                 self.iteration += 1
 
                 # get relevant attributes of result for logging
-                train_metrics = {"iteration": self.iteration, "epoch": epoch, "loss": res["loss"]}
+                train_metrics = {"iteration": self.iteration, "epoch": self.epoch, "loss": res["loss"]}
 
                 # record the metrics for the mini-batch in the log
                 self.train_log.record(train_metrics)
@@ -404,30 +334,76 @@ class RegressionEngine:
                 if self.rank == 0 and self.iteration % report_interval == 0:
                     previous_iteration_time = iteration_time
                     iteration_time = time()
-                    print(
-                        "... Iteration %d ... Epoch %1.2f ... Training Loss %1.3f ... Time Elapsed %1.3f ... Iteration Time %1.3f" %
-                        (self.iteration, epoch, res["loss"],
-                         iteration_time - start_time, iteration_time - previous_iteration_time))
+                    print("... Iteration %d ... Epoch %1.2f ... Training Loss %1.3f ... Time Elapsed %1.3f ... Iteration Time %1.3f" %
+                          (self.iteration, self.epoch, res["loss"], iteration_time - start_time, iteration_time - previous_iteration_time))
 
-                if (floor(epoch) - floor(old_epoch) == 1):
-                    if (res["loss"] < best_val_loss):
-                        self.wait = 1
-                    else:
-                        self.wait += 1
-                        print("No improvement in validation loss")
-                    print(self.wait)
-
-                if epoch >= epochs or self.wait > patience:
+                if self.epoch >= epochs:
                     return
 
-            if (self.wait > patience):
-                print("Training has stopped due to early stopping, Epoch %1.2f ... Best Val Loss %1.3f ... Time "
-                      "Elapsed %1.3f " % (epoch, best_val_loss,
-                         iteration_time - start_time))
-                break
         self.train_log.close()
         if self.rank == 0:
             self.val_log.close()
+
+    def validate(self, val_iter, num_val_batches, checkpointing):
+        # set model to eval mode
+        self.model.eval()
+        val_metrics = {"iteration": self.iteration, "epoch": self.epoch, "loss": 0., "saved_best": 0}
+        for val_batch in range(num_val_batches):
+            try:
+                val_data = next(val_iter)
+            except StopIteration:
+                del val_iter
+                print("Fetching new validation iterator...")
+                val_iter = iter(self.data_loaders["validation"])
+                val_data = next(val_iter)
+
+            # extract the event data from the input data tuple
+            self.data = val_data['data']
+            self.labels = val_data['labels']
+            self.energies = val_data['energies']
+            self.angles = val_data['angles']
+            self.positions = val_data['positions']
+            self.event_ids = val_data['event_ids']
+
+            val_res = self.forward(False)
+
+            val_metrics["loss"] += val_res["loss"]
+
+        # return model to training mode
+        self.model.train()
+
+        # record the validation stats to the csv
+        val_metrics["loss"] /= num_val_batches
+
+        local_val_metrics = {"loss": np.array([val_metrics["loss"]])}
+
+        if self.is_distributed:
+            global_val_metrics = self.get_synchronized_metrics(local_val_metrics)
+            for name, tensor in zip(global_val_metrics.keys(), global_val_metrics.values()):
+                global_val_metrics[name] = np.array(tensor.cpu())
+        else:
+            global_val_metrics = local_val_metrics
+
+        if self.rank == 0:
+            # Save if this is the best model so far
+            global_val_loss = np.mean(global_val_metrics["loss"])
+
+            val_metrics["loss"] = global_val_loss
+            val_metrics["epoch"] = self.epoch
+
+            if val_metrics["loss"] < self.best_validation_loss:
+                self.best_validation_loss = val_metrics["loss"]
+                print('best validation loss so far!: {}'.format(self.best_validation_loss))
+                self.save_state(best=True)
+                val_metrics["saved_best"] = 1
+
+            # Save the latest model if checkpointing
+            if checkpointing:
+                self.save_state(best=False)
+
+            self.val_log.record(val_metrics)
+            self.val_log.write()
+            self.val_log.flush()
 
     def evaluate(self, test_config):
         """
@@ -483,28 +459,24 @@ class RegressionEngine:
             for it, eval_data in enumerate(self.data_loaders["test"]):
 
                 # load data
-                self.data = copy.deepcopy(eval_data['data'].float())
-                self.energies = copy.deepcopy(eval_data['energies'].float())
-                self.positions = copy.deepcopy(eval_data['positions'].float())
+                self.data = eval_data['data']
+                self.energies = eval_data['energies']
+                self.positions = eval_data['positions']
 
-                eval_indices = copy.deepcopy(eval_data['indices'].long().to("cpu"))
+                eval_indices = eval_data['indices']
 
                 # Run the forward procedure and output the result
-                result = self.forward(False)
+                result = self.forward(train=False)
 
                 eval_loss += result['loss']
 
-                # Copy the tensors back to the CPU
-                self.energies = self.energies.to("cpu")
-
                 # Add the local result to the final result
-                indices.extend(eval_indices)
+                indices.extend(eval_indices.numpy())
                 energies.extend(self.energies.numpy())
-                positions.extend(self.positions.cpu().numpy())
-                outputs.extend(result['output'])                
+                positions.extend(self.positions.detach().cpu().numpy())
+                outputs.extend(result['output'].detach().cpu().numpy())
 
-                print("eval_iteration : " + str(it) + " eval_loss : " + str(
-                    result["loss"]))
+                print("eval_iteration : " + str(it) + " eval_loss : " + str(result["loss"]))
 
                 eval_iterations += 1
 
@@ -518,13 +490,10 @@ class RegressionEngine:
 
         indices = np.array(indices)
         energies = np.array(energies)
-        if self.is_distributed:
-            positions = global_eval_results_dict["positions"].cpu().numpy()
-        else:
-            positions = np.array(positions)
+        positions = np.array(positions)
         outputs = np.array(outputs)
 
-        local_eval_results_dict = {"indices": indices, "energies": energies, "outputs": outputs}
+        local_eval_results_dict = {"indices": indices, "energies": energies, "positions": positions, "outputs": outputs}
 
         if self.is_distributed:
             # Gather results from all processes
@@ -532,8 +501,7 @@ class RegressionEngine:
             global_eval_results_dict = self.get_synchronized_metrics(local_eval_results_dict)
 
             if self.rank == 0:
-                for name, tensor in zip(global_eval_metrics_dict.keys(),
-                        global_eval_metrics_dict.values()):
+                for name, tensor in zip(global_eval_metrics_dict.keys(), global_eval_metrics_dict.values()):
                     local_eval_metrics_dict[name] = np.array(tensor.cpu())
 
                 indices   = global_eval_results_dict["indices"].cpu().numpy()
@@ -542,16 +510,15 @@ class RegressionEngine:
                 outputs   = global_eval_results_dict["outputs"].cpu().numpy()
 
         if self.rank == 0:
-            print("Sorting Outputs...")
-            sorted_indices = np.argsort(indices)
+#            print("Sorting Outputs...")
+#            sorted_indices = np.argsort(indices)
 
             # Save overall evaluation results
             print("Saving Data...")
-            np.save(self.dirpath + "indices.npy", sorted_indices)
-            np.save(self.dirpath + "predictions.npy", outputs[sorted_indices])
-            print(outputs[sorted_indices])
-            np.save(self.dirpath + "positions.npy", positions[sorted_indices])
-            print(positions[sorted_indices])
+            np.save(self.dirpath + "indices.npy", indices)#sorted_indices)
+            np.save(self.dirpath + "energies.npy", energies)#[sorted_indices])
+            np.save(self.dirpath + "positions.npy", positions)#[sorted_indices])
+            np.save(self.dirpath + "predictions.npy", outputs)#[sorted_indices])
 
             # Compute overall evaluation metrics
             val_iterations = np.sum(local_eval_metrics_dict["eval_iterations"])
