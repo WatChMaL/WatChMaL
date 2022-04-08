@@ -62,10 +62,7 @@ class RegressionEngine:
         self.data = None
         self.labels = None
         self.energies = None
-        self.eventids = None
-        self.rootfiles = None
         self.angles = None
-        self.event_ids = None
         self.positions = None
 
         # placeholders for overall median and IQR values
@@ -309,7 +306,6 @@ class RegressionEngine:
                 self.labels = train_data['labels']
                 self.energies = train_data['energies']
                 self.angles = train_data['angles']
-                self.event_ids = train_data['event_ids']
                 self.positions = train_data['positions']
 
                 # Call forward: make a prediction & measure the average error using data = self.data
@@ -363,7 +359,6 @@ class RegressionEngine:
             self.energies = val_data['energies']
             self.angles = val_data['angles']
             self.positions = val_data['positions']
-            self.event_ids = val_data['event_ids']
 
             val_res = self.forward(False)
 
