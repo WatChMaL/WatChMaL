@@ -6,8 +6,6 @@ import torch
 
 # WatChMaL imports
 from watchmal.dataset.h5_dataset import H5Dataset
-import watchmal.dataset.graph_io_utils as du
-
 
 ##...............................................
 
