@@ -9,8 +9,8 @@ defaults:
     - model/feature_extractor: resnet18
     - model/regression_alg: linear
     - engine: regression
-    - loss@tasks.evaluate.loss: smooth
     - tasks/restore_state: restore_state
     - tasks/evaluate: test
+    - loss@tasks.evaluate.loss: smooth
     - sampler@tasks.evaluate.data_loaders.test.sampler: subset_sequential
     - _self_
