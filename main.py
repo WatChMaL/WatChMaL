@@ -21,7 +21,7 @@ import numpy as np
 
 logger = logging.getLogger('train')
 
-@hydra.main(config_path='config/', config_name='resnet_train')
+@hydra.main(config_path='config/', config_name='gnn_train')
 def main(config):
     """
     Run model using given config, spawn worker subprocesses as necessary
@@ -107,7 +107,7 @@ def main_worker_function(rank, ngpus_per_node, is_distributed, config):
         model = DDP(model, device_ids=[gpu], find_unused_parameters=True)
 
     # Instantiate the engine
-    engine = instantiate(config.engine, model=model, rank=rank, gpu=gpu, dump_path=config.dump_path)
+    engine = instantiate(config.engine, model=model, rank=rank, gpu=gpu, dump_path=config.dump_path, is_graph=config.is_graph)
     
     # Configure data loaders
     for task, task_config in config.tasks.items():

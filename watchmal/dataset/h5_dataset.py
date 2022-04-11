@@ -14,7 +14,7 @@ class H5CommonDataset(Dataset, ABC):
     """
     Initialize with file of h5 data.  Sets up access to all of the data that is common between
     the digitized hits data and the truth hits data.  These are:
-    
+
     event_ids 	(n_events,) 	int32 	ID of the event in the ROOT file
     root_files 	(n_events,) 	object 	File name and location of the ROOT file
     labels 	(n_events,) 	int32 	Label for event classification (gamma=0, electron=1, muon=2)
@@ -24,7 +24,7 @@ class H5CommonDataset(Dataset, ABC):
     veto 	(n_events,) 	bool 	OD veto estimate based on any Cherenkov producing particles exiting the tank, with initial energy above threshold
     veto2 	(n_events,) 	bool 	OD veto estimate based on any Cherenkov producing particles exiting the tank, with an estimate of energy at the point the particle exits the tank being above threshold
     event_hits_index 	(n_events,) 	int64 	Starting index in the hit dataset objects for hits of a particular event
-    
+
     hit_pmt 	(n_hits,) 	int32 	PMT ID of the digitized hit
     hit_time 	(n_hits,) 	float32 	Time of the digitized hit
     """
@@ -56,7 +56,7 @@ class H5CommonDataset(Dataset, ABC):
 #            self.veto  = np.array(self.h5_file["veto"])
 #            self.veto2 = np.array(self.h5_file["veto2"])
         self.event_hits_index = np.append(self.h5_file["event_hits_index"], self.h5_file["hit_pmt"].shape[0]).astype(np.int64)
-        
+
         self.hdf5_hit_pmt  = self.h5_file["hit_pmt"]
         self.hdf5_hit_time = self.h5_file["hit_time"]
 
@@ -71,7 +71,7 @@ class H5CommonDataset(Dataset, ABC):
 
         # Set attribute so that method won't be invoked again
         self.initialized = True
-        
+
     @abstractmethod
     def load_hits(self):
         pass
@@ -102,13 +102,13 @@ class H5Dataset(H5CommonDataset, ABC):
     """
     def __init__(self, h5_path, is_distributed):
         H5CommonDataset.__init__(self, h5_path, is_distributed)
-        
+
     def load_hits(self):
         self.hdf5_hit_charge = self.h5_file["hit_charge"]
         self.hit_charge = np.memmap(self.h5_path, mode="r", shape=self.hdf5_hit_charge.shape,
                                     offset=self.hdf5_hit_charge.id.get_offset(),
                                     dtype=self.hdf5_hit_charge.dtype)
-        
+
     def __getitem__(self, item):
         data_dict = super().__getitem__(item)
 
@@ -118,6 +118,11 @@ class H5Dataset(H5CommonDataset, ABC):
         self.event_hit_pmts = self.hit_pmt[start:stop]
         self.event_hit_charges = self.hit_charge[start:stop]
         self.event_hit_times = self.time[start:stop]
+
+        data = {"hit_pmts" : self.event_hit_pmts,
+                "hit_charges" : self.event_hit_charges,
+                "hit_times" : self.event_hit_times}
+        data_dict["data"] = data        
 
         return data_dict
 
