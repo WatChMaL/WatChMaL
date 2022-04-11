@@ -196,6 +196,9 @@ class RegressionEngine:
         x_positions_median, x_positions_IQR = self.median_and_IQR_calculation(x_positions)
         y_positions_median, y_positions_IQR = self.median_and_IQR_calculation(y_positions)
         z_positions_median, z_positions_IQR = self.median_and_IQR_calculation(z_positions)
+        print(f"x position median = {x_positions_median}  IQR = {x_positions_IQR}")
+        print(f"y position median = {y_positions_median}  IQR = {y_positions_IQR}")
+        print(f"z position median = {z_positions_median}  IQR = {z_positions_IQR}")
         
         return [x_positions_IQR, y_positions_IQR, z_positions_IQR]
 
