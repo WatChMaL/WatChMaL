@@ -276,7 +276,7 @@ class ClassifierEngine:
                 self.scheduler.step()
 
             if (save_interval is not None) and ((self.epoch+1)%save_interval == 0):
-                self.save_state(best=False, name=f'_epoch_{self.epoch+1}')   
+                self.save_state(name=f'_epoch_{self.epoch+1}')   
       
         self.train_log.close()
         if self.rank == 0:
@@ -332,12 +332,12 @@ class ClassifierEngine:
             if val_metrics["loss"] < self.best_validation_loss:
                 self.best_validation_loss = val_metrics["loss"]
                 print('best validation loss so far!: {}'.format(self.best_validation_loss))
-                self.save_state(best=True)
+                self.save_state("BEST")
                 val_metrics["saved_best"] = 1
 
             # Save the latest model if checkpointing
             if checkpointing:
-                self.save_state(best=False)
+                self.save_state()
 
             self.val_log.record(val_metrics)
             self.val_log.write()
@@ -455,12 +455,12 @@ class ClassifierEngine:
     # ========================================================================
     # Saving and loading models
 
-    def save_state(self, best=False, name=""):
+    def save_state(self, name=""):
         """
         Save model weights to a file.
         
         Args:
-            best    ... if true, save as best model found, else save as checkpoint
+            name    ... suffix for the filename. Should be "BEST" for saving the best validation state.
         
         Outputs:
             dict containing iteration, optimizer state dict, and model state dict
@@ -469,7 +469,7 @@ class ClassifierEngine:
         """
         filename = "{}{}{}{}".format(self.dirpath,
                                      str(self.model._get_name()),
-                                     ("BEST" if best else name),
+                                     name,
                                      ".pth")
         
         # Save model state dict in appropriate from depending on number of gpus
