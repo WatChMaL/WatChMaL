@@ -5,7 +5,6 @@ Class implementing a mPMT dataset for CNNs in h5 format
 # torch imports
 from torch import from_numpy
 from torch import flip
-from hydra.utils import instantiate
 
 # generic imports
 import numpy as np
