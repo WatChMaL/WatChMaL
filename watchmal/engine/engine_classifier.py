@@ -68,6 +68,9 @@ class ClassifierEngine:
 
         self.criterion = nn.CrossEntropyLoss()
         self.softmax = nn.Softmax(dim=1)
+        
+        self.optimizer = None
+        self.scheduler = None
     
     def configure_optimizers(self, optimizer_config):
         """
@@ -269,7 +272,7 @@ class ClassifierEngine:
                     print("... Iteration %d ... Epoch %d ... Step %d/%d  ... Training Loss %1.3f ... Training Accuracy %1.3f ... Time Elapsed %1.3f ... Iteration Time %1.3f" %
                           (self.iteration, self.epoch+1, self.step, len(train_loader), res["loss"], res["accuracy"], iteration_time - start_time, iteration_time - previous_iteration_time))
             
-            if hasattr(self, 'scheduler'):
+            if self.scheduler is not None:
                 self.scheduler.step()
 
             if (save_interval is not None) and ((self.epoch+1)%save_interval == 0):
