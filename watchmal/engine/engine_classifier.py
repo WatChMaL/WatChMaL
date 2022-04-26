@@ -37,6 +37,7 @@ class ClassifierEngine:
         """
         # create the directory for saving the log and dump files
         self.epoch = 0.
+        self.step = 0
         self.best_validation_loss = 1.0e10
         self.dirpath = dump_path
         self.rank = rank
@@ -76,6 +77,18 @@ class ClassifierEngine:
             optimizer_config    ... hydra config specifying optimizer object
         """
         self.optimizer = instantiate(optimizer_config, params=self.model_accs.parameters())
+
+  
+    def configure_scheduler(self, scheduler_config):
+        """
+        Set up scheduler from scheduler config
+
+        Args:
+            scheduler_config    ... hydra config specifying scheduler object
+        """
+        self.scheduler = instantiate(scheduler_config, optimizer=self.optimizer)
+        print('Successfully set up Scheduler')
+
 
     def configure_data_loaders(self, data_config, loaders_config, is_distributed, seed):
         """
@@ -178,11 +191,12 @@ class ClassifierEngine:
         Returns: None
         """
         # initialize training params
-        epochs          = train_config.epochs
-        report_interval = train_config.report_interval
-        val_interval    = train_config.val_interval
-        num_val_batches = train_config.num_val_batches
-        checkpointing   = train_config.checkpointing
+        epochs              = train_config.epochs
+        report_interval     = train_config.report_interval
+        val_interval        = train_config.val_interval
+        num_val_batches     = train_config.num_val_batches
+        checkpointing       = train_config.checkpointing
+        save_interval = train_config.save_interval if 'save_interval' in train_config else None
 
         # set the iterations at which to dump the events and their metrics
         if self.rank == 0:
@@ -194,7 +208,7 @@ class ClassifierEngine:
         # initialize epoch and iteration counters
         self.epoch = 0.
         self.iteration = 0
-
+        self.step = 0
         # keep track of the validation loss
         self.best_validation_loss = 1.0e10
 
@@ -202,9 +216,9 @@ class ClassifierEngine:
         val_iter = iter(self.data_loaders["validation"])
 
         # global training loop for multiple epochs
-        while (floor(self.epoch) < epochs):
+        for self.epoch in range(epochs):
             if self.rank == 0:
-                print('Epoch', floor(self.epoch), 'Starting @', strftime("%Y-%m-%d %H:%M:%S", localtime()))
+                print('Epoch', self.epoch+1, 'Starting @', strftime("%Y-%m-%d %H:%M:%S", localtime()))
             
             times = []
 
@@ -212,13 +226,13 @@ class ClassifierEngine:
             iteration_time = start_time
 
             train_loader = self.data_loaders["train"]
-
+            self.step = 0
             # update seeding for distributed samplers
             if self.is_distributed:
                 train_loader.sampler.set_epoch(self.epoch)
 
-            # local training loop for batches in a single epoch
-            for i, train_data in enumerate(self.data_loaders["train"]):
+            # local training loop for batches in a single epoch 
+            for self.step, train_data in enumerate(train_loader):
                 
                 # run validation on given intervals
                 if self.iteration % val_interval == 0:
@@ -235,7 +249,8 @@ class ClassifierEngine:
                 self.backward()
 
                 # update the epoch and iteration
-                self.epoch += 1. / len(self.data_loaders["train"])
+                # self.epoch += 1. / len(self.data_loaders["train"])
+                self.step += 1
                 self.iteration += 1
                 
                 # get relevant attributes of result for logging
@@ -250,15 +265,22 @@ class ClassifierEngine:
                 if self.rank == 0 and self.iteration % report_interval == 0:
                     previous_iteration_time = iteration_time
                     iteration_time = time()
-                    print("... Iteration %d ... Epoch %1.2f ... Training Loss %1.3f ... Training Accuracy %1.3f ... Time Elapsed %1.3f ... Iteration Time %1.3f" %
-                          (self.iteration, self.epoch, res["loss"], res["accuracy"], iteration_time - start_time, iteration_time - previous_iteration_time))
-                
-                if self.epoch >= epochs:
-                    break
-        
+
+                    print("... Iteration %d ... Epoch %d ... Step %d/%d  ... Training Loss %1.3f ... Training Accuracy %1.3f ... Time Elapsed %1.3f ... Iteration Time %1.3f" %
+                          (self.iteration, self.epoch+1, self.step, len(train_loader), res["loss"], res["accuracy"], iteration_time - start_time, iteration_time - previous_iteration_time))
+            
+            if hasattr(self, 'scheduler'):
+                self.scheduler.step()
+
+            if (save_interval is not None) and ((self.epoch+1)%save_interval == 0):
+                self.save_state(best=False, name=f'_epoch_{self.epoch+1}')   
+      
         self.train_log.close()
         if self.rank == 0:
             self.val_log.close()
+
+
+
 
     def validate(self, val_iter, num_val_batches, checkpointing):
         # set model to eval mode
@@ -430,7 +452,7 @@ class ClassifierEngine:
     # ========================================================================
     # Saving and loading models
 
-    def save_state(self, best=False):
+    def save_state(self, best=False, name=""):
         """
         Save model weights to a file.
         
@@ -444,7 +466,7 @@ class ClassifierEngine:
         """
         filename = "{}{}{}{}".format(self.dirpath,
                                      str(self.model._get_name()),
-                                     ("BEST" if best else ""),
+                                     ("BEST" if best else name),
                                      ".pth")
         
         # Save model state dict in appropriate from depending on number of gpus

@@ -1,0 +1,69 @@
+gpu_list:
+- 0
+seed: null
+dump_path: ./outputs/
+data:
+  split_path: /fast_scratch/WatChMaL/data/IWCD_mPMT_Short/index_lists/4class_e_mu_gamma_pi0/4class_small_debug.npz
+  # split_path: /fast_scratch/WatChMaL/data/IWCD_mPMT_Short/index_lists/4class_e_mu_gamma_pi0/IWCD_mPMT_Short_4_class_3M_emgp0_idxs.npz
+  dataset:
+    h5file: /fast_scratch/WatChMaL/data/IWCD_mPMT_Short/IWCD_mPMT_Short_emgp0_E0to1000MeV_digihits.h5
+    _target_: watchmal.dataset.cnn_mpmt.cnn_mpmt_dataset.CNNmPMTDataset
+    padding_type: double_cover
+    mpmt_positions_file: /data/WatChMaL/data/IWCDshort_mPMT_image_positions.npz
+    collapse_arrays: false
+model:
+  _target_: watchmal.model.classifier.Classifier
+  num_classes: 4
+  _recursive_: false
+  feature_extractor:
+    _target_: watchmal.model.resnet.resnet18
+    num_input_channels: 19
+    num_output_channels: 128
+  classification_network:
+    _target_: watchmal.model.classifier.ResNetFullyConnected
+engine:
+  _target_: watchmal.engine.engine_classifier.ClassifierEngine
+tasks:
+  train:
+    epochs: 3
+    report_interval: 100
+    val_interval: 100
+    save_interval: 1
+    num_val_batches: 32
+    checkpointing: false
+    data_loaders:
+      train:
+        split_key: train_idxs
+        batch_size: 1024
+        num_workers: 4
+        transforms:
+         - horizontal_flip
+         - front_back_reflection
+        sampler:
+          _target_: torch.utils.data.sampler.SubsetRandomSampler
+      validation:
+        split_key: val_idxs
+        batch_size: 1024  
+        num_workers: 4
+        sampler:
+          _target_: torch.utils.data.sampler.SubsetRandomSampler
+    optimizers:
+      _target_: torch.optim.SGD
+      lr: 1.5
+      weight_decay: 0
+    scheduler:
+      _target_: torch.optim.lr_scheduler.ExponentialLR
+      gamma: 0.93
+      verbose: True
+  restore_best_state:
+    placeholder: configs can't be empty
+  evaluate:
+    data_loaders:
+      test:
+        split_key: test_idxs
+        batch_size: 1024
+        num_workers: 4
+        sampler:
+          _target_: watchmal.dataset.samplers.SubsetSequentialSampler
+
+
