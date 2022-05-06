@@ -119,6 +119,12 @@ def main_worker_function(rank, ngpus_per_node, is_distributed, config):
         if 'optimizers' in task_config:
             engine.configure_optimizers(task_config.optimizers)
 
+    # Configure scheduler
+    for task, task_config in config.tasks.items():
+        if 'scheduler' in task_config:
+            engine.configure_scheduler(task_config.scheduler)
+
+    # Configure loss
     for task, task_config in config.tasks.items():
         if 'loss' in task_config:
             engine.configure_loss(task_config.loss)
