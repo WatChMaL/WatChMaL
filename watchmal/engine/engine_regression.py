@@ -40,6 +40,7 @@ class RegressionEngine:
         """
         # create the directory for saving the log and dump files
         self.epoch = 0.
+        self.step = 0
         self.best_validation_loss = 1.0e10
         self.dirpath = dump_path
         self.rank = rank
@@ -61,6 +62,7 @@ class RegressionEngine:
         # define the placeholder attributes
         self.data = None
         self.labels = None
+        self.loss = None
         self.energies = None
         self.angles = None
         self.positions = None
@@ -80,6 +82,9 @@ class RegressionEngine:
        #self.positions_medians = (list of the values) # for the whole batch values
        #self.positions_iqr = list of the values
 
+        self.optimizer = None
+        self.scheduler = None
+
     def configure_loss(self, loss_config):
         self.criterion = instantiate(loss_config)
 
@@ -91,6 +96,18 @@ class RegressionEngine:
             optimizer_config    ... hydra config specifying optimizer object
         """
         self.optimizer = instantiate(optimizer_config, params=self.model_accs.parameters())
+
+
+    def configure_scheduler(self, scheduler_config):
+        """
+        Set up scheduler from scheduler config
+
+        Args:
+            scheduler_config    ... hydra config specifying scheduler object
+        """
+        self.scheduler = instantiate(scheduler_config, optimizer=self.optimizer)
+        print('Successfully set up Scheduler')
+
 
     def configure_data_loaders(self, data_config, loaders_config, is_distributed, seed):
         """
@@ -239,6 +256,7 @@ class RegressionEngine:
         val_interval = train_config.val_interval
         num_val_batches = train_config.num_val_batches
         checkpointing = train_config.checkpointing
+        save_interval = train_config.save_interval if 'save_interval' in train_config else None
 
         # set the iterations at which to dump the events and their metrics
         if self.rank == 0:
@@ -250,7 +268,7 @@ class RegressionEngine:
         # initialize epoch and iteration counters
         self.epoch = 0.
         self.iteration = 0
-
+        self.step = 0
         # keep track of the validation loss
         self.best_validation_loss = 1.0e10
 
@@ -282,9 +300,9 @@ class RegressionEngine:
             self.energies_median, self.energies_IQR = self.median_and_IQR_calculation(all_validation_and_train_data)
 
         # global training loop for multiple epochs
-        while (floor(self.epoch) < epochs):
+        for self.epoch in range(epochs):
             if self.rank == 0:
-                print('Epoch', floor(self.epoch), 'Starting @', strftime("%Y-%m-%d %H:%M:%S", localtime()))
+                print('Epoch', self.epoch+1, 'Starting @', strftime("%Y-%m-%d %H:%M:%S", localtime()))
 
             times = []
 
@@ -292,13 +310,13 @@ class RegressionEngine:
             iteration_time = start_time
 
             train_loader = self.data_loaders["train"]
-
+            self.step = 0
             # update seeding for distributed samplers
             if self.is_distributed:
                 train_loader.sampler.set_epoch(self.epoch)
 
             # local training loop for batches in a single epoch
-            for i, train_data in enumerate(train_loader):
+            for self.step, train_data in enumerate(train_loader):
 
                 # run validation on given intervals
                 if self.iteration % val_interval == 0:
@@ -318,7 +336,8 @@ class RegressionEngine:
                 self.backward()
 
                 # update the epoch and iteration
-                self.epoch += 1. / len(train_loader)
+                # self.epoch += 1. / len(self.data_loaders["train"])
+                self.step += 1
                 self.iteration += 1
 
                 # get relevant attributes of result for logging
@@ -333,11 +352,14 @@ class RegressionEngine:
                 if self.rank == 0 and self.iteration % report_interval == 0:
                     previous_iteration_time = iteration_time
                     iteration_time = time()
-                    print("... Iteration %d ... Epoch %1.2f ... Training Loss %1.3f ... Time Elapsed %1.3f ... Iteration Time %1.3f" %
-                          (self.iteration, self.epoch, res["loss"], iteration_time - start_time, iteration_time - previous_iteration_time))
+                    print("... Iteration %d ... Epoch %d ... Step %d/%d  ... Training Loss %1.3f ... Time Elapsed %1.3f ... Iteration Time %1.3f" %
+                          (self.iteration, self.epoch+1, self.step, len(train_loader), res["loss"], iteration_time - start_time, iteration_time - previous_iteration_time))
 
-                if self.epoch >= epochs:
-                    return
+            if self.scheduler is not None:
+                self.scheduler.step()
+
+            if (save_interval is not None) and ((self.epoch+1)%save_interval == 0):
+                self.save_state(name=f'_epoch_{self.epoch+1}')
 
         self.train_log.close()
         if self.rank == 0:
@@ -392,12 +414,12 @@ class RegressionEngine:
             if val_metrics["loss"] < self.best_validation_loss:
                 self.best_validation_loss = val_metrics["loss"]
                 print('best validation loss so far!: {}'.format(self.best_validation_loss))
-                self.save_state(best=True)
+                self.save_state("BEST")
                 val_metrics["saved_best"] = 1
 
             # Save the latest model if checkpointing
             if checkpointing:
-                self.save_state(best=False)
+                self.save_state()
 
             self.val_log.record(val_metrics)
             self.val_log.write()
@@ -502,10 +524,10 @@ class RegressionEngine:
                 for name, tensor in zip(global_eval_metrics_dict.keys(), global_eval_metrics_dict.values()):
                     local_eval_metrics_dict[name] = np.array(tensor.cpu())
 
-                indices   = global_eval_results_dict["indices"].cpu().numpy()
-                energies  = global_eval_results_dict["energies"].cpu().numpy()
-                positions = global_eval_results_dict["positions"].cpu().numpy()
-                outputs   = global_eval_results_dict["outputs"].cpu().numpy()
+                indices   = global_eval_results_dict["indices"].cpu()
+                energies  = global_eval_results_dict["energies"].cpu()
+                positions = global_eval_results_dict["positions"].cpu()
+                outputs   = global_eval_results_dict["outputs"].cpu()
 
         if self.rank == 0:
 #            print("Sorting Outputs...")
@@ -527,12 +549,12 @@ class RegressionEngine:
     # ========================================================================
     # Saving and loading models
 
-    def save_state(self, best=False):
+    def save_state(self, name=""):
         """
         Save model weights to a file.
 
         Args:
-            best    ... if true, save as best model found, else save as checkpoint
+            name    ... suffix for the filename. Should be "BEST" for saving the best validation state.
 
         Outputs:
             dict containing iteration, optimizer state dict, and model state dict
@@ -540,9 +562,9 @@ class RegressionEngine:
         Returns: filename
         """
         filename = "{}{}{}{}".format(self.dirpath,
-            str(self.model._get_name()),
-            ("BEST" if best else ""),
-            ".pth")
+                                     str(self.model._get_name()),
+                                     name,
+                                     ".pth")
 
         # Save model state dict in appropriate from depending on number of gpus
         model_dict = self.model_accs.state_dict()
@@ -568,9 +590,9 @@ class RegressionEngine:
         Outputs: model params are now those loaded from best model file
         """
         best_validation_path = "{}{}{}{}".format(self.dirpath,
-            str(self.model._get_name()),
-            "BEST",
-            ".pth")
+                                     str(self.model._get_name()),
+                                     "BEST",
+                                     ".pth")
 
         self.restore_state_from_file(best_validation_path)
 

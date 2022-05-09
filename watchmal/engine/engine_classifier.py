@@ -72,6 +72,9 @@ class ClassifierEngine:
         self.optimizer = None
         self.scheduler = None
 
+    def configure_loss(self, loss_config):
+        self.criterion = instantiate(loss_config)
+
     def configure_optimizers(self, optimizer_config):
         """
         Set up optimizers from optimizer config
