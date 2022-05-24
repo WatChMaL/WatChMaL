@@ -26,7 +26,6 @@ import copy
 from watchmal.dataset.data_utils import get_data_loader
 from watchmal.utils.logging_utils import CSVData
 
-
 class ClassifierEngine:
     def __init__(self, model, rank, gpu, dump_path):
         """
@@ -38,6 +37,7 @@ class ClassifierEngine:
         """
         # create the directory for saving the log and dump files
         self.epoch = 0.
+        self.step = 0
         self.best_validation_loss = 1.0e10
         self.dirpath = dump_path
         self.rank = rank
@@ -69,6 +69,12 @@ class ClassifierEngine:
         self.criterion = nn.CrossEntropyLoss()
         self.softmax = nn.Softmax(dim=1)
 
+        self.optimizer = None
+        self.scheduler = None
+
+    def configure_loss(self, loss_config):
+        self.criterion = instantiate(loss_config)
+
     def configure_optimizers(self, optimizer_config):
         """
         Set up optimizers from optimizer config
@@ -77,6 +83,18 @@ class ClassifierEngine:
             optimizer_config    ... hydra config specifying optimizer object
         """
         self.optimizer = instantiate(optimizer_config, params=self.model_accs.parameters())
+
+
+    def configure_scheduler(self, scheduler_config):
+        """
+        Set up scheduler from scheduler config
+
+        Args:
+            scheduler_config    ... hydra config specifying scheduler object
+        """
+        self.scheduler = instantiate(scheduler_config, optimizer=self.optimizer)
+        print('Successfully set up Scheduler')
+
 
     def configure_data_loaders(self, data_config, loaders_config, is_distributed, seed):
         """
@@ -87,7 +105,7 @@ class ClassifierEngine:
             loaders_config  ... hydra config specifying dataloaders
             is_distributed  ... boolean indicating if running in multiprocessing mode
             seed            ... seed to use to initialize dataloaders
-
+        
         Parameters:
             self should have dict attribute data_loaders
         """
@@ -100,7 +118,7 @@ class ClassifierEngine:
 
         Args:
             metric_dict         ... dict containing values that are tensor outputs of a single process
-
+        
         Returns:
             global_metric_dict  ... dict containing concatenated list of tensor values gathered from all processes
         """
@@ -110,9 +128,8 @@ class ClassifierEngine:
             global_tensor = [torch.zeros_like(tensor).to(self.device) for i in range(self.ngpus)]
             torch.distributed.all_gather(global_tensor, tensor)
             global_metric_dict[name] = torch.cat(global_tensor)
-
+        
         return global_metric_dict
-
 
     def forward(self, train=True):
         """
@@ -127,7 +144,6 @@ class ClassifierEngine:
         Returns:
             dict containing loss, predicted labels, softmax, accuracy, and raw model outputs
         """
-
         with torch.set_grad_enabled(train):
             # Move the data and the labels to the GPU (if using CPU this has no effect)
             data = self.data.to(self.device)
@@ -163,21 +179,21 @@ class ClassifierEngine:
 
     # ========================================================================
     # Training and evaluation loops
-
+    
     def train(self, train_config):
         """
         Train the model on the training set
 
         Args:
             train_config    ... config specigying training parameters
-
+        
         Parameters:
             self should have attributes model, data_loaders
-
+        
         Outputs:
             val_log      ... csv log containing iteration, epoch, loss, accuracy for each iteration on validation set
             train_logs   ... csv logs containing iteration, epoch, loss, accuracy for each iteration on training set
-
+            
         Returns: None
         """
         # initialize training params
@@ -186,6 +202,7 @@ class ClassifierEngine:
         val_interval = train_config.val_interval
         num_val_batches = train_config.num_val_batches
         checkpointing = train_config.checkpointing
+        save_interval = train_config.save_interval if 'save_interval' in train_config else None
 
         # set the iterations at which to dump the events and their metrics
         if self.rank == 0:
@@ -197,7 +214,7 @@ class ClassifierEngine:
         # initialize epoch and iteration counters
         self.epoch = 0.
         self.iteration = 0
-
+        self.step = 0
         # keep track of the validation loss
         self.best_validation_loss = 1.0e10
 
@@ -205,28 +222,28 @@ class ClassifierEngine:
         val_iter = iter(self.data_loaders["validation"])
 
         # global training loop for multiple epochs
-        while (floor(self.epoch) < epochs):
+        for self.epoch in range(epochs):
             if self.rank == 0:
-                print('Epoch', floor(self.epoch), 'Starting @', strftime("%Y-%m-%d %H:%M:%S", localtime()))
-
+                print('Epoch', self.epoch+1, 'Starting @', strftime("%Y-%m-%d %H:%M:%S", localtime()))
+            
             times = []
 
             start_time = time()
             iteration_time = start_time
 
             train_loader = self.data_loaders["train"]
-
+            self.step = 0
             # update seeding for distributed samplers
             if self.is_distributed:
                 train_loader.sampler.set_epoch(self.epoch)
 
             # local training loop for batches in a single epoch
-            for i, train_data in enumerate(train_loader):
-
+            for self.step, train_data in enumerate(train_loader):
+                
                 # run validation on given intervals
                 if self.iteration % val_interval == 0:
                     self.validate(val_iter, num_val_batches, checkpointing)
-
+                
                 # Train on batch
                 self.data = train_data['data']
                 self.labels = train_data['labels']
@@ -238,26 +255,31 @@ class ClassifierEngine:
                 self.backward()
 
                 # update the epoch and iteration
-                self.epoch += 1. / len(train_loader)
+                # self.epoch += 1. / len(self.data_loaders["train"])
+                self.step += 1
                 self.iteration += 1
-
+                
                 # get relevant attributes of result for logging
                 train_metrics = {"iteration": self.iteration, "epoch": self.epoch, "loss": res["loss"], "accuracy": res["accuracy"]}
-
+                
                 # record the metrics for the mini-batch in the log
                 self.train_log.record(train_metrics)
                 self.train_log.write()
                 self.train_log.flush()
-
+                
                 # print the metrics at given intervals
                 if self.rank == 0 and self.iteration % report_interval == 0:
                     previous_iteration_time = iteration_time
                     iteration_time = time()
-                    print("... Iteration %d ... Epoch %1.2f ... Training Loss %1.3f ... Training Accuracy %1.3f ... Time Elapsed %1.3f ... Iteration Time %1.3f" %
-                          (self.iteration, self.epoch, res["loss"], res["accuracy"], iteration_time - start_time, iteration_time - previous_iteration_time))
 
-                if self.epoch >= epochs:
-                    break
+                    print("... Iteration %d ... Epoch %d ... Step %d/%d  ... Training Loss %1.3f ... Training Accuracy %1.3f ... Time Elapsed %1.3f ... Iteration Time %1.3f" %
+                          (self.iteration, self.epoch+1, self.step, len(train_loader), res["loss"], res["accuracy"], iteration_time - start_time, iteration_time - previous_iteration_time))
+
+            if self.scheduler is not None:
+                self.scheduler.step()
+
+            if (save_interval is not None) and ((self.epoch+1)%save_interval == 0):
+                self.save_state(name=f'_epoch_{self.epoch+1}')
 
         self.train_log.close()
         if self.rank == 0:
@@ -311,12 +333,12 @@ class ClassifierEngine:
             if val_metrics["loss"] < self.best_validation_loss:
                 self.best_validation_loss = val_metrics["loss"]
                 print('best validation loss so far!: {}'.format(self.best_validation_loss))
-                self.save_state(best=True)
+                self.save_state("BEST")
                 val_metrics["saved_best"] = 1
 
             # Save the latest model if checkpointing
             if checkpointing:
-                self.save_state(best=False)
+                self.save_state()
 
             self.val_log.record(val_metrics)
             self.val_log.write()
@@ -328,16 +350,16 @@ class ClassifierEngine:
 
         Args:
             test_config ... hydra config specifying evaluation parameters
-
+        
         Parameters:
             self should have attributes model, data_loaders, dirpath
-
+        
         Outputs:
             indices     ... index in dataset of each event
             labels      ... actual label of each event
             predictions ... predicted label of each event
             softmax     ... softmax output over classes for each event
-
+            
         Returns: None
         """
         print("evaluating in directory: ", self.dirpath)
@@ -346,41 +368,41 @@ class ClassifierEngine:
         eval_loss = 0.0
         eval_acc = 0.0
         eval_iterations = 0
-
+        
         # Iterate over the validation set to calculate val_loss and val_acc
         with torch.no_grad():
-
+            
             # Set the model to evaluation mode
             self.model.eval()
-
+            
             # Variables for the confusion matrix
             loss, accuracy, indices, labels, predictions, softmaxes= [],[],[],[],[],[]
-
+            
             # Extract the event data and label from the DataLoader iterator
             for it, eval_data in enumerate(self.data_loaders["test"]):
-
+                
                 # load data
                 self.data = eval_data['data']
                 self.labels = eval_data['labels']
 
                 eval_indices = eval_data['indices']
-
+                
                 # Run the forward procedure and output the result
                 result = self.forward(train=False)
 
                 eval_loss += result['loss']
                 eval_acc  += result['accuracy']
-
+                
                 # Add the local result to the final result
                 indices.extend(eval_indices.numpy())
                 labels.extend(self.labels.numpy())
                 predictions.extend(result['predicted_labels'].detach().cpu().numpy())
                 softmaxes.extend(result["softmax"].detach().cpu().numpy())
-
+           
                 print("eval_iteration : " + str(it) + " eval_loss : " + str(result["loss"]) + " eval_accuracy : " + str(result["accuracy"]))
-
+            
                 eval_iterations += 1
-
+        
         # convert arrays to torch tensors
         print("loss : " + str(eval_loss/eval_iterations) + " accuracy : " + str(eval_acc/eval_iterations))
 
@@ -388,29 +410,29 @@ class ClassifierEngine:
         loss = np.array([eval_loss])
         accuracy = np.array([eval_acc])
 
-        local_eval_metrics_dict = {"eval_iterations": iterations, "eval_loss": loss, "eval_acc": accuracy}
-
+        local_eval_metrics_dict = {"eval_iterations":iterations, "eval_loss":loss, "eval_acc":accuracy}
+        
         indices     = np.array(indices)
         labels      = np.array(labels)
         predictions = np.array(predictions)
         softmaxes   = np.array(softmaxes)
-
+        
         local_eval_results_dict = {"indices":indices, "labels":labels, "predictions":predictions, "softmaxes":softmaxes}
 
         if self.is_distributed:
             # Gather results from all processes
             global_eval_metrics_dict = self.get_synchronized_metrics(local_eval_metrics_dict)
             global_eval_results_dict = self.get_synchronized_metrics(local_eval_results_dict)
-
+            
             if self.rank == 0:
                 for name, tensor in zip(global_eval_metrics_dict.keys(), global_eval_metrics_dict.values()):
                     local_eval_metrics_dict[name] = np.array(tensor.cpu())
-
+                
                 indices     = np.array(global_eval_results_dict["indices"].cpu())
                 labels      = np.array(global_eval_results_dict["labels"].cpu())
                 predictions = np.array(global_eval_results_dict["predictions"].cpu())
                 softmaxes   = np.array(global_eval_results_dict["softmaxes"].cpu())
-
+        
         if self.rank == 0:
 #            print("Sorting Outputs...")
 #            sorted_indices = np.argsort(indices)
@@ -433,26 +455,26 @@ class ClassifierEngine:
     # ========================================================================
     # Saving and loading models
 
-    def save_state(self, best=False):
+    def save_state(self, name=""):
         """
         Save model weights to a file.
-
+        
         Args:
-            best    ... if true, save as best model found, else save as checkpoint
-
+            name    ... suffix for the filename. Should be "BEST" for saving the best validation state.
+        
         Outputs:
             dict containing iteration, optimizer state dict, and model state dict
-
+            
         Returns: filename
         """
         filename = "{}{}{}{}".format(self.dirpath,
-            str(self.model._get_name()),
-            ("BEST" if best else ""),
-            ".pth")
-
+                                     str(self.model._get_name()),
+                                     name,
+                                     ".pth")
+        
         # Save model state dict in appropriate from depending on number of gpus
         model_dict = self.model_accs.state_dict()
-
+        
         # Save parameters
         # 0+1) iteration counter + optimizer state => in case we want to "continue training" later
         # 2) network weight
@@ -474,22 +496,22 @@ class ClassifierEngine:
         Outputs: model params are now those loaded from best model file
         """
         best_validation_path = "{}{}{}{}".format(self.dirpath,
-            str(self.model._get_name()),
-            "BEST",
-            ".pth")
+                                     str(self.model._get_name()),
+                                     "BEST",
+                                     ".pth")
 
         self.restore_state_from_file(best_validation_path)
-
+    
     def restore_state(self, restore_config):
         self.restore_state_from_file(restore_config.weight_file)
 
     def restore_state_from_file(self, weight_file):
         """
         Restore model using weights stored from a previous run
-
-        Args:
+        
+        Args: 
             weight_file     ... path to weights to load
-
+        
         Outputs: model params are now those loaded from file
         """
         # Open a file in read-binary mode
@@ -498,15 +520,15 @@ class ClassifierEngine:
 
             # torch interprets the file, then we can access using string keys
             checkpoint = torch.load(f)
-
+            
             # load network weights
             self.model_accs.load_state_dict(checkpoint['state_dict'])
-
+            
             # if optim is provided, load the state of the optim
             if hasattr(self, 'optimizer'):
                 self.optimizer.load_state_dict(checkpoint['optimizer'])
-
+            
             # load iteration count
             self.iteration = checkpoint['global_step']
-
+        
         print('Restoration complete.')
