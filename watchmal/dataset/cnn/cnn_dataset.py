@@ -51,7 +51,7 @@ class CNNDataset(H5Dataset):
         hit_rows = self.pmt_positions[hit_pmts, 0]
         hit_cols = self.pmt_positions[hit_pmts, 1]
 
-        data = np.zeros(self.data_size)
+        data = np.zeros(self.data_size, dtype=np.float32)
 
         if self.use_times:
             data[0, hit_rows, hit_cols] = hit_times
