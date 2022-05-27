@@ -143,7 +143,7 @@ class ClassifierEngine:
         """
         with torch.set_grad_enabled(train):
             # Move the data and the labels to the GPU (if using CPU this has no effect)
-            data = self.data.to(self.device, dtype=torch.float)
+            data = self.data.to(self.device)
             labels = self.labels.to(self.device)
 
             model_out = self.model(data)

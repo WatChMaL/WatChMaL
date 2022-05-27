@@ -13,10 +13,8 @@ import numpy as np
 from watchmal.dataset.h5_dataset import H5Dataset
 import watchmal.dataset.data_utils as du
 
-n_channels=2
-
 class CNNDataset(H5Dataset):
-    def __init__(self, h5file, pmt_positions_file, is_distributed, transforms=None, collapse_arrays=False):
+    def __init__(self, h5file, pmt_positions_file, is_distributed, use_times=True, use_charges=True, transforms=None, collapse_arrays=False):
         """
         Args:
             h5_path             ... path to h5 dataset file
@@ -27,13 +25,15 @@ class CNNDataset(H5Dataset):
         super().__init__(h5file, is_distributed)
         
         self.pmt_positions = np.load(pmt_positions_file)['pmt_image_positions']
+        self.use_times = use_times
+        self.use_charges = use_charges
         self.data_size = np.max(self.pmt_positions, axis=0) + 1
         self.barrel_rows = [row for row in range(self.data_size[0]) if
                             np.count_nonzero(self.pmt_positions[:,0] == row) == self.data_size[1]]
-        self.data_size = np.insert(self.data_size, 0, n_channels)
+        self.data_size = np.insert(self.data_size, 0, 2)
         self.collapse_arrays = collapse_arrays
         self.transforms = None #du.get_transformations(transformations, transforms)
-
+        
     def process_data(self, hit_pmts, hit_times, hit_charges):
         """
         Returns event data from dataset associated with a specific index
@@ -52,8 +52,13 @@ class CNNDataset(H5Dataset):
         hit_cols = self.pmt_positions[hit_pmts, 1]
 
         data = np.zeros(self.data_size)
-        data[0, hit_rows, hit_cols] = hit_times
-        data[1, hit_rows, hit_cols] = hit_charges
+
+        if self.use_times:
+            data[0, hit_rows, hit_cols] = hit_times
+        if self.use_charges:
+            data[1, hit_rows, hit_cols] = hit_charges
+
+
 
         # fix barrel array indexing to match endcaps in xyz ordering
         #barrel_data = data[:, self.barrel_rows, :]
