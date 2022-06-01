@@ -1,0 +1,5 @@
+# @package _group_
+split_path:
+  /home/ayankelevich/SKROOT_B8_redwit_4MeV_idxs.npz
+dataset:
+  h5file: /home/ayankelevich/SKROOT_B8_redwit_4MeV.h5

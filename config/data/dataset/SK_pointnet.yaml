@@ -1,0 +1,6 @@
+# @package _group_
+_target_: watchmal.dataset.pointnet.pointnet_dataset.PointNetDataset
+geometry_file: /home/ayankele/projects/rpp-blairt2k/ayankele/SK_geo.npz
+use_orientations: False
+use_times: True
+n_points: 400
