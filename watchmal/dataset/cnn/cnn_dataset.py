@@ -30,10 +30,19 @@ class CNNDataset(H5Dataset):
         self.data_size = np.max(self.pmt_positions, axis=0) + 1
         self.barrel_rows = [row for row in range(self.data_size[0]) if
                             np.count_nonzero(self.pmt_positions[:,0] == row) == self.data_size[1]]
-        self.data_size = np.insert(self.data_size, 0, 2)
         self.collapse_arrays = collapse_arrays
         self.transforms = None #du.get_transformations(transformations, transforms)
-        
+
+        n_channels = 0
+        if use_times:
+            n_channels += 1
+        if use_charges:
+            n_channels += 1
+        if n_channels==0:
+            raise Exception("Please set 'use_times' and/or 'use_charges' to 'True' in your data config.")
+       
+        self.data_size = np.insert(self.data_size, 0, n_channels)
+
     def process_data(self, hit_pmts, hit_times, hit_charges):
         """
         Returns event data from dataset associated with a specific index
@@ -53,10 +62,14 @@ class CNNDataset(H5Dataset):
 
         data = np.zeros(self.data_size, dtype=np.float32)
 
-        if self.use_times:
+        if self.use_times and self.use_charges:
             data[0, hit_rows, hit_cols] = hit_times
-        if self.use_charges:
             data[1, hit_rows, hit_cols] = hit_charges
+        elif self.use_times:
+            data[0, hit_rows, hit_cols] = hit_times
+        else:
+            data[0, hit_rows, hit_cols] = hit_charges
+
 
 
 
