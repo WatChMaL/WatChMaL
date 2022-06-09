@@ -525,7 +525,7 @@ class ClassifierEngine:
             self.model_accs.load_state_dict(checkpoint['state_dict'])
             
             # if optim is provided, load the state of the optim
-            if hasattr(self, 'optimizer'):
+            if getattr(self, 'optimizer') is not None:
                 self.optimizer.load_state_dict(checkpoint['optimizer'])
             
             # load iteration count
