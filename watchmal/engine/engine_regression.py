@@ -29,7 +29,7 @@ from watchmal.dataset.data_utils import get_data_loader
 from watchmal.utils.logging_utils import CSVData
 
 
-class RegressionEngine:
+class RegressionEngine(BaseEngine):
     def __init__(self, output_type, model, rank, gpu, dump_path):
         """
         Args:
@@ -39,30 +39,10 @@ class RegressionEngine:
             dump_path   ... path to store outputs in
         """
         # create the directory for saving the log and dump files
-        self.epoch = 0.
-        self.step = 0
-        self.best_validation_loss = 1.0e10
-        self.dirpath = dump_path
-        self.rank = rank
-        self.model = model
-        self.device = torch.device(gpu)
+        super().__init__(model, rank, gpu, dump_path)
+
         self.output_type = output_type
 
-        # Setup the parameters to save given the model type
-        if isinstance(self.model, DDP):
-            self.is_distributed = True
-            self.model_accs = self.model.module
-            self.ngpus = torch.distributed.get_world_size()
-        else:
-            self.is_distributed = False
-            self.model_accs = self.model
-
-        self.data_loaders = {}
-
-        # define the placeholder attributes
-        self.data = None
-        self.labels = None
-        self.loss = None
         self.energies = None
         self.angles = None
         self.positions = None
@@ -72,78 +52,6 @@ class RegressionEngine:
         self.positions_overall_IQR = []
         self.energies_median = None
         self.energies_IQR = None
-
-        # logging attributes
-        self.train_log = CSVData(self.dirpath + "log_train_{}.csv".format(self.rank))
-
-        if self.rank == 0:
-            self.val_log = CSVData(self.dirpath + "log_val.csv")
-
-       #self.positions_medians = (list of the values) # for the whole batch values
-       #self.positions_iqr = list of the values
-
-        self.optimizer = None
-        self.scheduler = None
-
-    def configure_loss(self, loss_config):
-        self.criterion = instantiate(loss_config)
-
-    def configure_optimizers(self, optimizer_config):
-        """
-        Set up optimizers from optimizer config
-
-        Args:
-            optimizer_config    ... hydra config specifying optimizer object
-        """
-        self.optimizer = instantiate(optimizer_config, params=self.model_accs.parameters())
-
-
-    def configure_scheduler(self, scheduler_config):
-        """
-        Set up scheduler from scheduler config
-
-        Args:
-            scheduler_config    ... hydra config specifying scheduler object
-        """
-        self.scheduler = instantiate(scheduler_config, optimizer=self.optimizer)
-        print('Successfully set up Scheduler')
-
-
-    def configure_data_loaders(self, data_config, loaders_config, is_distributed, seed):
-        """
-        Set up data loaders from loaders config
-
-        Args:
-            data_config     ... hydra config specifying dataset
-            loaders_config  ... hydra config specifying dataloaders
-            is_distributed  ... boolean indicating if running in multiprocessing mode
-            seed            ... seed to use to initialize dataloaders
-
-        Parameters:
-            self should have dict attribute data_loaders
-        """
-        for name, loader_config in loaders_config.items():
-            self.data_loaders[name] = get_data_loader(**data_config, **loader_config, is_distributed=is_distributed, seed=seed)
-
-    def get_synchronized_metrics(self, metric_dict):
-        """
-        Gathers metrics from multiple processes using pytorch distributed operations
-
-        Args:
-            metric_dict         ... dict containing values that are tensor outputs of a single process
-
-        Returns:
-            global_metric_dict  ... dict containing concatenated list of tensor values gathered from all processes
-        """
-        global_metric_dict = {}
-        for name, array in zip(metric_dict.keys(), metric_dict.values()):
-            tensor = torch.as_tensor(array).to(self.device)
-            global_tensor = [torch.zeros_like(tensor).to(self.device) for i in range(self.ngpus)]
-            torch.distributed.all_gather(global_tensor, tensor)
-            global_metric_dict[name] = torch.cat(global_tensor)
-
-        return global_metric_dict
-    
 
     def forward(self, train=True):
         """
@@ -160,8 +68,6 @@ class RegressionEngine:
         """
 
         with torch.set_grad_enabled(train):
-            # Move the data and the labels to the GPU (if using CPU this has no effect)
-            data = self.data.to(self.device)
             energies = self.energies.to(self.device)
             positions = torch.squeeze(self.positions).to(self.device)
             model_out = self.model(data)
@@ -171,8 +77,9 @@ class RegressionEngine:
                 scaled_values, scaled_model_out = self.fit_transform(energies, model_out, self.energies_median, self.energies_IQR)
             self.loss = self.criterion(scaled_values, scaled_model_out)
 
-        return {'loss': self.loss.item(),
-                'output': model_out}
+        result = super().forward(train)
+
+        return result
 
     def scale_positions(self, data, model_out, positions_overall_IQR):
         x_positions = data[:,0]
@@ -218,21 +125,6 @@ class RegressionEngine:
         print(f"z position median = {z_positions_median}  IQR = {z_positions_IQR}")
         
         return [x_positions_IQR, y_positions_IQR, z_positions_IQR]
-
-    def backward(self):
-        """
-        Backward pass using the loss computed for a mini-batch
-
-        Parameters:
-            self should have attributes loss, optimizer
-        """
-        self.optimizer.zero_grad()  # reset accumulated gradient
-        self.loss.backward()  # compute new gradient
-        clip_grad_norm_(self.model.parameters(), 1) # TODO: check if this is necessary
-        self.optimizer.step()  # step params
-
-    # ========================================================================
-    # Training and evaluation loops
 
     def train(self, train_config):
         """
