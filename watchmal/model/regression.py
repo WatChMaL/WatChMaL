@@ -32,3 +32,9 @@ class LinearRegression(nn.Module):
         x = self.relu(self.cl_fc3(x))
         x = self.cl_fc4(x)
         return x
+
+class PassThrough(nn.Module):
+    def __init__(self, num_inputs, num_outputs):
+        super().__init__()
+    def forward(self, x):
+        return x
