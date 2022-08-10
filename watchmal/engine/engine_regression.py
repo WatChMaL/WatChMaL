@@ -69,6 +69,8 @@ class RegressionEngine(BaseEngine):
         """
 
         with torch.set_grad_enabled(train):
+            # Move the data and the labels to the GPU (if using CPU this has no effect)
+            data = self.data.to(self.device)
             energies = self.energies.to(self.device)
             positions = torch.squeeze(self.positions).to(self.device)
             model_out = self.model(data)
@@ -78,9 +80,8 @@ class RegressionEngine(BaseEngine):
                 scaled_values, scaled_model_out = self.fit_transform(energies, model_out, self.energies_median, self.energies_IQR)
             self.loss = self.criterion(scaled_values, scaled_model_out)
 
-        result = super().forward(train)
-
-        return result
+        return {'loss': self.loss.item(),
+                'output': model_out}
 
     def scale_positions(self, data, model_out, positions_overall_IQR):
         x_positions = data[:,0]
