@@ -1,1 +1,2 @@
 _target_: watchmal.model.regression.PassThrough
+num_outputs: 3

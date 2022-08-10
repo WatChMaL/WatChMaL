@@ -2,15 +2,18 @@ gpu_list:
     - 5
 seed: null
 dump_path: './outputs/'
+model:
+    feature_extractor:
+        num_output_channels: 3
 defaults:
     - data: iwcd_electron
     - data/dataset: iwcd_cnn_short
     - model: regression
     - model/feature_extractor: resnet18
-    - model/regression_alg: linear
+    - model/regression_alg: resnet
     - engine: regression
     - tasks/restore_state: restore_state
     - tasks/evaluate: test
-    - loss@tasks.evaluate.loss: smooth
+    - loss@tasks.evaluate.loss: huber
     - sampler@tasks.evaluate.data_loaders.test.sampler: subset_sequential
     - _self_
