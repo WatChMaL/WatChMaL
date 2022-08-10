@@ -7,8 +7,8 @@ defaults:
     - data: iwcd_short
     - data/dataset: iwcd_cnn_short
     - model: classifier
-    - model/feature_extractor: resnet18
-    - model/classification_network: resnet
+    - model/feature_extractor: resnet18_old
+    - model/classification_network: resnet_old
     - engine: classifier
     - tasks/restore_state: restore_state
     - tasks/evaluate: test

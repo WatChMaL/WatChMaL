@@ -9,9 +9,9 @@ checkpointing: False
 data_loaders:
   train:
     split_key: train_idxs
-    batch_size: 512
+    batch_size: 1024
     num_workers: 4
   validation:
     split_key: val_idxs
-    batch_size: 512
+    batch_size: 1024
     num_workers: 4
