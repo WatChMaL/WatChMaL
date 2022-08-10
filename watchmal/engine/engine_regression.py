@@ -27,6 +27,7 @@ from scipy import stats #For interquartile range
 # WatChMaL imports
 from watchmal.dataset.data_utils import get_data_loader
 from watchmal.utils.logging_utils import CSVData
+from watchmal.engine.engine_base import BaseEngine
 
 
 class RegressionEngine(BaseEngine):
