@@ -25,8 +25,9 @@ import copy
 # WatChMaL imports
 from watchmal.dataset.data_utils import get_data_loader
 from watchmal.utils.logging_utils import CSVData
+from watchmal.engine.engine_base import BaseEngine
 
-class ClassifierEngine:
+class ClassifierEngine(BaseEngine):
     def __init__(self, model, rank, gpu, dump_path):
         """
         Args:
@@ -36,100 +37,10 @@ class ClassifierEngine:
             dump_path   ... path to store outputs in
         """
         # create the directory for saving the log and dump files
-        self.epoch = 0.
-        self.step = 0
-        self.best_validation_loss = 1.0e10
-        self.dirpath = dump_path
-        self.rank = rank
-        self.model = model
-        self.device = torch.device(gpu)
-
-        # Setup the parameters to save given the model type
-        if isinstance(self.model, DDP):
-            self.is_distributed = True
-            self.model_accs = self.model.module
-            self.ngpus = torch.distributed.get_world_size()
-        else:
-            self.is_distributed = False
-            self.model_accs = self.model
-
-        self.data_loaders = {}
-
-        # define the placeholder attributes
-        self.data = None
-        self.labels = None
-        self.loss = None
-
-        # logging attributes
-        self.train_log = CSVData(self.dirpath + "log_train_{}.csv".format(self.rank))
-
-        if self.rank == 0:
-            self.val_log = CSVData(self.dirpath + "log_val.csv")
+        super().__init__(model, rank, gpu, dump_path)
 
         self.criterion = nn.CrossEntropyLoss()
         self.softmax = nn.Softmax(dim=1)
-
-        self.optimizer = None
-        self.scheduler = None
-
-    def configure_loss(self, loss_config):
-        self.criterion = instantiate(loss_config)
-
-    def configure_optimizers(self, optimizer_config):
-        """
-        Set up optimizers from optimizer config
-
-        Args:
-            optimizer_config    ... hydra config specifying optimizer object
-        """
-        self.optimizer = instantiate(optimizer_config, params=self.model_accs.parameters())
-
-
-    def configure_scheduler(self, scheduler_config):
-        """
-        Set up scheduler from scheduler config
-
-        Args:
-            scheduler_config    ... hydra config specifying scheduler object
-        """
-        self.scheduler = instantiate(scheduler_config, optimizer=self.optimizer)
-        print('Successfully set up Scheduler')
-
-
-    def configure_data_loaders(self, data_config, loaders_config, is_distributed, seed):
-        """
-        Set up data loaders from loaders config
-
-        Args:
-            data_config     ... hydra config specifying dataset
-            loaders_config  ... hydra config specifying dataloaders
-            is_distributed  ... boolean indicating if running in multiprocessing mode
-            seed            ... seed to use to initialize dataloaders
-        
-        Parameters:
-            self should have dict attribute data_loaders
-        """
-        for name, loader_config in loaders_config.items():
-            self.data_loaders[name] = get_data_loader(**data_config, **loader_config, is_distributed=is_distributed, seed=seed)
-    
-    def get_synchronized_metrics(self, metric_dict):
-        """
-        Gathers metrics from multiple processes using pytorch distributed operations
-
-        Args:
-            metric_dict         ... dict containing values that are tensor outputs of a single process
-        
-        Returns:
-            global_metric_dict  ... dict containing concatenated list of tensor values gathered from all processes
-        """
-        global_metric_dict = {}
-        for name, array in zip(metric_dict.keys(), metric_dict.values()):
-            tensor = torch.as_tensor(array).to(self.device)
-            global_tensor = [torch.zeros_like(tensor).to(self.device) for i in range(self.ngpus)]
-            torch.distributed.all_gather(global_tensor, tensor)
-            global_metric_dict[name] = torch.cat(global_tensor)
-        
-        return global_metric_dict
 
     def forward(self, train=True):
         """
@@ -165,17 +76,6 @@ class ClassifierEngine:
             result['accuracy'] = accuracy
         
         return result
-    
-    def backward(self):
-        """
-        Backward pass using the loss computed for a mini-batch
-
-        Parameters:
-            self should have attributes loss, optimizer
-        """
-        self.optimizer.zero_grad()  # reset accumulated gradient
-        self.loss.backward()  # compute new gradient
-        self.optimizer.step()  # step params
 
     # ========================================================================
     # Training and evaluation loops
@@ -451,84 +351,3 @@ class ClassifierEngine:
 
             print("\nAvg eval loss : " + str(val_loss/val_iterations),
                   "\nAvg eval acc : "  + str(val_acc/val_iterations))
-        
-    # ========================================================================
-    # Saving and loading models
-
-    def save_state(self, name=""):
-        """
-        Save model weights to a file.
-        
-        Args:
-            name    ... suffix for the filename. Should be "BEST" for saving the best validation state.
-        
-        Outputs:
-            dict containing iteration, optimizer state dict, and model state dict
-            
-        Returns: filename
-        """
-        filename = "{}{}{}{}".format(self.dirpath,
-                                     str(self.model._get_name()),
-                                     name,
-                                     ".pth")
-        
-        # Save model state dict in appropriate from depending on number of gpus
-        model_dict = self.model_accs.state_dict()
-        
-        # Save parameters
-        # 0+1) iteration counter + optimizer state => in case we want to "continue training" later
-        # 2) network weight
-        torch.save({
-            'global_step': self.iteration,
-            'optimizer': self.optimizer.state_dict(),
-            'state_dict': model_dict
-        }, filename)
-        print('Saved checkpoint as:', filename)
-        return filename
-
-    def restore_best_state(self, placeholder):
-        """
-        Restore model using best model found in current directory
-
-        Args:
-            placeholder     ... extraneous; hydra configs are not allowed to be empty
-
-        Outputs: model params are now those loaded from best model file
-        """
-        best_validation_path = "{}{}{}{}".format(self.dirpath,
-                                     str(self.model._get_name()),
-                                     "BEST",
-                                     ".pth")
-
-        self.restore_state_from_file(best_validation_path)
-    
-    def restore_state(self, restore_config):
-        self.restore_state_from_file(restore_config.weight_file)
-
-    def restore_state_from_file(self, weight_file):
-        """
-        Restore model using weights stored from a previous run
-        
-        Args: 
-            weight_file     ... path to weights to load
-        
-        Outputs: model params are now those loaded from file
-        """
-        # Open a file in read-binary mode
-        with open(weight_file, 'rb') as f:
-            print('Restoring state from', weight_file)
-
-            # torch interprets the file, then we can access using string keys
-            checkpoint = torch.load(f)
-            
-            # load network weights
-            self.model_accs.load_state_dict(checkpoint['state_dict'])
-            
-            # if optim is provided, load the state of the optim
-            if self.optimizer is not None:
-                self.optimizer.load_state_dict(checkpoint['optimizer'])
-            
-            # load iteration count
-            self.iteration = checkpoint['global_step']
-        
-        print('Restoration complete.')
