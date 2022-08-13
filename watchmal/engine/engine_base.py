@@ -38,8 +38,9 @@ class BaseEngine(ABC):
             dump_path   ... path to store outputs in
         """
         # create the directory for saving the log and dump files
-        self.epoch = 0.
+        self.epoch = 0
         self.step = 0
+        self.iteration = 0
         self.best_validation_loss = 1.0e10
         self.dirpath = dump_path
         self.rank = rank

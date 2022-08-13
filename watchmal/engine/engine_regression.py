@@ -2,36 +2,19 @@
 Class for training a fully supervised classifier
 """
 
-# hydra imports
-from hydra.utils import instantiate
-
 # torch imports
 import torch
-from torch import optim
-import torch.nn as nn
-import torch.nn.functional as F
-from torch.nn.parallel import DistributedDataParallel as DDP
-from torch.nn.utils import clip_grad_norm_
 
 # generic imports
-from math import floor, ceil, log
 import numpy as np
-from numpy import savez
-import os
 from time import strftime, localtime, time
-import sys
-from sys import stdout
-import copy
-from scipy import stats #For interquartile range
 
 # WatChMaL imports
-from watchmal.dataset.data_utils import get_data_loader
-from watchmal.utils.logging_utils import CSVData
 from watchmal.engine.engine_base import BaseEngine
 
 
 class RegressionEngine(BaseEngine):
-    def __init__(self, output_type, model, rank, gpu, dump_path):
+    def __init__(self, output_type, model, rank, gpu, dump_path, output_center=0, output_scale=1):
         """
         Args:
             model       ... model object that engine will use in training or evaluation
@@ -43,6 +26,8 @@ class RegressionEngine(BaseEngine):
         super().__init__(model, rank, gpu, dump_path)
 
         self.output_type = output_type
+        self.output_center = torch.tensor(output_center).to(self.device)
+        self.output_scale = torch.tensor(output_scale).to(self.device)
 
         self.energies = None
         self.angles = None
@@ -71,62 +56,18 @@ class RegressionEngine(BaseEngine):
         with torch.set_grad_enabled(train):
             # Move the data and the labels to the GPU (if using CPU this has no effect)
             data = self.data.to(self.device)
-            energies = self.energies.to(self.device)
-            positions = torch.squeeze(self.positions).to(self.device)
+            target = torch.squeeze(self.target).to(self.device)
             model_out = self.model(data)
-            if self.output_type == 'positions':
-                scaled_values, scaled_model_out = self.scale_positions(positions, model_out, self.positions_overall_IQR) #Loss with scaling
-            elif self.output_type == 'energies':
-                scaled_values, scaled_model_out = self.fit_transform(energies, model_out, self.energies_median, self.energies_IQR)
-            self.loss = self.criterion(scaled_values, scaled_model_out)
+            scaled_target = self.scale_values(target)
+            scaled_model_out = self.scale_values(model_out)
+            self.loss = self.criterion(scaled_target, scaled_model_out)
 
         return {'loss': self.loss.item(),
                 'output': model_out}
 
-    def scale_positions(self, data, model_out, positions_overall_IQR):
-        x_positions = data[:,0]
-        y_positions = data[:,1]
-        z_positions = data[:,2]
-        x_outputs = model_out[:,0]
-        y_outputs = model_out[:,1]
-        z_outputs = model_out[:,2]
-        x_pos_scale, x_out_scale = self.fit_transform(x_positions, x_outputs, self.positions_median, positions_overall_IQR[0])
-        y_pos_scale, y_out_scale = self.fit_transform(y_positions, y_outputs, self.positions_median, positions_overall_IQR[1])
-        z_pos_scale, z_out_scale = self.fit_transform(z_positions, z_outputs, self.positions_median, positions_overall_IQR[2])
-
-        coordinates = torch.stack([x_pos_scale, y_pos_scale, z_pos_scale], dim=1)
-        model_outputs = torch.stack([x_out_scale, y_out_scale, z_out_scale], dim=1)
-        return coordinates, model_outputs
-
-    def fit_transform(self, data, model_out, median, IQR):
-        positions_scaled = ((data - median) / IQR)
-        outputs_scaled = ((model_out - median) / IQR) #Scaling positions and output values
-        return positions_scaled, outputs_scaled #RobustScaler
-
-    def median_and_IQR_calculation(self, data):
-        data = data.to(self.device)
-        median = torch.median(data)
-        q = torch.tensor([0.25, 0.75]).to(self.device)
-        IQR = torch.quantile(data, q, dim=0, keepdim=True).to(self.device)
-        IQR = IQR[1] - IQR [0] #Subtractting the 25th quartile from the 75th quartile
-        return median, IQR
-
-    def set_positions_IQR(self, data):
-        # the concat caused the dataset to be two dimensions deeper
-        uwrap_data = data[:,[0][0]]
-        x_positions = uwrap_data[:,0]
-        y_positions = uwrap_data[:,1]
-        z_positions = uwrap_data[:,2]
-        
-        # median for positions is calculated, but not used as '0' is used instead and declared at the start
-        x_positions_median, x_positions_IQR = self.median_and_IQR_calculation(x_positions)
-        y_positions_median, y_positions_IQR = self.median_and_IQR_calculation(y_positions)
-        z_positions_median, z_positions_IQR = self.median_and_IQR_calculation(z_positions)
-        print(f"x position median = {x_positions_median}  IQR = {x_positions_IQR}")
-        print(f"y position median = {y_positions_median}  IQR = {y_positions_IQR}")
-        print(f"z position median = {z_positions_median}  IQR = {z_positions_IQR}")
-        
-        return [x_positions_IQR, y_positions_IQR, z_positions_IQR]
+    def scale_values(self, data):
+        scaled = (data - self.output_center) / self.output_scale
+        return scaled
 
     def train(self, train_config):
         """
@@ -160,7 +101,7 @@ class RegressionEngine(BaseEngine):
         self.model.train()
 
         # initialize epoch and iteration counters
-        self.epoch = 0.
+        self.epoch = 0
         self.iteration = 0
         self.step = 0
         # keep track of the validation loss
@@ -169,36 +110,10 @@ class RegressionEngine(BaseEngine):
         # initialize the iterator over the validation set
         val_iter = iter(self.data_loaders["validation"])
 
-        # ================================================================================
-        # Retrieve all data for the validation and train set
-        # for calculating an overall median and IQR for scaling
-        # ================================================================================
-        train_iter = iter(self.data_loaders["train"])
-        all_validation_and_train_data = None
-        for data in val_iter:
-            if all_validation_and_train_data is None:
-                all_validation_and_train_data = data[self.output_type]
-            else:
-                all_validation_and_train_data = torch.cat((all_validation_and_train_data, data[self.output_type]), 0)
-
-        for data in train_iter:
-            if all_validation_and_train_data is None:
-                all_validation_and_train_data = data[self.output_type]
-            else:
-                all_validation_and_train_data = torch.cat((all_validation_and_train_data, data[self.output_type]), 0)
-
-
-        if self.output_type == 'positions':
-            self.positions_overall_IQR = self.set_positions_IQR(all_validation_and_train_data)
-        elif self.output_type == 'energies':
-            self.energies_median, self.energies_IQR = self.median_and_IQR_calculation(all_validation_and_train_data)
-
         # global training loop for multiple epochs
         for self.epoch in range(epochs):
             if self.rank == 0:
                 print('Epoch', self.epoch+1, 'Starting @', strftime("%Y-%m-%d %H:%M:%S", localtime()))
-
-            times = []
 
             start_time = time()
             iteration_time = start_time
@@ -219,9 +134,7 @@ class RegressionEngine(BaseEngine):
                 # Train on batch
                 self.data = train_data['data']
                 self.labels = train_data['labels']
-                self.energies = train_data['energies']
-                self.angles = train_data['angles']
-                self.positions = train_data['positions']
+                self.target = train_data[self.output_type]
 
                 # Call forward: make a prediction & measure the average error using data = self.data
                 res = self.forward(True)
@@ -275,9 +188,7 @@ class RegressionEngine(BaseEngine):
             # extract the event data from the input data tuple
             self.data = val_data['data']
             self.labels = val_data['labels']
-            self.energies = val_data['energies']
-            self.angles = val_data['angles']
-            self.positions = val_data['positions']
+            self.target = val_data[self.output_type]
 
             val_res = self.forward(False)
 
@@ -364,18 +275,12 @@ class RegressionEngine(BaseEngine):
                 else:
                     all_test_data = torch.cat((all_test_data, data[self.output_type]), 0)
 
-            if self.output_type == 'positions':
-                self.positions_overall_IQR = self.set_positions_IQR(all_test_data)
-            elif self.output_type == 'energies':
-                self.energies_median, self.energies_IQR = self.median_and_IQR_calculation(all_test_data)
-
             # Extract the event data and label from the DataLoader iterator
             for it, eval_data in enumerate(self.data_loaders["test"]):
 
                 # load data
                 self.data = eval_data['data']
-                self.energies = eval_data['energies']
-                self.positions = eval_data['positions']
+                self.target = eval_data[self.output_type]
 
                 eval_indices = eval_data['indices']
 
