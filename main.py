@@ -104,7 +104,7 @@ def main_worker_function(rank, ngpus_per_node, is_distributed, config):
     if is_distributed:
         # Convert model batch norms to synchbatchnorm
         model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
-        model = DDP(model, device_ids=[gpu], find_unused_parameters=True)
+        model = DDP(model, device_ids=[gpu])
 
     # Instantiate the engine
     engine = instantiate(config.engine, model=model, rank=rank, gpu=gpu, dump_path=config.dump_path)
