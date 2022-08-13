@@ -29,7 +29,7 @@ class RegressionEngine(BaseEngine):
         self.output_center = torch.tensor(output_center).to(self.device)
         self.output_scale = torch.tensor(output_scale).to(self.device)
 
-        self.targets = None
+        self.target = None
 
         # placeholders for overall median and IQR values
         self.positions_median = 0
@@ -54,11 +54,11 @@ class RegressionEngine(BaseEngine):
         with torch.set_grad_enabled(train):
             # Move the data and the labels to the GPU (if using CPU this has no effect)
             data = self.data.to(self.device)
-            target = torch.squeeze(self.target).to(self.device)
             model_out = self.model(data)
+            target = self.target.to(self.device).reshape(model_out.shape)
             scaled_target = self.scale_values(target)
             scaled_model_out = self.scale_values(model_out)
-            self.loss = self.criterion(scaled_target, scaled_model_out)
+            self.loss = self.criterion(scaled_model_out, scaled_target)
 
         return {'loss': self.loss.item(),
                 'output': model_out}
@@ -289,7 +289,7 @@ class RegressionEngine(BaseEngine):
 
                 # Add the local result to the final result
                 indices.extend(eval_indices.numpy())
-                targets.extend(self.targets.numpy())
+                targets.extend(self.target.numpy())
                 outputs.extend(result['output'].detach().cpu().numpy())
 
                 print("eval_iteration : " + str(it) + " eval_loss : " + str(result["loss"]))
