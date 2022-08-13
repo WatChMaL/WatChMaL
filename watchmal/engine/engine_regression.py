@@ -29,9 +29,7 @@ class RegressionEngine(BaseEngine):
         self.output_center = torch.tensor(output_center).to(self.device)
         self.output_scale = torch.tensor(output_scale).to(self.device)
 
-        self.energies = None
-        self.angles = None
-        self.positions = None
+        self.targets = None
 
         # placeholders for overall median and IQR values
         self.positions_median = 0
@@ -261,7 +259,7 @@ class RegressionEngine(BaseEngine):
             self.model.eval()
 
             # Variables for the confusion matrix
-            loss, indices, energies, outputs, positions = [], [], [], [], []
+            loss, indices, outputs, targets = [], [], [], [], []
 
             # ================================================================================
             # Retrieve all data for the test set for calculating
@@ -291,8 +289,7 @@ class RegressionEngine(BaseEngine):
 
                 # Add the local result to the final result
                 indices.extend(eval_indices.numpy())
-                energies.extend(self.energies.numpy())
-                positions.extend(self.positions.detach().cpu().numpy())
+                targets.extend(self.targets.numpy())
                 outputs.extend(result['output'].detach().cpu().numpy())
 
                 print("eval_iteration : " + str(it) + " eval_loss : " + str(result["loss"]))
@@ -308,11 +305,10 @@ class RegressionEngine(BaseEngine):
         local_eval_metrics_dict = {"eval_iterations": iterations, "eval_loss": loss}
 
         indices = np.array(indices)
-        energies = np.array(energies)
-        positions = np.array(positions)
+        targets = np.array(targets)
         outputs = np.array(outputs)
 
-        local_eval_results_dict = {"indices": indices, "energies": energies, "positions": positions, "outputs": outputs}
+        local_eval_results_dict = {"indices": indices, "targets": targets, "outputs": outputs}
 
         if self.is_distributed:
             # Gather results from all processes
@@ -324,8 +320,7 @@ class RegressionEngine(BaseEngine):
                     local_eval_metrics_dict[name] = np.array(tensor.cpu())
 
                 indices   = global_eval_results_dict["indices"].cpu()
-                energies  = global_eval_results_dict["energies"].cpu()
-                positions = global_eval_results_dict["positions"].cpu()
+                targets  = global_eval_results_dict["targets"].cpu()
                 outputs   = global_eval_results_dict["outputs"].cpu()
 
         if self.rank == 0:
@@ -335,8 +330,7 @@ class RegressionEngine(BaseEngine):
             # Save overall evaluation results
             print("Saving Data...")
             np.save(self.dirpath + "indices.npy", indices)#sorted_indices)
-            np.save(self.dirpath + "energies.npy", energies)#[sorted_indices])
-            np.save(self.dirpath + "positions.npy", positions)#[sorted_indices])
+            np.save(self.dirpath + "targets.npy", targets)#[sorted_indices])
             np.save(self.dirpath + "predictions.npy", outputs)#[sorted_indices])
 
             # Compute overall evaluation metrics
