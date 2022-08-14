@@ -261,18 +261,6 @@ class RegressionEngine(BaseEngine):
             # Variables for the confusion matrix
             loss, indices, outputs, targets = [], [], [], []
 
-            # ================================================================================
-            # Retrieve all data for the test set for calculating
-            # an overall median and IQR for scaling
-            # ================================================================================
-            test_iter = iter(self.data_loaders["test"])
-            all_test_data = None
-            for data in test_iter:
-                if all_test_data is None:
-                    all_test_data = data[self.output_type]
-                else:
-                    all_test_data = torch.cat((all_test_data, data[self.output_type]), 0)
-
             # Extract the event data and label from the DataLoader iterator
             for it, eval_data in enumerate(self.data_loaders["test"]):
 
