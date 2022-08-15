@@ -1,1 +1,13 @@
+_target_: watchmal.dataset.cnn_mpmt.cnn_mpmt_dataset.CNNmPMTDataset
+mpmt_positions_file: /data/WatChMaL/data/IWCDshort_mPMT_image_positions.npz
+mode: ['charge', 'time'] # With this configuration: 38 channels (19 for charge + 19 for time)
+collapse_arrays: False
+#collapse_mode: ['charge', 'time']
+padding_type: mpmtPadding
+scaling: True 
 
+# You can find and change the scaling values in: WatChMaL/watchmal/dataset/cnn_mpmt/cnn_mpmt_dataset.py
+#        self.mu_q = 2.634658   #np.mean(train_events)
+#        self.mu_t = 1115.6687   #np.mean(train_events)
+#        self.std_q = 6.9462004  #np.std(train_events)
+#        self.std_t = 263.4307  #np.std(train_events)
