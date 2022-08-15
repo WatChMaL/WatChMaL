@@ -50,15 +50,15 @@ class CNNmPMTDataset(H5Dataset):
         self.mode = mode
         self.collapse_mode = collapse_mode
         self.scaling = scaling
-#old17Julydataset        self.mu_q = 2.673324   #np.mean(train_events)
-#        self.mu_t = 980.8191   #np.mean(train_events)
-#        self.std_q = 6.961118  #np.std(train_events)
-#        self.std_t = 71.10292   #np.std(train_events)
+
         ################
+        
         self.mu_q = 2.634658   #np.mean(train_events)
         self.mu_t = 1115.6687   #np.mean(train_events)
         self.std_q = 6.9462004  #np.std(train_events)
         self.std_t = 263.4307  #np.std(train_events)
+        
+        ################
 
 
     def process_data(self, hit_pmts, hit_data):
