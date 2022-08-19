@@ -70,3 +70,21 @@ def momentum(energy, label, particle_masses=np.array((0, 0.511, 105.7, 134.98)))
         """
     mass = particle_masses[label]
     return np.sqrt(energy**2 - mass**2)
+
+
+def energy(momentum, label, particle_masses=np.array((0, 0.511, 105.7, 134.98))):
+    """
+        Calculate total energy of particle from momentum and particle type (label)
+        Default labels are 0:gamma, 1:electron, 2:muon, 3:pi0
+
+        Parameters
+        ----------
+        momentum : array_like
+            momentum of particle or vector of energies of particles
+        label : array_like
+            integer label of particle type or vector of labels of particles
+        particle_masses : array_like
+            array of particle masses indexed by label
+        """
+    mass = particle_masses[label]
+    return np.sqrt(momentum**2 + mass**2)
