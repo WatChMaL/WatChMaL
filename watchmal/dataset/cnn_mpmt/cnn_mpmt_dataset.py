@@ -42,7 +42,7 @@ class CNNmPMTDataset(H5Dataset):
         if padding_type is not None:
             self.padding_type = getattr(self, padding_type)
         else:
-            self.padding_type = lambda x : x 
+            self.padding_type = None
 
         self.horizontal_flip_mpmt_map=[0, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 12, 17, 16, 15, 14, 13, 18]
         self.vertical_flip_mpmt_map=[6, 5, 4, 3, 2, 1, 0, 11, 10, 9, 8, 7, 15, 14, 13, 12, 17, 16, 18]
@@ -85,8 +85,9 @@ class CNNmPMTDataset(H5Dataset):
         
         processed_data = du.apply_random_transformations(self.transforms, processed_data)
 
-        processed_data = self.padding_type(processed_data)
-            
+        if self.padding_type is not None:
+            processed_data = self.padding_type(processed_data)
+
         data_dict["data"] = processed_data
         
         return data_dict
