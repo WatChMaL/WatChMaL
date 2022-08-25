@@ -20,10 +20,7 @@ def towall(position, angle, tank_half_height=300, tank_radius=400, tank_axis=1):
     """
     pos_trans = np.delete(position, tank_axis, axis=-1)
     pos_along = position[..., tank_axis]
-    zenith = angle[..., 0]
-    azimuth = angle[..., 1]
-    dir_along = np.cos(zenith)
-    dir_trans = np.column_stack((np.sin(zenith)*np.cos(azimuth), np.sin(zenith)*np.sin(azimuth)))
+    dir_along, dir_trans = polar_to_cartesian(angle)
     a = np.linalg.norm(dir_trans, axis=-1)**2
     b = np.sum(pos_trans*dir_trans, axis=-1)
     c = np.linalg.norm(pos_trans, axis=-1) ** 2 - tank_radius ** 2
@@ -54,7 +51,7 @@ def dwall(position, tank_half_height=300, tank_radius=400, tank_axis=1):
     return np.minimum(dwall_barrel, dwall_endcap)
 
 
-def momentum(energy, label, particle_masses=np.array((0, 0.511, 105.7, 134.98))):
+def momentum_from_energy(energy, label, particle_masses=np.array((0, 0.511, 105.7, 134.98))):
     """
         Calculate momentum of particle from total energy and particle type (label)
         Default labels are 0:gamma, 1:electron, 2:muon, 3:pi0
@@ -72,7 +69,7 @@ def momentum(energy, label, particle_masses=np.array((0, 0.511, 105.7, 134.98)))
     return np.sqrt(energy**2 - mass**2)
 
 
-def energy(momentum, label, particle_masses=np.array((0, 0.511, 105.7, 134.98))):
+def energy_from_momentum(momentum, label, particle_masses=np.array((0, 0.511, 105.7, 134.98))):
     """
         Calculate total energy of particle from momentum and particle type (label)
         Default labels are 0:gamma, 1:electron, 2:muon, 3:pi0
@@ -88,3 +85,38 @@ def energy(momentum, label, particle_masses=np.array((0, 0.511, 105.7, 134.98)))
         """
     mass = particle_masses[label]
     return np.sqrt(momentum**2 + mass**2)
+
+
+def direction_from_angles(angles, tank_axis=1):
+    dir_along, dir_trans = polar_to_cartesian(angles)
+    return np.insert(dir_trans, tank_axis, dir_along, axis=1)
+
+
+def polar_to_cartesian(angles):
+    zenith = angles[..., 0]
+    azimuth = angles[..., 1]
+    dir_along = np.cos(zenith)
+    dir_trans = np.column_stack((np.sin(zenith) * np.cos(azimuth), np.sin(zenith) * np.sin(azimuth)))
+    return dir_along, dir_trans
+
+
+def angles_from_direction(direction, tank_axis=1):
+    dir_along = direction[..., tank_axis]
+    dir_trans = np.delete(direction, tank_axis, axis=-1)
+    zenith = np.arccos(dir_along)
+    azimuth = np.arctan2(dir_trans[..., 1], dir_trans[..., 0])
+    return np.column_stack((zenith, azimuth))
+
+
+def angle_between_directions(direction1, direction2, degrees=False):
+    angle = np.arccos(np.clip(np.einsum('...i,...i', direction1, direction2), -1.0, 1.0))
+    if degrees:
+        angle *= 180/np.pi
+    return angle
+
+
+def decompose_along_direction(vector, direction):
+    total_magnitude = np.linalg.norm(vector, axis=-1)
+    longitudinal_component = np.einsum('...i,...i', vector, direction)
+    transverse_component = np.sqrt(np.maximum(total_magnitude**2-longitudinal_component**2, 0))
+    return total_magnitude, longitudinal_component, transverse_component
