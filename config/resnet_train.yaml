@@ -7,7 +7,7 @@ defaults:
     - data/dataset: iwcd_cnn_short
     - model: classifier
     - model/feature_extractor: resnet18
-    - model/classification_network: resnet_fc
+    - model/classification_network: resnet
     - engine: classifier
     - tasks/train: train_resnet
     - optimizers@tasks.train.optimizers: adam
@@ -16,3 +16,4 @@ defaults:
     - tasks/restore_best_state: restore_best_state
     - tasks/evaluate: test
     - sampler@tasks.evaluate.data_loaders.test.sampler: subset_sequential
+    - _self_

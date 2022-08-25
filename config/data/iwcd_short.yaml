@@ -1,4 +1,3 @@
-# @package _group_
-split_path: /fast_scratch/WatChMaL/data/IWCD_mPMT_Short_3M_full_train_OD_veto_test_idxs.npz
+split_path: /fast_scratch/WatChMaL/data/IWCD_mPMT_Short/index_lists/4class_e_mu_gamma_pi0/IWCD_mPMT_Short_4_class_3M_emgp0_idxs.npz
 dataset:
-  h5file: /fast_scratch/WatChMaL/data/IWCD_mPMT_Short_emg_E0to1000MeV_digihits.h5
+  h5file: /fast_scratch/WatChMaL/data/IWCD_mPMT_Short/IWCD_mPMT_Short_emgp0_E0to1000MeV_digihits.h5

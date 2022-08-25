@@ -20,6 +20,13 @@ class Classifier(nn.Module):
         return x
 
 
+class PassThrough(nn.Module):
+    def __init__(self, num_inputs, num_classes):
+        super().__init__()
+    def forward(self, x):
+        return x
+
+
 class ResNetFullyConnected(nn.Module):
     def __init__(self, num_inputs, num_classes):
         super().__init__()

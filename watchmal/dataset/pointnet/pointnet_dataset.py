@@ -2,9 +2,6 @@
 Class implementing a mPMT dataset for pointnet in h5 format
 """
 
-# torch imports
-import torch
-
 # generic imports
 import numpy as np
 
@@ -13,13 +10,14 @@ from watchmal.dataset.h5_dataset import H5Dataset
 from watchmal.dataset.pointnet import transformations
 import watchmal.dataset.data_utils as du
 
+
 class PointNetDataset(H5Dataset):
 
     def __init__(self, h5file, geometry_file, is_distributed, use_times=True, use_orientations=False, n_points=4000, transforms=None):
         super().__init__(h5file, is_distributed)
         geo_file = np.load(geometry_file, 'r')
-        self.geo_positions = torch.from_numpy(geo_file["position"]).float()
-        self.geo_orientations = torch.from_numpy(geo_file["orientation"]).float()
+        self.geo_positions = geo_file["position"].astype(np.float32)
+        self.geo_orientations = geo_file["orientation"].astype(np.float32)
         self.use_orientations = use_orientations
         self.use_times = use_times
         self.n_points = n_points
@@ -30,14 +28,13 @@ class PointNetDataset(H5Dataset):
         if use_times:
             self.channels += 1
 
-
     def  __getitem__(self, item):
 
         data_dict = super().__getitem__(item)
 
         n_hits = min(self.n_points, self.event_hit_pmts.shape[0])
         hit_positions = self.geo_positions[self.event_hit_pmts[:n_hits], :]
-        data = np.zeros((self.channels, self.n_points))
+        data = np.zeros((self.channels, self.n_points), dtype=np.float32)
         data[:3, :n_hits] = hit_positions.T
         if self.use_orientations:
             hit_orientations = self.geo_orientations[self.event_hit_pmts[:n_hits], :]

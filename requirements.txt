@@ -1,7 +1,5 @@
 torch
-hydra-core>=1.0.0
-pytorch-lightning
-tqdm
+hydra-core>=1.1
 omegaconf
 h5py
 numpy
