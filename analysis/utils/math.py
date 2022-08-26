@@ -180,9 +180,9 @@ def angle_between_directions(direction1, direction2, degrees=False):
 
     Parameters
     ----------
-    direction1 : ndarray
+    direction1 : array_like
         vector of (x,y,z) components of a unit vector of a direction, or (N,3) array of (x,y,z) unit vector directions
-    direction2 : ndarray
+    direction2 : array_like
         vector of (x,y,z) components of a unit vector of a direction, or (N,3) array of (x,y,z) unit vector directions
     degrees : bool, default: False
         if True, return values in degrees (otherwise radians)
@@ -238,6 +238,7 @@ def binomial_error(x):
     scalar
         binomial standard error of x
     """
-    trials = len(x)
+    x = np.array(x)
+    trials = x.size
     successes = np.count_nonzero(x)
     return np.sqrt(successes*(trials-successes))/trials
