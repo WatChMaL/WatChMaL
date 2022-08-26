@@ -178,7 +178,7 @@ class ClassifierEngine(BaseEngine):
             if self.scheduler is not None:
                 self.scheduler.step()
 
-            if (save_interval is not None) and ((self.epoch+1)%save_interval == 0):
+            if self.rank == 0 and (save_interval is not None) and ((self.epoch+1)%save_interval == 0):
                 self.save_state(name=f'_epoch_{self.epoch+1}')
 
         self.train_log.close()

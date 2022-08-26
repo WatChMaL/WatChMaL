@@ -269,7 +269,7 @@ class BaseEngine(ABC):
             if self.scheduler is not None:
                 self.scheduler.step()
 
-            if (save_interval is not None) and ((self.epoch+1)%save_interval == 0):
+            if self.rank == 0 and (save_interval is not None) and ((self.epoch+1)%save_interval == 0):
                 self.save_state(name=f'_epoch_{self.epoch+1}')
 
         self.train_log.close()
@@ -458,6 +458,11 @@ class BaseEngine(ABC):
             
         Returns: filename
         """
+
+        if self.is_distributed and self.rank != 0:
+            print("Attempted to save state, but not rank 0! NOT saving state!")
+            return
+
         filename = "{}{}{}{}".format(self.dirpath,
                                      str(self.model._get_name()),
                                      name,
@@ -509,8 +514,11 @@ class BaseEngine(ABC):
         with open(weight_file, 'rb') as f:
             print('Restoring state from', weight_file)
 
+            # prevent loading while DDP operations are happening
+            if self.is_distributed:
+                torch.distributed.barrier()
             # torch interprets the file, then we can access using string keys
-            checkpoint = torch.load(f)
+            checkpoint = torch.load(f, map_location=self.device)
             
             # load network weights
             self.model_accs.load_state_dict(checkpoint['state_dict'])
