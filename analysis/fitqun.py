@@ -27,7 +27,7 @@ class FiTQunOutput:
         # These variables are the result of the 1-ring fits. The first index is the subevent (1-ring fits are run on all subevents). The second
         # index is the particle-hypothesis index (same as apfit):
         # 0 = GAMMA, 1 = ELECTRON, 2 = MUON, 3 = PION, 4 = KAON, 5 = PROTON,  6 = CONE GENERATOR
-        # Currently, only the electron, muon, and pion (the upstream pion segement) hypotheses are implemented.
+        # Currently, only the electron, muon, and pion (the upstream pion segment) hypotheses are implemented.
         self._singlering_flag = self.chain['fq1rpcflg']               # Flag to indicate whether fiTQun believes the particle is exiting the ID(<0 if MINUIT did not converge)
         self._singlering_momentum = self.chain['fq1rmom']             # Fit momentum
         self._singlering_position = self.chain['fq1rpos']             # Fit vertex (0=X, 1=Y, 2=Z)
@@ -67,7 +67,7 @@ class FiTQunOutput:
         self._pi0fit_total_charge = self.chain['fqpi0totmu']               # Best fit total predicted charge
         self._pi0fit_nll = self.chain['fqpi0nll']                          # Best fit -log(Likelihood)
         self._pi0fit_mass = self.chain['fqpi0mass']                        # Fit pi0 mass (always 134.9766 for constrained mass fit)
-        self._pi0fit_gamma1_momenutm = self.chain['fqpi0mom1']             # Fit momentum of first photon
+        self._pi0fit_gamma1_momentum = self.chain['fqpi0mom1']             # Fit momentum of first photon
         self._pi0fit_gamma2_momentum = self.chain['fqpi0mom2']             # Fit momentum of second photon
         self._pi0fit_gamma1_direction = self.chain['fqpi0dir1']            # Fit direction of the first photon
         self._pi0fit_gamma2_direction = self.chain['fqpi0dir2']            # Fit direction of the second photon
@@ -83,7 +83,7 @@ class FiTQunOutput:
         self._pi0_total_charge = None
         self._pi0_nll = None
         self._pi0_mass = None
-        self._pi0_gamma1_momenutm = None
+        self._pi0_gamma1_momentum = None
         self._pi0_gamma2_momentum = None
         self._pi0_gamma1_direction = None
         self._pi0_gamma2_direction = None
@@ -317,10 +317,10 @@ class FiTQunOutput:
         return self._pi0_mass
     
     @property
-    def pi0_gamma1_momenutm(self):
-        if self._pi0_gamma1_momenutm is None:
-            self._pi0_gamma1_momenutm = self._pi0fit_gamma1_momenutm[:, 0]
-        return self._pi0_gamma1_momenutm
+    def pi0_gamma1_momentum(self):
+        if self._pi0_gamma1_momentum is None:
+            self._pi0_gamma1_momentum = self._pi0fit_gamma1_momentum[:, 0]
+        return self._pi0_gamma1_momentum
     
     @property
     def pi0_gamma2_momentum(self):
