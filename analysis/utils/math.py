@@ -222,3 +222,22 @@ def decompose_along_direction(vector, direction):
     longitudinal_component = np.einsum('...i,...i', vector, direction)
     transverse_component = np.sqrt(np.maximum(total_magnitude**2-longitudinal_component**2, 0))
     return total_magnitude, longitudinal_component, transverse_component
+
+
+def binomial_error(x):
+    """
+    Calculate binomial standard error of an array of booleans
+
+    Parameters
+    ----------
+    x: array_like
+        array of booleans corresponding to binomial trial results
+
+    Returns
+    -------
+    scalar
+        binomial standard error of x
+    """
+    trials = len(x)
+    successes = np.count_nonzero(x)
+    return np.sqrt(successes*(trials-successes))/trials
