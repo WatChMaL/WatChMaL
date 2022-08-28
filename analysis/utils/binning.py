@@ -2,7 +2,7 @@ import numpy as np
 from analysis.utils.math import binomial_error
 
 
-def get_binning(x, bins=None, width=None, minimum=None, maximum=None):
+def get_binning(x, bins=None, minimum=None, maximum=None, width=None):
     """
     Finds the indices of the bins to which each value in input array belongs, for a set of bins specified either as an
     array of bin edges, number of bins or bin width
@@ -14,12 +14,12 @@ def get_binning(x, bins=None, width=None, minimum=None, maximum=None):
     bins: array_like, optional
         If `bins` is an int, it defines the number of equal-width bins in the range (200, by default). If `bins` is an
         array, it is the array of bin edges and must be 1-dimensional and monotonic.
-    width: int or real, optional
-        Width of bins to generate equal width bins if `bins` is None
     minimum: int or real, optional
         Lowest bin lower edge (by default use minimum value in `x`). Not used if `bins` is an ndarray of bin edges.
     maximum: int or real, optional
         Highest bin upper edge (by default use minimum value in `x`). Not used if `bins` is an ndarray of bin edges.
+    width: int or real, optional
+        Width of bins to generate equal width bins if `bins` is None
 
     Returns
     -------
