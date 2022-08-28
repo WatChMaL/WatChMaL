@@ -30,8 +30,7 @@ def get_predictions(run_directory, indices=None):
     return sorted_predictions.squeeze()
 
 
-def plot_histograms(runs, quantity, selection=..., figsize=None, xlabel="", ylabel="", legend='best', tight=True,
-                    **hist_args):
+def plot_histograms(runs, quantity, selection=..., figsize=None, xlabel="", ylabel="", legend='best', **hist_args):
     """
     Plot overlaid histograms of results from a number of regression runs
 
@@ -52,8 +51,6 @@ def plot_histograms(runs, quantity, selection=..., figsize=None, xlabel="", ylab
         Label of the y-axis.
     legend: str or None, optional
         Position of the legend, or None to have no legend. Attempts to find the best position by default.
-    tight: bool, optional
-        If false, don't use tight formatting of the figure.
     hist_args: optional
         Additional arguments to pass to the `hist` plotting function. Note that these may be overridden by arguments
         provided in `runs`.
@@ -76,13 +73,11 @@ def plot_histograms(runs, quantity, selection=..., figsize=None, xlabel="", ylab
     ax.set_ylabel(ylabel)
     if legend:
         ax.legend(loc=legend)
-    if tight:
-        fig.tight_layout()
     return fig, ax
 
 
 def plot_resolution_profile(runs, quantity, binning, selection=..., figsize=None, xlabel="", ylabel="", legend='best',
-                            tight=True, ylim=None, **plot_args):
+                            ylim=None, **plot_args):
     """
     Plot binned resolutions for results from a number of regression runs.
     The quantity being used from each run should correspond to residuals and these residuals are divided up into bins of
@@ -109,8 +104,6 @@ def plot_resolution_profile(runs, quantity, binning, selection=..., figsize=None
         Label of the y-axis.
     legend: str or None, optional
         Position of the legend, or None to have no legend. Attempts to find the best position by default.
-    tight: bool, optional
-        If false, don't use tight formatting of the figure.
     ylim: (float, float), optional
         Limits of the y-axis.
     plot_args: optional
@@ -130,8 +123,6 @@ def plot_resolution_profile(runs, quantity, binning, selection=..., figsize=None
     ax.set_ylabel(ylabel)
     if legend:
         ax.legend(loc=legend)
-    if tight:
-        fig.tight_layout()
     if ylim is not None:
         ax.set_ylim(ylim)
     return fig, ax
