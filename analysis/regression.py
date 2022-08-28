@@ -125,7 +125,7 @@ def plot_resolution_profile(runs, quantity, binning, selection=..., figsize=None
     fig, ax = plt.subplots(figsize=figsize)
     for r in runs:
         args = {**plot_args, **r['args']}
-        plot_binned_resolution(r[quantity], binning, ax, selection, **args)
+        plot_binned_resolution(r[quantity], ax, binning, selection, **args)
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
     if legend:
