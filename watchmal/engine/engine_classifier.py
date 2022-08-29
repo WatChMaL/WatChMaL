@@ -3,7 +3,6 @@ Class for training a fully supervised classifier
 """
 
 # hydra imports
-from hydra.utils import instantiate
 
 # torch imports
 import torch
@@ -21,10 +20,11 @@ from time import strftime, localtime, time
 import sys
 from sys import stdout
 import copy
+import random
 
 # WatChMaL imports
-from watchmal.dataset.data_utils import get_data_loader
-from watchmal.utils.logging_utils import CSVData
+from WatChMaL.watchmal.dataset.data_utils import get_data_loader
+from WatChMaL.watchmal.utils.logging_utils import CSVData
 
 class ClassifierEngine:
     def __init__(self, model, rank, gpu, dump_path):
@@ -72,14 +72,14 @@ class ClassifierEngine:
         self.optimizer = None
         self.scheduler = None
     
-    def configure_optimizers(self, optimizer_config):
+    def configure_optimizers(self, optimizer):
         """
         Set up optimizers from optimizer config
 
         Args:
             optimizer_config    ... hydra config specifying optimizer object
         """
-        self.optimizer = instantiate(optimizer_config, params=self.model_accs.parameters())
+        self.optimizer = optimizer(params=self.model_accs.parameters(), lr=0.001)
 
   
     def configure_scheduler(self, scheduler_config):
@@ -93,7 +93,7 @@ class ClassifierEngine:
         print('Successfully set up Scheduler')
 
 
-    def configure_data_loaders(self, data_config, loaders_config, is_distributed, seed):
+    def configure_data_loaders(self, data_config, loaders_config, is_distributed, seed, indices=0):
         """
         Set up data loaders from loaders config
 
@@ -106,8 +106,18 @@ class ClassifierEngine:
         Parameters:
             self should have dict attribute data_loaders
         """
-        for name, loader_config in loaders_config.items():
-            self.data_loaders[name] = get_data_loader(**data_config, **loader_config, is_distributed=is_distributed, seed=seed)
+
+        split=0.8
+        indices = set(range(indices))
+        train =  set(random.sample(indices, int(split*len(list(indices)))))
+        test = indices - train
+        train_indices = list(train)
+        test_indices = list(test)
+        print(f'Train and test sets share no indices: {set(train_indices).isdisjoint(test_indices)}')
+        #for name, loader_config in loaders_config.items():
+        self.data_loaders['train'] = get_data_loader(**data_config, **loaders_config, indices=train_indices, is_distributed=is_distributed, seed=seed)
+        self.data_loaders['validation'] = get_data_loader(**data_config, **loaders_config, indices = test_indices[0:int(0.5*len(test_indices))], is_distributed=is_distributed, seed=seed)
+        self.data_loaders['test'] = get_data_loader(**data_config, **loaders_config, indices = test_indices[int(0.5*len(test_indices)):len(test_indices)], is_distributed=is_distributed, seed=seed)
     
     def get_synchronized_metrics(self, metric_dict):
         """
@@ -199,13 +209,14 @@ class ClassifierEngine:
         val_interval        = train_config.val_interval
         num_val_batches     = train_config.num_val_batches
         checkpointing       = train_config.checkpointing
-        save_interval = train_config.save_interval if 'save_interval' in train_config else None
+        save_interval = train_config.save_interval
 
         # set the iterations at which to dump the events and their metrics
         if self.rank == 0:
             print(f"Training... Validation Interval: {val_interval}")
 
         # set model to training mode
+        self.restore_best_state("")
         self.model.train()
 
         # initialize epoch and iteration counters
@@ -268,9 +279,14 @@ class ClassifierEngine:
                 if self.rank == 0 and self.iteration % report_interval == 0:
                     previous_iteration_time = iteration_time
                     iteration_time = time()
+                    unique, unique_counts = np.unique(self.labels, return_counts=True)
 
                     print("... Iteration %d ... Epoch %d ... Step %d/%d  ... Training Loss %1.3f ... Training Accuracy %1.3f ... Time Elapsed %1.3f ... Iteration Time %1.3f" %
                           (self.iteration, self.epoch+1, self.step, len(train_loader), res["loss"], res["accuracy"], iteration_time - start_time, iteration_time - previous_iteration_time))
+                    print("Unique Labels")
+                    print(unique)
+                    print("Unique Label Counts")
+                    print(unique_counts)
             
             if self.scheduler is not None:
                 self.scheduler.step()
@@ -281,6 +297,7 @@ class ClassifierEngine:
         self.train_log.close()
         if self.rank == 0:
             self.val_log.close()
+        self.evaluate("")
 
 
 
@@ -327,11 +344,14 @@ class ClassifierEngine:
 
             val_metrics["loss"] = global_val_loss
             val_metrics["accuracy"] = global_val_accuracy
+            print(global_val_accuracy)
             val_metrics["epoch"] = self.epoch
 
             if val_metrics["loss"] < self.best_validation_loss:
                 self.best_validation_loss = val_metrics["loss"]
+                best_validation_accuracy = val_metrics["accuracy"]
                 print('best validation loss so far!: {}'.format(self.best_validation_loss))
+                print('best validation accuracy so far!: {}'.format(best_validation_accuracy))
                 self.save_state("BEST")
                 val_metrics["saved_best"] = 1
 

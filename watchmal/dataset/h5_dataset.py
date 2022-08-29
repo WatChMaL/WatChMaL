@@ -108,6 +108,11 @@ class H5Dataset(H5CommonDataset, ABC):
         self.hit_charge = np.memmap(self.h5_path, mode="r", shape=self.hdf5_hit_charge.shape,
                                     offset=self.hdf5_hit_charge.id.get_offset(),
                                     dtype=self.hdf5_hit_charge.dtype)
+
+        self.hdf5_hit_pos = self.h5_file["hit_pmt_pos"]
+        self.hit_pos = np.memmap(self.h5_path, mode="r", shape=self.hdf5_hit_pos.shape,
+                                    offset=self.hdf5_hit_pos.id.get_offset(),
+                                    dtype=self.hdf5_hit_pos.dtype)
         
     def __getitem__(self, item):
         data_dict = super().__getitem__(item)
@@ -118,6 +123,10 @@ class H5Dataset(H5CommonDataset, ABC):
         self.event_hit_pmts = self.hit_pmt[start:stop]
         self.event_hit_charges = self.hit_charge[start:stop]
         self.event_hit_times = self.time[start:stop]
+        
+        self.event_hit_x = self.hit_pos[start:stop,0]
+        self.event_hit_y = self.hit_pos[start:stop,1]
+        self.event_hit_z = self.hit_pos[start:stop,2]
 
         return data_dict
 

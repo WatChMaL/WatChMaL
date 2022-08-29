@@ -82,7 +82,7 @@ class STNkd(nn.Module):
 
 
 class PointNetFeat(nn.Module):
-    def __init__(self, feature_transform=False, k=5, mean_pool=0, num_output_channels=256):
+    def __init__(self, feature_transform=False, k=2, mean_pool=0, num_output_channels=256):
         super().__init__()
         self.max_feat = num_output_channels
         self.stn = STNkd(k=k, mean_pool=mean_pool, max_feat=num_output_channels)
