@@ -26,8 +26,10 @@ class RegressionEngine(BaseEngine):
         super().__init__(model, rank, gpu, dump_path)
 
         self.output_type = output_type
-        self.output_center = torch.tensor(output_center).to(self.device)
-        self.output_scale = torch.tensor(output_scale).to(self.device)
+        self.output_center = output_center
+        self.output_scale = output_scale
+        #self.output_center = torch.tensor(output_center).to(self.device)
+        #self.output_scale = torch.tensor(output_scale).to(self.device)
 
         self.target = None
 
@@ -259,14 +261,22 @@ class RegressionEngine(BaseEngine):
             self.model.eval()
 
             # Variables for the confusion matrix
-            loss, indices, outputs, targets = [], [], [], []
+#            loss, indices, outputs, targets = [], [], [], []
+            n_events = len(self.data_loaders["test"].sampler)
+            print(f"{n_events} events to evaluate")
+            indices = np.zeros(n_events)
+            target_shape = self.data_loaders["test"].dataset[0][self.output_type].squeeze().shape
+            print(f"target shape of {target_shape}")
+            outputs = np.zeros((n_events, *target_shape))
+            targets = np.zeros((n_events, *target_shape))
+            pos = 0
 
             # Extract the event data and label from the DataLoader iterator
             for it, eval_data in enumerate(self.data_loaders["test"]):
 
                 # load data
                 self.data = eval_data['data']
-                self.target = eval_data[self.output_type]
+                self.target = eval_data[self.output_type].squeeze()
 
                 eval_indices = eval_data['indices']
 
@@ -276,15 +286,16 @@ class RegressionEngine(BaseEngine):
                 eval_loss += result['loss']
 
                 # Add the local result to the final result
-                indices.extend(eval_indices.numpy())
-                targets.extend(self.target.numpy())
-                outputs.extend(result['output'].detach().cpu().numpy())
+                bs = eval_indices.shape[0]
+                indices[pos:pos+bs] = eval_indices
+                targets[pos:pos+bs] = self.target
+                outputs[pos:pos+bs] = result['output'].detach().cpu()
+                pos += bs
 
                 print("eval_iteration : " + str(it) + " eval_loss : " + str(result["loss"]))
 
                 eval_iterations += 1
 
-        # convert arrays to torch tensors
         print("loss : " + str(eval_loss / eval_iterations))
 
         iterations = np.array([eval_iterations])
