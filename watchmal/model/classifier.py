@@ -20,7 +20,7 @@ class Classifier(nn.Module):
 
 
 class PassThrough(nn.Module):
-    def __init__(self, num_inputs, num_classes):
+    def __init__(self):
         super().__init__()
     def forward(self, x):
         return x
