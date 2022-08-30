@@ -258,16 +258,11 @@ class RegressionEngine(BaseEngine):
             # Set the model to evaluation mode
             self.model.eval()
 
-            # Variables for the confusion matrix
-#            loss, indices, outputs, targets = [], [], [], []
-            n_events = len(self.data_loaders["test"].sampler)
-            print(f"{n_events} events to evaluate")
-            indices = np.zeros(n_events)
+            # Variables for the outputs
             target_shape = self.data_loaders["test"].dataset[0][self.output_type].squeeze().shape
-            print(f"target shape of {target_shape}")
-            outputs = np.zeros((n_events, *target_shape))
-            targets = np.zeros((n_events, *target_shape))
-            pos = 0
+            indices = np.zeros((0,))
+            outputs = np.zeros((0, *target_shape))
+            targets = np.zeros((0, *target_shape))
 
             start_time = time()
             iteration_time = start_time
@@ -287,13 +282,9 @@ class RegressionEngine(BaseEngine):
                 eval_loss += result['loss']
 
                 # Add the local result to the final result
-                bs = eval_indices.shape[0]
-                indices[pos:pos+bs] = eval_indices
-                targets[pos:pos+bs] = self.target
-                outputs[pos:pos+bs] = result['output'].detach().cpu()
-                pos += bs
-
-                #print("eval_iteration : " + str(it) + " eval_loss : " + str(result["loss"]))
+                indices = np.concatenate((indices, eval_indices))
+                targets = np.concatenate((targets, self.target))
+                outputs = np.concatenate((outputs, result['output'].detach().cpu()))
 
                 eval_iterations += 1
                 
