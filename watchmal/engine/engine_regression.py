@@ -287,9 +287,9 @@ class RegressionEngine(BaseEngine):
                 outputs = np.concatenate((outputs, result['output'].detach().cpu()))
 
                 eval_iterations += 1
-                
+
                 # print the metrics at given intervals
-                if self.rank == 0 and it % 10 == 0:
+                if self.rank == 0 and it % test_config.report_interval == 0:
                     previous_iteration_time = iteration_time
                     iteration_time = time()
                     print("... Iteration %d ... Training Loss %1.3f ... Time Elapsed %1.3f ... Iteration Time %1.3f" %
