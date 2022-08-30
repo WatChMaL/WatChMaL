@@ -143,8 +143,6 @@ class RegressionEngine(BaseEngine):
                 self.backward()
 
                 # update the epoch and iteration
-                # self.epoch += 1. / len(self.data_loaders["train"])
-                self.step += 1
                 self.iteration += 1
 
                 # get relevant attributes of result for logging
@@ -271,6 +269,9 @@ class RegressionEngine(BaseEngine):
             targets = np.zeros((n_events, *target_shape))
             pos = 0
 
+            start_time = time()
+            iteration_time = start_time
+
             # Extract the event data and label from the DataLoader iterator
             for it, eval_data in enumerate(self.data_loaders["test"]):
 
@@ -292,9 +293,16 @@ class RegressionEngine(BaseEngine):
                 outputs[pos:pos+bs] = result['output'].detach().cpu()
                 pos += bs
 
-                print("eval_iteration : " + str(it) + " eval_loss : " + str(result["loss"]))
+                #print("eval_iteration : " + str(it) + " eval_loss : " + str(result["loss"]))
 
                 eval_iterations += 1
+                
+                # print the metrics at given intervals
+                if self.rank == 0 and it % 10 == 0:
+                    previous_iteration_time = iteration_time
+                    iteration_time = time()
+                    print("... Iteration %d ... Training Loss %1.3f ... Time Elapsed %1.3f ... Iteration Time %1.3f" %
+                          (it, result["loss"], iteration_time - start_time, iteration_time - previous_iteration_time))
 
         print("loss : " + str(eval_loss / eval_iterations))
 
