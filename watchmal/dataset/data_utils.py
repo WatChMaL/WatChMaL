@@ -19,7 +19,7 @@ import random
 # WatChMaL imports
 from WatChMaL.watchmal.dataset.samplers import DistributedSamplerWrapper
 
-def get_data_loader(dataset, batch_size, sampler, num_workers, is_distributed, seed, indices=0, split_path=None, split_key=None, transforms=None, data_class=None, use_positions=True, use_time=True, pmt_positions_file=None):
+def get_data_loader(settings, dataset, batch_size, sampler, num_workers, is_distributed, seed, indices=0, split_path=None, split_key=None, transforms=None, data_class=None, use_positions=True, use_time=True, pmt_positions_file=None):
     """
     Returns data loaders given dataset and sampler configs
 
@@ -37,9 +37,11 @@ def get_data_loader(dataset, batch_size, sampler, num_workers, is_distributed, s
     Returns: dataloader created with instantiated dataset and (possibly wrapped) sampler
     """
     #PointNet
-    #dataset = data_class(dataset, False, use_positions=use_positions, use_times=use_time)
+    if 'PointNet'.lower() in settings.arch.lower():
+        dataset = data_class(dataset, False, use_positions=use_positions, use_times=use_time)
     #ResNet
-    dataset = data_class(dataset, pmt_positions_file, False, )
+    if 'ResNet'.lower() in settings.arch.lower():
+        dataset = data_class(dataset, pmt_positions_file, False, )
     #dataset = instantiate(dataset, transforms=transforms, is_distributed=is_distributed)
     
     if split_path is not None and split_key is not None:

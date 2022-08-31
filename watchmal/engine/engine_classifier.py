@@ -93,7 +93,7 @@ class ClassifierEngine:
         print('Successfully set up Scheduler')
 
 
-    def configure_data_loaders(self, data_config, loaders_config, is_distributed, seed, indices=0):
+    def configure_data_loaders(self, data_config, loaders_config, is_distributed, seed, train_indices, test_indices, val_indices, settings):
         """
         Set up data loaders from loaders config
 
@@ -107,17 +107,10 @@ class ClassifierEngine:
             self should have dict attribute data_loaders
         """
 
-        split=0.8
-        indices = set(range(indices))
-        train =  set(random.sample(indices, int(split*len(list(indices)))))
-        test = indices - train
-        train_indices = list(train)
-        test_indices = list(test)
-        print(f'Train and test sets share no indices: {set(train_indices).isdisjoint(test_indices)}')
         #for name, loader_config in loaders_config.items():
-        self.data_loaders['train'] = get_data_loader(**data_config, **loaders_config, indices=train_indices, is_distributed=is_distributed, seed=seed)
-        self.data_loaders['validation'] = get_data_loader(**data_config, **loaders_config, indices = test_indices[0:int(0.5*len(test_indices))], is_distributed=is_distributed, seed=seed)
-        self.data_loaders['test'] = get_data_loader(**data_config, **loaders_config, indices = test_indices[int(0.5*len(test_indices)):len(test_indices)], is_distributed=is_distributed, seed=seed)
+        self.data_loaders['train'] = get_data_loader(settings, **data_config, **loaders_config, indices=train_indices, is_distributed=is_distributed, seed=seed)
+        self.data_loaders['validation'] = get_data_loader(settings, **data_config, **loaders_config, indices = test_indices, is_distributed=is_distributed, seed=seed)
+        self.data_loaders['test'] = get_data_loader(settings, **data_config, **loaders_config, indices = val_indices, is_distributed=is_distributed, seed=seed)
     
     def get_synchronized_metrics(self, metric_dict):
         """
@@ -187,7 +180,7 @@ class ClassifierEngine:
     # ========================================================================
     # Training and evaluation loops
     
-    def train(self, train_config):
+    def train(self, settings):
         """
         Train the model on the training set
 
@@ -204,19 +197,20 @@ class ClassifierEngine:
         Returns: None
         """
         # initialize training params
-        epochs              = train_config.epochs
-        report_interval     = train_config.report_interval
-        val_interval        = train_config.val_interval
-        num_val_batches     = train_config.num_val_batches
-        checkpointing       = train_config.checkpointing
-        save_interval = train_config.save_interval
+        epochs              = settings.train_config.epochs
+        report_interval     = settings.train_config.report_interval
+        val_interval        = settings.train_config.val_interval
+        num_val_batches     = settings.train_config.num_val_batches
+        checkpointing       = settings.train_config.checkpointing
+        save_interval = settings.train_config.save_interval
 
         # set the iterations at which to dump the events and their metrics
         if self.rank == 0:
             print(f"Training... Validation Interval: {val_interval}")
 
         # set model to training mode
-        self.restore_best_state("")
+        if settings.restoreBestState:
+            self.restore_best_state("")
         self.model.train()
 
         # initialize epoch and iteration counters
