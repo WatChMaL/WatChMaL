@@ -261,7 +261,7 @@ class RegressionEngine(BaseEngine):
             self.model.eval()
 
             # Variables for the outputs
-            target_shape = self.data_loaders["test"].dataset[0][self.output_type].squeeze().shape
+            target_shape = next(iter(self.data_loaders["test"]))[self.output_type][0].squeeze().shape
             indices = np.zeros((0,))
             outputs = np.zeros((0, *target_shape))
             targets = np.zeros((0, *target_shape))

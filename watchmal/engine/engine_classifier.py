@@ -255,9 +255,9 @@ class ClassifierEngine(BaseEngine):
 
             # Variables for the outputs
             # TODO: find some way of determining the softmax_shape without having to do a forward run
-            self.data = self.data_loaders["test"].dataset[0]['data']
-            self.labels = self.data_loaders["test"].dataset[0]['labels']
-            softmax_shape = self.forward(train=False)['softmax'].shape
+            self.data = next(iter(self.data_loaders["test"]))['data']
+            self.labels = next(iter(self.data_loaders["test"].dataset))['labels']
+            softmax_shape = self.forward(train=False)['softmax'][0].shape
             indices = np.zeros((0,))
             labels = np.zeros((0,))
             predictions = np.zeros((0,))
