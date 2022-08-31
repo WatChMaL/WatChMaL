@@ -56,8 +56,8 @@ class RegressionEngine(BaseEngine):
         with torch.set_grad_enabled(train):
             # Move the data and the labels to the GPU (if using CPU this has no effect)
             data = self.data.to(self.device)
-            model_out = self.model(data)
-            target = self.target.to(self.device).reshape(model_out.shape)
+            target = self.target.to(self.device)
+            model_out = self.model(data).reshape(target.shape)
             scaled_target = self.scale_values(target)
             scaled_model_out = self.scale_values(model_out)
             self.loss = self.criterion(scaled_model_out, scaled_target)
@@ -261,7 +261,7 @@ class RegressionEngine(BaseEngine):
             self.model.eval()
 
             # Variables for the outputs
-            target_shape = next(iter(self.data_loaders["test"]))[self.output_type][0].squeeze().shape
+            target_shape = next(iter(self.data_loaders["test"]))[self.output_type].squeeze().shape[1:]
             indices = np.zeros((0,))
             outputs = np.zeros((0, *target_shape))
             targets = np.zeros((0, *target_shape))
@@ -280,13 +280,14 @@ class RegressionEngine(BaseEngine):
 
                 # Run the forward procedure and output the result
                 result = self.forward(train=False)
+                eval_outputs = result['output'].detach().cpu()
 
                 eval_loss += result['loss']
 
                 # Add the local result to the final result
                 indices = np.concatenate((indices, eval_indices))
                 targets = np.concatenate((targets, self.target))
-                outputs = np.concatenate((outputs, result['output'].detach().cpu()))
+                outputs = np.concatenate((outputs, eval_outputs))
 
                 eval_iterations += 1
 
