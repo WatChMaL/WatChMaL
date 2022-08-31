@@ -50,7 +50,7 @@ class RegressionEngine(BaseEngine):
             self should have attributes data, labels, model, criterion, softmax
 
         Returns:
-            dict containing loss, and model outputs
+            dict containing loss and model outputs
         """
 
         with torch.set_grad_enabled(train):
@@ -61,13 +61,16 @@ class RegressionEngine(BaseEngine):
             scaled_target = self.scale_values(target)
             scaled_model_out = self.scale_values(model_out)
             self.loss = self.criterion(scaled_model_out, scaled_target)
-
-        return {'loss': self.loss.item(),
-                'output': model_out}
+            result = {'loss': self.loss.item(),
+                      'output': model_out}
+        return result
 
     def scale_values(self, data):
         scaled = (data - self.output_center) / self.output_scale
         return scaled
+
+    # ========================================================================
+    # Training and evaluation loops
 
     def train(self, train_config):
         """
@@ -133,7 +136,6 @@ class RegressionEngine(BaseEngine):
 
                 # Train on batch
                 self.data = train_data['data']
-                self.labels = train_data['labels']
                 self.target = train_data[self.output_type]
 
                 # Call forward: make a prediction & measure the average error using data = self.data
@@ -143,6 +145,8 @@ class RegressionEngine(BaseEngine):
                 self.backward()
 
                 # update the epoch and iteration
+                # self.epoch += 1. / len(self.data_loaders["train"])
+                self.step += 1
                 self.iteration += 1
 
                 # get relevant attributes of result for logging
@@ -185,7 +189,6 @@ class RegressionEngine(BaseEngine):
 
             # extract the event data from the input data tuple
             self.data = val_data['data']
-            self.labels = val_data['labels']
             self.target = val_data[self.output_type]
 
             val_res = self.forward(False)
@@ -197,7 +200,6 @@ class RegressionEngine(BaseEngine):
 
         # record the validation stats to the csv
         val_metrics["loss"] /= num_val_batches
-
         local_val_metrics = {"loss": np.array([val_metrics["loss"]])}
 
         if self.is_distributed:
@@ -292,8 +294,8 @@ class RegressionEngine(BaseEngine):
                 if self.rank == 0 and it % test_config.report_interval == 0:
                     previous_iteration_time = iteration_time
                     iteration_time = time()
-                    print("... Iteration %d ... Training Loss %1.3f ... Time Elapsed %1.3f ... Iteration Time %1.3f" %
-                          (it, result["loss"], iteration_time - start_time, iteration_time - previous_iteration_time))
+                    print("... Iteration %d ... Evaluation Loss %1.3f ... Time Elapsed %1.3f ... Iteration Time %1.3f" %
+                          (it, result['loss'], iteration_time - start_time, iteration_time - previous_iteration_time))
 
         print("loss : " + str(eval_loss / eval_iterations))
 
@@ -322,14 +324,12 @@ class RegressionEngine(BaseEngine):
                 outputs   = global_eval_results_dict["outputs"].cpu()
 
         if self.rank == 0:
-#            print("Sorting Outputs...")
-#            sorted_indices = np.argsort(indices)
 
             # Save overall evaluation results
             print("Saving Data...")
-            np.save(self.dirpath + "indices.npy", indices)#sorted_indices)
-            np.save(self.dirpath + "targets.npy", targets)#[sorted_indices])
-            np.save(self.dirpath + "predictions.npy", outputs)#[sorted_indices])
+            np.save(self.dirpath + "indices.npy", indices)
+            np.save(self.dirpath + "targets.npy", targets)
+            np.save(self.dirpath + "predictions.npy", outputs)
 
             # Compute overall evaluation metrics
             val_iterations = np.sum(local_eval_metrics_dict["eval_iterations"])

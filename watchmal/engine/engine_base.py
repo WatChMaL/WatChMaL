@@ -7,20 +7,11 @@ from hydra.utils import instantiate
 
 # torch imports
 import torch
-from torch import optim
-import torch.nn as nn
-import torch.nn.functional as F
 from torch.nn.parallel import DistributedDataParallel as DDP
 
 # generic imports
-from math import floor, ceil
 import numpy as np
-from numpy import savez
-import os
 from time import strftime, localtime, time
-import sys
-from sys import stdout
-import copy
 
 # WatChMaL imports
 from watchmal.dataset.data_utils import get_data_loader
@@ -141,7 +132,7 @@ class BaseEngine(ABC):
 
         Parameters:
             self should have attributes data, labels, model, criterion, softmax
-        
+
         Returns:
             dict containing loss, predicted labels, softmax, accuracy, and raw model outputs
         """
@@ -170,21 +161,21 @@ class BaseEngine(ABC):
 
     # ========================================================================
     # Training and evaluation loops
-    
+
     def train(self, train_config):
         """
         Train the model on the training set
 
         Args:
             train_config    ... config specigying training parameters
-        
+
         Parameters:
             self should have attributes model, data_loaders
-        
+
         Outputs:
             val_log      ... csv log containing iteration, epoch, loss, accuracy for each iteration on validation set
             train_logs   ... csv logs containing iteration, epoch, loss, accuracy for each iteration on training set
-            
+
         Returns: None
         """
         # initialize training params
@@ -203,7 +194,7 @@ class BaseEngine(ABC):
         self.model.train()
 
         # initialize epoch and iteration counters
-        self.epoch = 0.
+        self.epoch = 0
         self.iteration = 0
         self.step = 0
         # keep track of the validation loss
@@ -216,8 +207,6 @@ class BaseEngine(ABC):
         for self.epoch in range(epochs):
             if self.rank == 0:
                 print('Epoch', self.epoch+1, 'Starting @', strftime("%Y-%m-%d %H:%M:%S", localtime()))
-            
-            times = []
 
             start_time = time()
             iteration_time = start_time
@@ -230,11 +219,11 @@ class BaseEngine(ABC):
 
             # local training loop for batches in a single epoch
             for self.step, train_data in enumerate(train_loader):
-                
+
                 # run validation on given intervals
                 if self.iteration % val_interval == 0:
                     self.validate(val_iter, num_val_batches, checkpointing)
-                
+
                 # Train on batch
                 self.data = train_data['data']
                 self.labels = train_data['labels']
@@ -249,7 +238,7 @@ class BaseEngine(ABC):
                 # self.epoch += 1. / len(self.data_loaders["train"])
                 self.step += 1
                 self.iteration += 1
-                
+
                 # get relevant attributes of result for logging
                 train_metrics = {"iteration": self.iteration, "epoch": self.epoch, "loss": res["loss"], "accuracy": res["accuracy"]}
                 
@@ -257,12 +246,11 @@ class BaseEngine(ABC):
                 self.train_log.record(train_metrics)
                 self.train_log.write()
                 self.train_log.flush()
-                
+
                 # print the metrics at given intervals
                 if self.rank == 0 and self.iteration % report_interval == 0:
                     previous_iteration_time = iteration_time
                     iteration_time = time()
-
                     print("... Iteration %d ... Epoch %d ... Step %d/%d  ... Training Loss %1.3f ... Training Accuracy %1.3f ... Time Elapsed %1.3f ... Iteration Time %1.3f" %
                           (self.iteration, self.epoch+1, self.step, len(train_loader), res["loss"], res["accuracy"], iteration_time - start_time, iteration_time - previous_iteration_time))
 
@@ -341,16 +329,16 @@ class BaseEngine(ABC):
 
         Args:
             test_config ... hydra config specifying evaluation parameters
-        
+
         Parameters:
             self should have attributes model, data_loaders, dirpath
-        
+
         Outputs:
             indices     ... index in dataset of each event
             labels      ... actual label of each event
             predictions ... predicted label of each event
             softmax     ... softmax output over classes for each event
-            
+
         Returns: None
         """
         print("evaluating in directory: ", self.dirpath)
@@ -359,42 +347,56 @@ class BaseEngine(ABC):
         eval_loss = 0.0
         eval_acc = 0.0
         eval_iterations = 0
-        
+
         # Iterate over the validation set to calculate val_loss and val_acc
         with torch.no_grad():
-            
+
             # Set the model to evaluation mode
             self.model.eval()
-            
-            # Variables for the confusion matrix
-            loss, accuracy, indices, labels, predictions, softmaxes= [],[],[],[],[],[]
-            
+
+            # Variables for the outputs
+            # TODO: find some way of determining the softmax_shape without having to do a forward run
+            self.data = self.data_loaders["test"].dataset[0]['data']
+            self.labels = self.data_loaders["test"].dataset[0]['labels']
+            softmax_shape = self.forward(train=False)['softmax'].shape
+            indices = np.zeros((0,))
+            labels = np.zeros((0,))
+            predictions = np.zeros((0,))
+            softmaxes = np.zeros((0, *softmax_shape))
+
+            start_time = time()
+            iteration_time = start_time
+
             # Extract the event data and label from the DataLoader iterator
             for it, eval_data in enumerate(self.data_loaders["test"]):
-                
+
                 # load data
                 self.data = eval_data['data']
                 self.labels = eval_data['labels']
 
                 eval_indices = eval_data['indices']
-                
+
                 # Run the forward procedure and output the result
                 result = self.forward(train=False)
 
                 eval_loss += result['loss']
                 eval_acc  += result['accuracy']
-                
+
                 # Add the local result to the final result
-                indices.extend(eval_indices.numpy())
-                labels.extend(self.labels.numpy())
-                predictions.extend(result['predicted_labels'].detach().cpu().numpy())
-                softmaxes.extend(result["softmax"].detach().cpu().numpy())
-           
-                print("eval_iteration : " + str(it) + " eval_loss : " + str(result["loss"]) + " eval_accuracy : " + str(result["accuracy"]))
-            
+                indices = np.concatenate((indices, eval_indices))
+                labels = np.concatenate((labels, self.labels))
+                predictions = np.concatenate((predictions, result['predicted_labels'].detach().cpu().numpy()))
+                softmaxes = np.concatenate((softmaxes, result['softmax'].detach().cpu().numpy()))
+
                 eval_iterations += 1
-        
-        # convert arrays to torch tensors
+
+                # print the metrics at given intervals
+                if self.rank == 0 and it % test_config.report_interval == 0:
+                    previous_iteration_time = iteration_time
+                    iteration_time = time()
+                    print("... Iteration %d ... Evaluation Loss %1.3f ... Evaluation Accuracy %1.3f ... Time Elapsed %1.3f ... Iteration Time %1.3f" %
+                          (it, result['loss'], result['accuracy'], iteration_time - start_time, iteration_time - previous_iteration_time))
+
         print("loss : " + str(eval_loss/eval_iterations) + " accuracy : " + str(eval_acc/eval_iterations))
 
         iterations = np.array([eval_iterations])
@@ -402,38 +404,36 @@ class BaseEngine(ABC):
         accuracy = np.array([eval_acc])
 
         local_eval_metrics_dict = {"eval_iterations":iterations, "eval_loss":loss, "eval_acc":accuracy}
-        
+
         indices     = np.array(indices)
         labels      = np.array(labels)
         predictions = np.array(predictions)
         softmaxes   = np.array(softmaxes)
-        
+
         local_eval_results_dict = {"indices":indices, "labels":labels, "predictions":predictions, "softmaxes":softmaxes}
 
         if self.is_distributed:
             # Gather results from all processes
             global_eval_metrics_dict = self.get_synchronized_metrics(local_eval_metrics_dict)
             global_eval_results_dict = self.get_synchronized_metrics(local_eval_results_dict)
-            
+
             if self.rank == 0:
                 for name, tensor in zip(global_eval_metrics_dict.keys(), global_eval_metrics_dict.values()):
                     local_eval_metrics_dict[name] = np.array(tensor.cpu())
-                
-                indices     = np.array(global_eval_results_dict["indices"].cpu())
-                labels      = np.array(global_eval_results_dict["labels"].cpu())
-                predictions = np.array(global_eval_results_dict["predictions"].cpu())
-                softmaxes   = np.array(global_eval_results_dict["softmaxes"].cpu())
-        
+
+                indices     = global_eval_results_dict["indices"].cpu()
+                labels      = global_eval_results_dict["labels"].cpu()
+                predictions = global_eval_results_dict["predictions"].cpu()
+                softmaxes   = global_eval_results_dict["softmaxes"].cpu()
+
         if self.rank == 0:
-#            print("Sorting Outputs...")
-#            sorted_indices = np.argsort(indices)
 
             # Save overall evaluation results
             print("Saving Data...")
-            np.save(self.dirpath + "indices.npy", indices)#sorted_indices)
-            np.save(self.dirpath + "labels.npy", labels)#[sorted_indices])
-            np.save(self.dirpath + "predictions.npy", predictions)#[sorted_indices])
-            np.save(self.dirpath + "softmax.npy", softmaxes)#[sorted_indices])
+            np.save(self.dirpath + "indices.npy", indices)
+            np.save(self.dirpath + "labels.npy", labels)
+            np.save(self.dirpath + "predictions.npy", predictions)
+            np.save(self.dirpath + "softmax.npy", softmaxes)
 
             # Compute overall evaluation metrics
             val_iterations = np.sum(local_eval_metrics_dict["eval_iterations"])
