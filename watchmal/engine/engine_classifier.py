@@ -117,6 +117,7 @@ class ClassifierEngine(BaseEngine):
                 train_loader.sampler.set_epoch(self.epoch)
 
             # local training loop for batches in a single epoch
+            steps_per_epoch = len(train_loader)
             for self.step, train_data in enumerate(train_loader):
 
                 # run validation on given intervals
@@ -151,7 +152,7 @@ class ClassifierEngine(BaseEngine):
                     previous_iteration_time = iteration_time
                     iteration_time = time()
                     print("... Iteration %d ... Epoch %d ... Step %d/%d  ... Training Loss %1.3f ... Training Accuracy %1.3f ... Time Elapsed %1.3f ... Iteration Time %1.3f" %
-                          (self.iteration, self.epoch+1, self.step, len(train_loader), res["loss"], res["accuracy"], iteration_time - start_time, iteration_time - previous_iteration_time))
+                          (self.iteration, self.epoch + 1, self.step, steps_per_epoch, res["loss"], res["accuracy"], iteration_time - start_time, iteration_time - previous_iteration_time))
 
             if self.scheduler is not None:
                 self.scheduler.step()
@@ -267,6 +268,7 @@ class ClassifierEngine(BaseEngine):
             iteration_time = start_time
 
             # Extract the event data and label from the DataLoader iterator
+            steps_per_epoch = len(self.data_loaders["test"])
             for it, eval_data in enumerate(self.data_loaders["test"]):
 
                 # load data
@@ -293,23 +295,23 @@ class ClassifierEngine(BaseEngine):
                 if self.rank == 0 and it % test_config.report_interval == 0:
                     previous_iteration_time = iteration_time
                     iteration_time = time()
-                    print("... Iteration %d ... Evaluation Loss %1.3f ... Evaluation Accuracy %1.3f ... Time Elapsed %1.3f ... Iteration Time %1.3f" %
-                          (it, result['loss'], result['accuracy'], iteration_time - start_time, iteration_time - previous_iteration_time))
+                    print("... Iteration %d / %d ... Evaluation Loss %1.3f ... Evaluation Accuracy %1.3f ... Time Elapsed %1.3f ... Iteration Time %1.3f" %
+                          (it, steps_per_epoch, result['loss'], result['accuracy'], iteration_time - start_time, iteration_time - previous_iteration_time))
 
-        print("loss : " + str(eval_loss/eval_iterations) + " accuracy : " + str(eval_acc/eval_iterations))
+        print("loss : " + str(eval_loss / eval_iterations) + " accuracy : " + str(eval_acc/eval_iterations))
 
         iterations = np.array([eval_iterations])
         loss = np.array([eval_loss])
         accuracy = np.array([eval_acc])
 
-        local_eval_metrics_dict = {"eval_iterations":iterations, "eval_loss":loss, "eval_acc":accuracy}
+        local_eval_metrics_dict = {"eval_iterations": iterations, "eval_loss": loss, "eval_acc": accuracy}
 
         indices     = np.array(indices)
         labels      = np.array(labels)
         predictions = np.array(predictions)
         softmaxes   = np.array(softmaxes)
 
-        local_eval_results_dict = {"indices":indices, "labels":labels, "predictions":predictions, "softmaxes":softmaxes}
+        local_eval_results_dict = {"indices": indices, "labels": labels, "predictions": predictions, "softmaxes": softmaxes}
 
         if self.is_distributed:
             # Gather results from all processes
@@ -339,5 +341,5 @@ class ClassifierEngine(BaseEngine):
             val_loss = np.sum(local_eval_metrics_dict["eval_loss"])
             val_acc = np.sum(local_eval_metrics_dict["eval_acc"])
 
-            print("\nAvg eval loss : " + str(val_loss/val_iterations),
-                  "\nAvg eval acc : "  + str(val_acc/val_iterations))
+            print("\nAvg eval loss : " + str(val_loss / val_iterations),
+                  "\nAvg eval acc : "  + str(val_acc / val_iterations))

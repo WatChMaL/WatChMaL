@@ -28,8 +28,6 @@ class RegressionEngine(BaseEngine):
         self.output_type = output_type
         self.output_center = output_center
         self.output_scale = output_scale
-        #self.output_center = torch.tensor(output_center).to(self.device)
-        #self.output_scale = torch.tensor(output_scale).to(self.device)
 
         self.target = None
 
@@ -77,10 +75,10 @@ class RegressionEngine(BaseEngine):
         Train the model on the training set
 
         Args:
-            train_config    ... config specigying training parameters
+            train_config    ... config specifying training parameters
 
         Parameters:
-            self should have attributes model, data_loaders
+            self should have attributes model, output_type, data_loaders
 
         Outputs:
             val_log      ... csv log containing iteration, epoch, loss, accuracy for each iteration on validation set
@@ -128,6 +126,7 @@ class RegressionEngine(BaseEngine):
                 train_loader.sampler.set_epoch(self.epoch)
 
             # local training loop for batches in a single epoch
+            steps_per_epoch = len(train_loader)
             for self.step, train_data in enumerate(train_loader):
 
                 # run validation on given intervals
@@ -162,12 +161,12 @@ class RegressionEngine(BaseEngine):
                     previous_iteration_time = iteration_time
                     iteration_time = time()
                     print("... Iteration %d ... Epoch %d ... Step %d/%d  ... Training Loss %1.3f ... Time Elapsed %1.3f ... Iteration Time %1.3f" %
-                          (self.iteration, self.epoch+1, self.step, len(train_loader), res["loss"], iteration_time - start_time, iteration_time - previous_iteration_time))
+                          (self.iteration, self.epoch + 1, self.step, steps_per_epoch, res["loss"], iteration_time - start_time, iteration_time - previous_iteration_time))
 
             if self.scheduler is not None:
                 self.scheduler.step()
 
-            if self.rank == 0 and (save_interval is not None) and ((self.epoch+1)%save_interval == 0):
+            if self.rank == 0 and (save_interval is not None) and ((self.epoch+1) % save_interval == 0):
                 self.save_state(name=f'_epoch_{self.epoch+1}')
 
         self.train_log.close()
@@ -177,7 +176,7 @@ class RegressionEngine(BaseEngine):
     def validate(self, val_iter, num_val_batches, checkpointing):
         # set model to eval mode
         self.model.eval()
-        val_metrics = {"iteration": self.iteration, "epoch": self.epoch, "loss": 0., "saved_best": 0}
+        val_metrics = {"iteration": self.iteration, "loss": 0., "saved_best": 0}
         for val_batch in range(num_val_batches):
             try:
                 val_data = next(val_iter)
@@ -238,13 +237,12 @@ class RegressionEngine(BaseEngine):
             test_config ... hydra config specifying evaluation parameters
 
         Parameters:
-            self should have attributes model, data_loaders, dirpath
+            self should have attributes model, output_type, data_loaders, dirpath
 
         Outputs:
             indices     ... index in dataset of each event
-            labels      ... actual label of each event
-            predictions ... predicted label of each event
-            softmax     ... softmax output over classes for each event
+            target      ... true quantity to reconstruct for each event
+            predictions ... predicted quantity of each event
 
         Returns: None
         """
@@ -270,6 +268,7 @@ class RegressionEngine(BaseEngine):
             iteration_time = start_time
 
             # Extract the event data and label from the DataLoader iterator
+            steps_per_epoch = len(self.data_loaders["test"])
             for it, eval_data in enumerate(self.data_loaders["test"]):
 
                 # load data
@@ -295,8 +294,8 @@ class RegressionEngine(BaseEngine):
                 if self.rank == 0 and it % test_config.report_interval == 0:
                     previous_iteration_time = iteration_time
                     iteration_time = time()
-                    print("... Iteration %d ... Evaluation Loss %1.3f ... Time Elapsed %1.3f ... Iteration Time %1.3f" %
-                          (it, result['loss'], iteration_time - start_time, iteration_time - previous_iteration_time))
+                    print("... Iteration %d / %d ... Evaluation Loss %1.3f ... Time Elapsed %1.3f ... Iteration Time %1.3f" %
+                          (it, steps_per_epoch, result['loss'], iteration_time - start_time, iteration_time - previous_iteration_time))
 
         print("loss : " + str(eval_loss / eval_iterations))
 
@@ -320,9 +319,9 @@ class RegressionEngine(BaseEngine):
                 for name, tensor in zip(global_eval_metrics_dict.keys(), global_eval_metrics_dict.values()):
                     local_eval_metrics_dict[name] = np.array(tensor.cpu())
 
-                indices   = global_eval_results_dict["indices"].cpu()
-                targets  = global_eval_results_dict["targets"].cpu()
-                outputs   = global_eval_results_dict["outputs"].cpu()
+                indices = global_eval_results_dict["indices"].cpu()
+                targets = global_eval_results_dict["targets"].cpu()
+                outputs = global_eval_results_dict["outputs"].cpu()
 
         if self.rank == 0:
 

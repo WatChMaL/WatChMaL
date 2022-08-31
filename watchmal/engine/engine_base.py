@@ -218,6 +218,7 @@ class BaseEngine(ABC):
                 train_loader.sampler.set_epoch(self.epoch)
 
             # local training loop for batches in a single epoch
+            steps_per_epoch = len(train_loader)
             for self.step, train_data in enumerate(train_loader):
 
                 # run validation on given intervals
@@ -252,7 +253,7 @@ class BaseEngine(ABC):
                     previous_iteration_time = iteration_time
                     iteration_time = time()
                     print("... Iteration %d ... Epoch %d ... Step %d/%d  ... Training Loss %1.3f ... Training Accuracy %1.3f ... Time Elapsed %1.3f ... Iteration Time %1.3f" %
-                          (self.iteration, self.epoch+1, self.step, len(train_loader), res["loss"], res["accuracy"], iteration_time - start_time, iteration_time - previous_iteration_time))
+                          (self.iteration, self.epoch + 1, self.step, steps_per_epoch, res["loss"], res["accuracy"], iteration_time - start_time, iteration_time - previous_iteration_time))
 
             if self.scheduler is not None:
                 self.scheduler.step()
@@ -356,9 +357,9 @@ class BaseEngine(ABC):
 
             # Variables for the outputs
             # TODO: find some way of determining the softmax_shape without having to do a forward run
-            self.data = self.data_loaders["test"].dataset[0]['data']
-            self.labels = self.data_loaders["test"].dataset[0]['labels']
-            softmax_shape = self.forward(train=False)['softmax'].shape
+            self.data = next(iter(self.data_loaders["test"]))['data']
+            self.labels = next(iter(self.data_loaders["test"].dataset))['labels']
+            softmax_shape = self.forward(train=False)['softmax'][0].shape
             indices = np.zeros((0,))
             labels = np.zeros((0,))
             predictions = np.zeros((0,))
@@ -368,6 +369,7 @@ class BaseEngine(ABC):
             iteration_time = start_time
 
             # Extract the event data and label from the DataLoader iterator
+            steps_per_epoch = len(self.data_loaders["test"])
             for it, eval_data in enumerate(self.data_loaders["test"]):
 
                 # load data
@@ -394,8 +396,8 @@ class BaseEngine(ABC):
                 if self.rank == 0 and it % test_config.report_interval == 0:
                     previous_iteration_time = iteration_time
                     iteration_time = time()
-                    print("... Iteration %d ... Evaluation Loss %1.3f ... Evaluation Accuracy %1.3f ... Time Elapsed %1.3f ... Iteration Time %1.3f" %
-                          (it, result['loss'], result['accuracy'], iteration_time - start_time, iteration_time - previous_iteration_time))
+                    print("... Iteration %d / %d ... Evaluation Loss %1.3f ... Evaluation Accuracy %1.3f ... Time Elapsed %1.3f ... Iteration Time %1.3f" %
+                          (it, steps_per_epoch, result['loss'], result['accuracy'], iteration_time - start_time, iteration_time - previous_iteration_time))
 
         print("loss : " + str(eval_loss/eval_iterations) + " accuracy : " + str(eval_acc/eval_iterations))
 
