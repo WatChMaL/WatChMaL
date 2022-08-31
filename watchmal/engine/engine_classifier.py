@@ -72,14 +72,14 @@ class ClassifierEngine:
         self.optimizer = None
         self.scheduler = None
     
-    def configure_optimizers(self, optimizer):
+    def configure_optimizers(self, settings):
         """
         Set up optimizers from optimizer config
 
         Args:
             optimizer_config    ... hydra config specifying optimizer object
         """
-        self.optimizer = optimizer(params=self.model_accs.parameters(), lr=0.001)
+        self.optimizer = settings.optimizer_engine(params=self.model_accs.parameters(), lr=settings.lr)
 
   
     def configure_scheduler(self, scheduler_config):
