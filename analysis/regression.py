@@ -189,7 +189,7 @@ def get_resolutions(runs, quantity, selection=...):
     list of float
         List of resolution of quantity of each run.
     """
-    return [np.quantile(np.abs(r[quantity][selection], 0.68)) for r in runs]
+    return [np.quantile(np.abs(r[quantity][selection]), 0.68) for r in runs]
 
 
 def get_means(runs, quantity, selection=...):
