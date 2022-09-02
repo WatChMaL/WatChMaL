@@ -1,6 +1,7 @@
 import numpy as np
 import analysis.utils.binning as bins
 import matplotlib.pyplot as plt
+import tabulate
 
 
 def get_predictions(run_directory, indices=None):
@@ -167,3 +168,108 @@ def plot_binned_resolution(values, ax, binning, selection=..., errors=False, xer
     else:
         plot_args.setdefault('marker', 'o')
         ax.plot(x, y, **plot_args)
+
+
+def get_resolutions(runs, quantity, selection=...):
+    """
+    Return a list of resolutions (68th percentile) of values as some quantity in each run.
+
+    Parameters
+    ----------
+    runs: dict
+        Dictionary of run results, with the key "quantity" giving an array-like of values to be used and the key "args"
+        containing a dictionary of arguments including "label" to label the run.
+    quantity: str
+        Key in `runs` that contains the quantities whose resolutions would be calculated.
+    selection: indexing expression, optional
+        Selection of the values to use in calculating the resolutions (by default use all values).
+
+    Returns
+    -------
+    list of float
+        List of resolution of quantity of each run.
+    """
+    return [np.quantile(np.abs(r[quantity][selection], 0.68)) for r in runs]
+
+
+def get_means(runs, quantity, selection=...):
+    """
+    Return a list of means of values as some quantity in each run.
+
+    Parameters
+    ----------
+    runs: dict
+        Dictionary of run results, with the key "quantity" giving an array-like of values to be used and the key "args"
+        containing a dictionary of arguments including "label" to label the run.
+    quantity: str
+        Key in `runs` that contains the quantities whose means would be calculated.
+    selection: indexing expression, optional
+        Selection of the values to use in calculating the means (by default use all values).
+
+    Returns
+    -------
+    list of float
+        List of mean quantity of each run.
+    """
+    return [np.mean(r[quantity][selection]) for r in runs]
+
+
+def tabulate_statistics(runs, quantities, labels, selection=..., statistic="resolution", transpose=False,
+                        **tabulate_args):
+    """
+    Return a table of summary statistics of quantities of runs.
+
+    Parameters
+    ----------
+    runs: dict
+        Dictionary of run results, with the key "quantity" giving an array-like of values to be used and the key "args"
+        containing a dictionary of arguments including "label" to label the run.
+    quantities: str or list of str
+        Key in `runs` that contains the quantities whose statistics would be calculated, or list of keys.
+    labels: str or list of str
+        Label for the quantities / statistics being calulated, or list of labels the same length as `quantities`.
+    selection:
+        Selection of the values to use in calculating the summary statistics (by default use all values).
+    statistic: {callable, 'resolution', 'mean'} or list of {callable, 'resolution', 'mean'}
+        The summary statistic to apply to the quantity. If callable, should be a function that takes the array_like of
+        values and returns the summary statistic. If `resolution` (default) use the 68th percentile. If `mean` use the
+        mean. If a list, should be the same length as `quantities` to specify the summary statistic of each quantity.
+    transpose: bool
+        If True, table rows correspond to each run and columns correspond to each quantity summary statistic. Otherwise
+        (default) rows correspond to summary statistics and columns correspond to runs.
+    tabulate_args: optional
+        Additional named arguments to pass to `tabulate.tabulate`. By defualt, set table format to `html` and float
+        format to `.2f`.
+    Returns
+    -------
+    str
+        String representing the tabulated data
+    """
+    tabulate_args.setdefault('tablefmt', 'html')
+    tabulate_args.setdefault('floatfmt', '.2f')
+    if isinstance(quantities, str):
+        quantities = [quantities]
+    if isinstance(labels, str):
+        labels = [labels]
+    statistic_map = {
+        "resolution": get_resolutions,
+        "mean": get_means,
+    }
+    if callable(statistic):
+        functions = [lambda rs, q, sel: [statistic(r[q][sel]) for r in rs]] * len(quantities)
+    elif isinstance(statistic, str):
+        functions = [statistic_map[statistic]]*len(quantities)
+    else:
+        functions = [(lambda rs, q, sel: [s(r[q][sel]) for r in rs]) if callable(s)
+                     else statistic_map[s]
+                     for s in statistic]
+    data = []
+    for f, q in zip(functions, quantities):
+        data.append(f(runs, q, selection))
+    if transpose:
+        list(zip(*data))
+        headers = labels
+        labels = [r['args']['label'] for r in runs]
+    else:
+        headers = [r['args']['label'] for r in runs]
+    return tabulate.tabulate(data, headers=headers, showindex=labels, **tabulate_args)
