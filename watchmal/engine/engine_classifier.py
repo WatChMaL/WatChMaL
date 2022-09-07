@@ -338,7 +338,6 @@ class ClassifierEngine:
 
             val_metrics["loss"] = global_val_loss
             val_metrics["accuracy"] = global_val_accuracy
-            print(global_val_accuracy)
             val_metrics["epoch"] = self.epoch
 
             if val_metrics["loss"] < self.best_validation_loss:
