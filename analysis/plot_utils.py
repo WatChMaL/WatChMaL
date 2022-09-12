@@ -167,7 +167,7 @@ def disp_learn_hist_smoothed(location, losslim=None, window_train=400, window_va
 
     labels = [l.get_label() for l in lines]
     
-    leg    = ax2.legend(lines, labels, fontsize=16, loc=5, numpoints=1)
+    leg    = ax2.legend(lines, labels, fontsize=16, loc='best', numpoints=1)
     leg_frame = leg.get_frame()
     leg_frame.set_facecolor('white')
 
