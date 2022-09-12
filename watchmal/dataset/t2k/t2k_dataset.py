@@ -15,7 +15,7 @@ import WatChMaL.watchmal.dataset.data_utils as du
 
 class PointNetT2KDataset(H5Dataset):
 
-    def __init__(self, h5file, is_distributed, use_positions=True, use_times=True, use_orientations=False, n_points=2500, transforms=None):
+    def __init__(self, h5file, is_distributed=False, use_positions=True, use_times=True, use_orientations=False, n_points=2500, transforms=None):
         super().__init__(h5file, is_distributed)
         #geo_file = np.load(geometry_file, 'r')
         #self.geo_positions = geo_file["position"].astype(np.float32)
@@ -61,7 +61,7 @@ class PointNetT2KDataset(H5Dataset):
         return data_dict
 
 class T2KCNNDataset(H5Dataset):
-    def __init__(self, h5file, pmt_positions_file, is_distributed, use_times=True, use_charges=True, transforms=None, collapse_arrays=False):
+    def __init__(self, h5file, pmt_positions_file, is_distributed=False, use_times=True, use_charges=True, transforms=None, collapse_arrays=False):
         """
         Args:
             h5_path             ... path to h5 dataset file

@@ -79,7 +79,7 @@ class ClassifierEngine:
         Args:
             optimizer_config    ... hydra config specifying optimizer object
         """
-        self.optimizer = settings.optimizer_engine(params=self.model_accs.parameters(), lr=settings.lr)
+        self.optimizer = settings.optimizer_engine(params=self.model_accs.parameters(), lr=settings.lr, weight_decay=settings.weightDecay)
 
   
     def configure_scheduler(self, scheduler_config):
@@ -108,9 +108,9 @@ class ClassifierEngine:
         """
 
         #for name, loader_config in loaders_config.items():
-        self.data_loaders['train'] = get_data_loader(settings, **data_config, **loaders_config, indices=train_indices, is_distributed=is_distributed, seed=seed)
-        self.data_loaders['validation'] = get_data_loader(settings, **data_config, **loaders_config, indices = test_indices, is_distributed=is_distributed, seed=seed)
-        self.data_loaders['test'] = get_data_loader(settings, **data_config, **loaders_config, indices = val_indices, is_distributed=is_distributed, seed=seed)
+        self.data_loaders['train'] = get_data_loader(settings, **data_config, **loaders_config, indices=train_indices, seed=seed)
+        self.data_loaders['validation'] = get_data_loader(settings, **data_config, **loaders_config, indices = test_indices, seed=seed)
+        self.data_loaders['test'] = get_data_loader(settings, **data_config, **loaders_config, indices = val_indices, seed=seed)
     
     def get_synchronized_metrics(self, metric_dict):
         """
@@ -131,7 +131,7 @@ class ClassifierEngine:
         
         return global_metric_dict
 
-    def forward(self, train=True):
+    def forward(self, settings, train=True):
         """
         Compute predictions and metrics for a batch of data
 
@@ -148,6 +148,7 @@ class ClassifierEngine:
             # Move the data and the labels to the GPU (if using CPU this has no effect)
             data = self.data.to(self.device)
             labels = self.labels.to(self.device)
+            labels = labels
 
             model_out = self.model(data)
             
@@ -209,8 +210,6 @@ class ClassifierEngine:
             print(f"Training... Validation Interval: {val_interval}")
 
         # set model to training mode
-        if settings.restoreBestState:
-            self.restore_best_state("")
         self.model.train()
 
         # initialize epoch and iteration counters
@@ -222,6 +221,9 @@ class ClassifierEngine:
 
         # initialize the iterator over the validation set
         val_iter = iter(self.data_loaders["validation"])
+
+        if settings.restoreBestState:
+            self.restore_best_state("")
 
         # global training loop for multiple epochs
         for self.epoch in range(epochs):
@@ -237,21 +239,22 @@ class ClassifierEngine:
             self.step = 0
             # update seeding for distributed samplers
             if self.is_distributed:
-                train_loader.sampler.set_epoch(self.epoch)
+                pass
+                #train_loader.sampler.set_epoch(self.epoch)
 
             # local training loop for batches in a single epoch 
             for self.step, train_data in enumerate(train_loader):
                 
                 # run validation on given intervals
                 if self.iteration % val_interval == 0:
-                    self.validate(val_iter, num_val_batches, checkpointing)
+                    self.validate(settings, val_iter, num_val_batches, checkpointing)
                 
                 # Train on batch
                 self.data = train_data['data']
-                self.labels = train_data['labels']
+                self.labels = (train_data['labels']-settings.minLabel)
 
                 # Call forward: make a prediction & measure the average error using data = self.data
-                res = self.forward(True)
+                res = self.forward(settings, True)
 
                 #Call backward: backpropagate error and update weights using loss = self.loss
                 self.backward()
@@ -273,14 +276,9 @@ class ClassifierEngine:
                 if self.rank == 0 and self.iteration % report_interval == 0:
                     previous_iteration_time = iteration_time
                     iteration_time = time()
-                    unique, unique_counts = np.unique(self.labels, return_counts=True)
 
                     print("... Iteration %d ... Epoch %d ... Step %d/%d  ... Training Loss %1.3f ... Training Accuracy %1.3f ... Time Elapsed %1.3f ... Iteration Time %1.3f" %
                           (self.iteration, self.epoch+1, self.step, len(train_loader), res["loss"], res["accuracy"], iteration_time - start_time, iteration_time - previous_iteration_time))
-                    print("Unique Labels")
-                    print(unique)
-                    print("Unique Label Counts")
-                    print(unique_counts)
             
             if self.scheduler is not None:
                 self.scheduler.step()
@@ -291,12 +289,12 @@ class ClassifierEngine:
         self.train_log.close()
         if self.rank == 0:
             self.val_log.close()
-        self.evaluate("")
+        self.evaluate(settings,"")
 
 
 
 
-    def validate(self, val_iter, num_val_batches, checkpointing):
+    def validate(self, settings, val_iter, num_val_batches, checkpointing):
         # set model to eval mode
         self.model.eval()
         val_metrics = {"iteration": self.iteration, "loss": 0., "accuracy": 0., "saved_best": 0}
@@ -311,9 +309,9 @@ class ClassifierEngine:
 
             # extract the event data from the input data tuple
             self.data = val_data['data']
-            self.labels = val_data['labels']
+            self.labels = (val_data['labels']-settings.minLabel)
 
-            val_res = self.forward(False)
+            val_res = self.forward(settings, False)
 
             val_metrics["loss"] += val_res["loss"]
             val_metrics["accuracy"] += val_res["accuracy"]
@@ -340,6 +338,9 @@ class ClassifierEngine:
             val_metrics["accuracy"] = global_val_accuracy
             val_metrics["epoch"] = self.epoch
 
+            print("Evaluation  ... Loss %1.3f ... Accuracy %1.3f" %
+                    (val_metrics["loss"], val_metrics["accuracy"])) 
+
             if val_metrics["loss"] < self.best_validation_loss:
                 self.best_validation_loss = val_metrics["loss"]
                 best_validation_accuracy = val_metrics["accuracy"]
@@ -356,7 +357,7 @@ class ClassifierEngine:
             self.val_log.write()
             self.val_log.flush()
 
-    def evaluate(self, test_config):
+    def evaluate(self, settings, test_config):
         """
         Evaluate the performance of the trained model on the test set
 
@@ -375,6 +376,8 @@ class ClassifierEngine:
         Returns: None
         """
         print("evaluating in directory: ", self.dirpath)
+        print("Restoring Best State for Evaluation")
+        self.restore_best_state("")
 
         
         # Variables to output at the end
@@ -396,12 +399,12 @@ class ClassifierEngine:
                 
                 # load data
                 self.data = eval_data['data']
-                self.labels = eval_data['labels']
+                self.labels = (eval_data['labels']-settings.minLabel)
 
                 eval_indices = eval_data['indices']
                 
                 # Run the forward procedure and output the result
-                result = self.forward(train=False)
+                result = self.forward(settings, train=False)
 
                 eval_loss += result['loss']
                 eval_acc  += result['accuracy']
