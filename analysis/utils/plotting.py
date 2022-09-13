@@ -26,7 +26,7 @@ def plot_training_progression(train_epoch, train_loss, val_epoch, val_loss, val_
     ax.plot(train_epoch, train_loss, lw=2, label='Train loss', color='b', alpha=0.3)
     ax.plot(val_epoch, val_loss, lw=2, label='Validation loss', color='b')
     if val_best is not None:
-        ax.plot(val_epoch[val_best], val_loss[val_best], lw=0, marker='o', label='Best validation accuracy',
+        ax.plot(val_epoch[val_best], val_loss[val_best], lw=0, marker='o', label='Best validation loss',
                  color='darkblue')
     if y_lim is not None:
         ax.set_ylim(y_lim)

@@ -3,8 +3,10 @@ import analysis.utils.binning as bins
 import analysis.utils.plotting as plot
 import matplotlib.pyplot as plt
 from sklearn import metrics
-import glob
 import tabulate
+import glob
+from omegaconf import OmegaConf
+from os.path import dirname
 
 
 def get_softmaxes(run_directory, indices=None):
@@ -297,22 +299,23 @@ def plot_efficiency_profile(runs, cut, binning, selection=..., fig_size=None, x_
 
 
 def load_training_log(run_directory):
+    train_files = glob.glob(run_directory+"/outputs/log_train*.csv")
+    if not train_files: # search for a previous training run with a saved state that was loaded
+        conf = OmegaConf.load(run_directory+'/.hydra/config.yaml')
+        state_file = conf.tasks.restore_state.weight_file
+        run_directory = dirname(dirname(state_file))
+    log_train = np.array([np.genfromtxt(f, delimiter=',', skip_header=1) for f in train_files])
+    train_iteration = log_train[0, :, 0]
+    train_epoch = log_train[0, :, 1]
+    it_per_epoch = np.min(train_iteration[train_epoch == 1]) - 1
+    train_epoch = train_iteration / it_per_epoch
+    train_loss = np.mean(log_train[:, :, 2], axis=0)
+    train_accuracy = np.mean(log_train[:, :, 3], axis=0)
     log_val = np.genfromtxt(run_directory+"/outputs/log_val.csv", delimiter=',',skip_header=1)
-    val_iteration = log_val[:, 0]
+    val_epoch = log_val[:, 0] / it_per_epoch
     val_loss = log_val[:, 1]
     val_accuracy = log_val[:, 2]
     val_best = log_val[:, 3].astype(bool)
-    log_train = np.array([
-        np.genfromtxt(f, delimiter=',', skip_header=1)
-        for f in glob.glob(run_directory+"/outputs/log_train*.csv")
-    ])
-    train_iteration = log_train[0, :, 0]
-    train_epoch = log_train[0, :, 1]
-    train_loss = np.mean(log_train[:, :, 2], axis=0)
-    train_accuracy = np.mean(log_train[:, :, 3], axis=0)
-    it_per_epoch = np.min(train_iteration[train_epoch == 1]) - 1
-    train_epoch = train_iteration / it_per_epoch
-    val_epoch = val_iteration / it_per_epoch
     return train_epoch, train_loss, train_accuracy, val_epoch, val_loss, val_accuracy, val_best
 
 
