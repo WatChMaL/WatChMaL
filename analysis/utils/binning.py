@@ -44,7 +44,7 @@ def get_binning(x, bins=None, minimum=None, maximum=None, width=None):
 
 def apply_binning(values, binning, selection=...):
     """
-    This function bins values according to the incides returned by `get_binning`. Returns a list of arrays where the nth
+    This function bins values according to the indices returned by `get_binning`. Returns a list of arrays where the nth
     array contains the values assigned to the nth bin.
 
     Parameters
@@ -69,6 +69,35 @@ def apply_binning(values, binning, selection=...):
     return [data[data_bins == b] for b in range(1, binning[0].size)]
 
 
+def unapply_binning(binned_values, binning, selection=...):
+    """
+    Reverses the effect of `apply_binning`. Takes a list of arrays corresponding to values assigned to bins and returns
+    a single array of values ordered as they were before they were binned.
+
+    Parameters
+    ----------
+    binned_values: list of ndarrays
+        Binned values returned by `apply_binning`
+
+    binning: (ndarray, ndarray)
+        Array of bin edges and array of bin indices, returned from `get_binning`
+
+    selection: index expression, optional
+        If provided, the returned array will match the original length before the selection of `apply_binning` was
+        applied. The missing entries that do not exist in `binned_values` due to not passing the selection are filled
+        with zeros.
+
+    Returns
+    -------
+    list of ndarray
+        List of arrays of values assigned to each bin
+    """
+    data = np.zeros(binning[1].shape)
+    data_bins = binning[1][selection]
+    for b, v in enumerate(binned_values):
+        data[selection][data_bins == b+1] = v
+
+
 def binned_resolutions(binned_residuals):
     """
     Calculate resolution defined as 68th percentile of the absolute residuals for each of a list of arrays of residuals
@@ -84,6 +113,68 @@ def binned_resolutions(binned_residuals):
         array of resolutions of the bins' residuals
     """
     return np.array([np.quantile(np.abs(x), 0.68) for x in binned_residuals])
+
+
+def binned_quantiles(binned_values, quantile):
+    """
+    Calculate quantiles of the values for each of a list of arrays of values
+
+    Parameters
+    ----------
+    binned_values: list of array_like
+        list of arrays of float values in each bin
+    quantile: float
+        quantile value to find in each bin
+
+    Returns
+    -------
+    ndarray
+        array of quantiles of the bins' values
+    """
+    return np.array([np.quantile(x, quantile) for x in binned_values])
+
+
+def binned_mean(binned_values):
+    """
+    Calculate mean of the values for each of a list of arrays of values
+
+    Parameters
+    ----------
+    binned_values: list of array_like
+        list of arrays of values in each bin
+
+    Returns
+    -------
+    ndarray
+        array of means of the bins' values
+    """
+    return np.array([np.mean(x) for x in binned_values])
+
+
+def binned_efficiencies(binned_cut, return_errors=True):
+    """
+    Calculate proportion of true values (and binomial errors) in each arrays of booleans in a list
+
+    Parameters
+    ----------
+    binned_cut: list of array_like
+        list of arrays of booleans in each bin
+    return_errors: bool
+        if True, return array of each list of booleans' binomial standard error
+
+    Returns
+    -------
+    efficiencies: ndarray
+        array of proportion of true values in each bin
+    errors: ndarray
+        array of binomial standard errors
+    """
+    efficiencies = binned_mean(binned_cut)
+    if not return_errors:
+        return efficiencies
+    else:
+        errors = binned_binomial_errors(binned_cut)
+        return efficiencies, errors
 
 
 def binned_std_errors(binned_residuals):
