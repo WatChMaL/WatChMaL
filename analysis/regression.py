@@ -31,7 +31,7 @@ def get_predictions(run_directory, indices=None):
     return sorted_predictions.squeeze()
 
 
-def plot_histograms(runs, quantity, selection=..., figsize=None, xlabel="", ylabel="", legend='best', **hist_args):
+def plot_histograms(runs, quantity, selection=..., fig_size=None, x_label="", y_label="", legend='best', **hist_args):
     """
     Plot overlaid histograms of results from a number of regression runs
 
@@ -44,11 +44,11 @@ def plot_histograms(runs, quantity, selection=..., figsize=None, xlabel="", ylab
         Key in `runs` that contains the quantities to be histogrammed
     selection: indexing expression, optional
         Selection of the values to be histogrammed (by default use all values).
-    figsize: (float, float), optional
+    fig_size: (float, float), optional
         Figure size.
-    xlabel: str, optional
+    x_label: str, optional
         Label of the x-axis.
-    ylabel: str, optional
+    y_label: str, optional
         Label of the y-axis.
     legend: str or None, optional
         Position of the legend, or None to have no legend. Attempts to find the best position by default.
@@ -65,20 +65,20 @@ def plot_histograms(runs, quantity, selection=..., figsize=None, xlabel="", ylab
     hist_args.setdefault('density', True)
     hist_args.setdefault('histtype', 'step')
     hist_args.setdefault('lw', 2)
-    fig, ax = plt.subplots(figsize=figsize)
+    fig, ax = plt.subplots(figsize=fig_size)
     for r in runs:
         data = r[quantity][selection].flatten()
         args = {**hist_args, **r['args']}
         ax.hist(data, **args)
-    ax.set_xlabel(xlabel)
-    ax.set_ylabel(ylabel)
+    ax.set_xlabel(x_label)
+    ax.set_ylabel(y_label)
     if legend:
         ax.legend(loc=legend)
     return fig, ax
 
 
-def plot_resolution_profile(runs, quantity, binning, selection=..., figsize=None, xlabel="", ylabel="", legend='best',
-                            ylim=None, **plot_args):
+def plot_resolution_profile(runs, quantity, binning, selection=..., fig_size=None, x_label="", y_label="",
+                            legend='best', y_lim=None, **plot_args):
     """
     Plot binned resolutions for results from a number of regression runs.
     The quantity being used from each run should correspond to residuals and these residuals are divided up into bins of
@@ -97,15 +97,15 @@ def plot_resolution_profile(runs, quantity, binning, selection=..., figsize=None
         Array of bin edges and array of bin indices, returned from `analysis.utils.binning.get_binning`.
     selection: indexing expression, optional
         Selection of the values to use in calculating the resolutions (by default use all values).
-    figsize: (float, float), optional
+    fig_size: (float, float), optional
         Figure size.
-    xlabel: str, optional
+    x_label: str, optional
         Label of the x-axis.
-    ylabel: str, optional
+    y_label: str, optional
         Label of the y-axis.
     legend: str or None, optional
         Position of the legend, or None to have no legend. Attempts to find the best position by default.
-    ylim: (float, float), optional
+    y_lim: (float, float), optional
         Limits of the y-axis.
     plot_args: optional
         Additional arguments to pass to the plotting function. Note that these may be overridden by arguments
@@ -116,20 +116,20 @@ def plot_resolution_profile(runs, quantity, binning, selection=..., figsize=None
     fig: Figure
     ax: axes.Axes
     """
-    fig, ax = plt.subplots(figsize=figsize)
+    fig, ax = plt.subplots(figsize=fig_size)
     for r in runs:
         args = {**plot_args, **r['args']}
         plot_binned_resolution(r[quantity], ax, binning, selection, **args)
-    ax.set_xlabel(xlabel)
-    ax.set_ylabel(ylabel)
+    ax.set_xlabel(x_label)
+    ax.set_ylabel(y_label)
     if legend:
         ax.legend(loc=legend)
-    if ylim is not None:
-        ax.set_ylim(ylim)
+    if y_lim is not None:
+        ax.set_ylim(y_lim)
     return fig, ax
 
 
-def plot_binned_resolution(values, ax, binning, selection=..., errors=False, xerrors=True, **plot_args):
+def plot_binned_resolution(values, ax, binning, selection=..., errors=False, x_errors=True, **plot_args):
     """
     Plot binned resolutions of the results of a regression run on an existing set of axes. The values should correspond
     to residuals, and the set of residuals are divided up into bins of some quantity according to `binning`, before
@@ -139,7 +139,7 @@ def plot_binned_resolution(values, ax, binning, selection=..., errors=False, xer
     Parameters
     ----------
     values: array_like
-        Array of residuals to be binned and the.
+        Array of residuals to be binned and their corresponding resolutions plotted.
     ax: axes.Axes
         Axes to draw the plot.
     binning: (ndarray, ndarray)
@@ -148,7 +148,7 @@ def plot_binned_resolution(values, ax, binning, selection=..., errors=False, xer
         Selection of the values to use in calculating the resolutions (by default use all values).
     errors: bool, optional
         If True, plot error bars calculated as the standard deviation divided by sqrt(N) of the N values in the bin.
-    xerrors: bool, optional
+    x_errors: bool, optional
         If True, plot horizontal error bars corresponding to the width of the bin, only if `errors` is also True.
     plot_args: optional
         Additional arguments to pass to the plotting function. Note that these may be overridden by arguments
@@ -159,12 +159,12 @@ def plot_binned_resolution(values, ax, binning, selection=..., errors=False, xer
     y = bins.binned_resolutions(binned_values)
     x = bins.bin_centres(binning[0])
     if errors:
-        yerr = bins.binned_std_errors(binned_values)
-        xerr = bins.bin_halfwidths(binning[0]) if xerrors else None
+        y_err = bins.binned_std_errors(binned_values)
+        x_err = bins.bin_halfwidths(binning[0]) if x_errors else None
         plot_args.setdefault('marker', '')
         plot_args.setdefault('capsize', 4)
         plot_args.setdefault('capthick', 2)
-        ax.errorbar(x, y, yerr=yerr, xerr=xerr, **plot_args)
+        ax.errorbar(x, y, yerr=y_err, xerr=x_err, **plot_args)
     else:
         plot_args.setdefault('marker', 'o')
         ax.plot(x, y, **plot_args)
@@ -227,7 +227,7 @@ def tabulate_statistics(runs, quantities, labels, selection=..., statistic="reso
     quantities: str or list of str
         Key in `runs` that contains the quantities whose statistics would be calculated, or list of keys.
     labels: str or list of str
-        Label for the quantities / statistics being calulated, or list of labels the same length as `quantities`.
+        Label for the quantities / statistics being calculated, or list of labels the same length as `quantities`.
     selection:
         Selection of the values to use in calculating the summary statistics (by default use all values).
     statistic: {callable, 'resolution', 'mean'} or list of {callable, 'resolution', 'mean'}
@@ -238,7 +238,7 @@ def tabulate_statistics(runs, quantities, labels, selection=..., statistic="reso
         If True, table rows correspond to each run and columns correspond to each quantity summary statistic. Otherwise
         (default) rows correspond to summary statistics and columns correspond to runs.
     tabulate_args: optional
-        Additional named arguments to pass to `tabulate.tabulate`. By defualt, set table format to `html` and float
+        Additional named arguments to pass to `tabulate.tabulate`. By default, set table format to `html` and float
         format to `.2f`.
     Returns
     -------
