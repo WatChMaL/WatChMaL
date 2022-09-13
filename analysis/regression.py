@@ -267,7 +267,7 @@ def tabulate_statistics(runs, quantities, labels, selection=..., statistic="reso
     for f, q in zip(functions, quantities):
         data.append(f(runs, q, selection))
     if transpose:
-        list(zip(*data))
+        data = list(zip(*data))
         headers = labels
         labels = [r['args']['label'] for r in runs]
     else:
