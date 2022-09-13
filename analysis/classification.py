@@ -205,7 +205,7 @@ def cut_with_constant_binned_efficiency(discriminator_values, efficiency, binnin
         return cut
 
 
-def plot_binned_efficiency(cut, ax, binning, selection=..., errors=False, x_errors=True, **plot_args):
+def plot_binned_efficiency(cut, ax, binning, selection=..., reverse=False, errors=False, x_errors=True, **plot_args):
     """
     Plot binned efficiencies of a cut applied to a classification run on an existing set of axes. The cut values should
     correspond to booleans indicating whether each event passes the cut, then the set of booleans are divided up into
@@ -222,6 +222,9 @@ def plot_binned_efficiency(cut, ax, binning, selection=..., errors=False, x_erro
         Array of bin edges and array of bin indices, returned from `analysis.utils.binning.get_binning`.
     selection: indexing expression, optional
         Selection of the values to use in calculating the resolutions (by default use all values).
+    reverse: bool
+        If True, reverse the cut to plot percentage of events failing the cut. By default the percentage of events
+        passing the cut is plotted
     errors: bool, optional
         If True, plot error bars calculated as the standard deviation divided by sqrt(N) of the N values in the bin.
     x_errors: bool, optional
@@ -232,7 +235,7 @@ def plot_binned_efficiency(cut, ax, binning, selection=..., errors=False, x_erro
     """
     plot_args.setdefault('lw', 2)
     binned_cut = bins.apply_binning(cut, binning, selection)
-    y = bins.binned_efficiencies(binned_cut, errors)
+    y = bins.binned_efficiencies(binned_cut, errors, reverse=reverse)
     x = bins.bin_centres(binning[0])
     if errors:
         y_values, y_errors = y

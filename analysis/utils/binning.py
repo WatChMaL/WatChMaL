@@ -151,7 +151,7 @@ def binned_mean(binned_values):
     return np.array([np.mean(x) for x in binned_values])
 
 
-def binned_efficiencies(binned_cut, return_errors=True):
+def binned_efficiencies(binned_cut, return_errors=True, reverse=False):
     """
     Calculate percentage of true values (and binomial errors) in each arrays of booleans in a list
 
@@ -159,6 +159,9 @@ def binned_efficiencies(binned_cut, return_errors=True):
     ----------
     binned_cut: list of array_like
         list of arrays of booleans in each bin
+    reverse: bool
+        If True, reverse the cut to give percentage of events failing the cut. By default give percentage of events
+        passing the cut
     return_errors: bool
         if True, return array of each list of booleans' binomial standard error
 
@@ -170,6 +173,8 @@ def binned_efficiencies(binned_cut, return_errors=True):
         array of binomial standard errors
     """
     efficiencies = binned_mean(binned_cut)*100
+    if reverse:
+        efficiencies = 100 - efficiencies
     if not return_errors:
         return efficiencies
     else:
