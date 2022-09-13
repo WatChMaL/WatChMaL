@@ -178,7 +178,7 @@ def binned_efficiencies(binned_cut, return_errors=True, reverse=False):
     if not return_errors:
         return efficiencies
     else:
-        errors = binned_binomial_errors(binned_cut)
+        errors = binned_binomial_errors(binned_cut)*100
         return efficiencies, errors
 
 
