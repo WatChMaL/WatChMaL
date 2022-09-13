@@ -240,5 +240,5 @@ def binomial_error(x):
     """
     x = np.array(x)
     trials = x.size
-    successes = np.count_nonzero(x)
-    return np.sqrt(successes*(trials-successes))/trials
+    p = np.count_nonzero(x)/trials
+    return np.sqrt(p*(1-p)/trials)
