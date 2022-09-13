@@ -153,7 +153,7 @@ def binned_mean(binned_values):
 
 def binned_efficiencies(binned_cut, return_errors=True):
     """
-    Calculate proportion of true values (and binomial errors) in each arrays of booleans in a list
+    Calculate percentage of true values (and binomial errors) in each arrays of booleans in a list
 
     Parameters
     ----------
@@ -165,11 +165,11 @@ def binned_efficiencies(binned_cut, return_errors=True):
     Returns
     -------
     efficiencies: ndarray
-        array of proportion of true values in each bin
+        array of percentage of true values in each bin
     errors: ndarray
         array of binomial standard errors
     """
-    efficiencies = binned_mean(binned_cut)
+    efficiencies = binned_mean(binned_cut)*100
     if not return_errors:
         return efficiencies
     else:
