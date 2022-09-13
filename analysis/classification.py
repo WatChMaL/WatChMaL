@@ -1,7 +1,9 @@
 import numpy as np
 import analysis.utils.binning as bins
+import analysis.utils.plotting as plot
 import matplotlib.pyplot as plt
 from sklearn import metrics
+import glob
 import tabulate
 
 
@@ -292,3 +294,38 @@ def plot_efficiency_profile(runs, cut, binning, selection=..., fig_size=None, x_
     if y_lim is not None:
         ax.set_ylim(y_lim)
     return fig, ax
+
+
+def load_training_log(run_directory):
+    log_val = np.genfromtxt(run_directory+"/outputs/log_val.csv", delimiter=',',skip_header=1)
+    val_iteration = log_val[:, 0]
+    val_loss = log_val[:, 1]
+    val_accuracy = log_val[:, 2]
+    val_best = log_val[:, 3].astype(bool)
+    log_train = np.array([
+        np.genfromtxt(f, delimiter=',', skip_header=1)
+        for f in glob.glob(run_directory+"/outputs/log_train*.csv")
+    ])
+    train_iteration = log_train[0, :, 0]
+    train_epoch = log_train[0, :, 1]
+    train_loss = np.mean(log_train[:, :, 2], axis=0)
+    train_accuracy = np.mean(log_train[:, :, 3], axis=0)
+    it_per_epoch = np.min(train_iteration[train_epoch == 1]) - 1
+    train_epoch = train_iteration / it_per_epoch
+    val_epoch = val_iteration / it_per_epoch
+    return train_epoch, train_loss, train_accuracy, val_epoch, val_loss, val_accuracy, val_best
+
+
+def plot_training_progression(train_epoch, train_loss, train_accuracy, val_epoch, val_loss, val_accuracy,
+                                             val_best=None, y_loss_lim=None, fig_size=None, title=None, legend='center right'):
+    fig, ax1 = plot.plot_training_progression(train_epoch, train_loss, val_epoch, val_loss, val_best, y_loss_lim, fig_size, title, legend=None)
+    ax2 = ax1.twinx()
+    ax2.plot(train_epoch, train_accuracy, lw=2, label='Train accuracy', color='r', alpha=0.3)
+    ax2.plot(val_epoch, val_accuracy, lw=2, label='Validation accuracy', color='r')
+    if val_best is not None:
+        ax2.plot(val_epoch[val_best], val_accuracy[val_best], lw=0, marker='o', label='Best validation accuracy',
+                 color='darkred')
+    ax2.set_ylabel("Accuracy", c='r')
+    if legend:
+        ax1.legend(plot.combine_legends((ax1, ax2)), loc=legend)
+    return fig, ax1, ax2
