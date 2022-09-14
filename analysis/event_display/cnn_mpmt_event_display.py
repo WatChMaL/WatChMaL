@@ -36,11 +36,13 @@ def plot_2d_event(dataset, event, **kwargs):
     plot_2d_data(data, dataset.mpmt_positions, **kwargs)
 
 
-def plot_3d_event(dataset, event, geo_positions, **kwargs):
+def plot_3d_event(dataset, event, geo_positions_file, **kwargs):
     dataset.__getitem__(event)
+    geo_positions_file = np.load(geo_positions_file)
+    geo_positions = geo_positions_file['position']
+    geo_orientations = geo_positions_file['orientation']
     hit_positions = geo_positions[dataset.event_hit_pmts, :]
-    data = np.column_stack((hit_positions, dataset.event_hit_charges))
-    ed.plot_3d_event(data, geo_positions, **kwargs)
+    ed.plot_3d_event(dataset.event_hit_charges, hit_positions, geo_positions, geo_orientations, **kwargs)
 
 
 CNNmPMTDataset.plot_2d_event = plot_2d_event
