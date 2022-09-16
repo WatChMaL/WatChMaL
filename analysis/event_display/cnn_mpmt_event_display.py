@@ -116,6 +116,21 @@ class CNNmPMTEventDisplay(CNNmPMTDataset):
             to apply to the event data, such as those used for augmentation.
         kwargs : optional
             Additional arguments to pass to `analysis.event_display.plot_event_2d`
+            Valid arguments are:
+            fig_width : scalar, optional
+                Width of the figure
+            title : str, default: None
+                Title of the plot
+            style : str, optional
+                matplotlib style
+            color_label: str, default: "Charge"
+                Label to print next to the color scale
+            color_map : str or Colormap, default: plt.cm.plasma
+                Color map to use when plotting the data
+            color_norm : matplotlib.colors.Normalize, optional
+                Normalization to apply to color scale, by default uses log scaling
+            show_zero : bool, default: false
+                If false, zero data is drawn as the background color
 
         Returns
         -------
