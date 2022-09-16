@@ -67,7 +67,22 @@ class CNNmPMTEventDisplay(CNNmPMTDataset):
             Transformation function, or the name of a method of the dataset, or a sequence of functions or method names
             to apply to the data, such as those used for augmentation.
         kwargs : optional
-            Additional arguments to pass to `analysis.event_display.plot_event_2d`
+            Additional arguments to pass to `analysis.event_display.plot_event_2d`.
+            Valid arguments are:
+            fig_width : scalar, optional
+                Width of the figure
+            title : str, default: None
+                Title of the plot
+            style : str, optional
+                matplotlib style
+            color_label: str, default: "Charge"
+                Label to print next to the color scale
+            color_map : str or Colormap, default: plt.cm.plasma
+                Color map to use when plotting the data
+            color_norm : matplotlib.colors.Normalize, optional
+                Normalization to apply to color scale, by default uses log scaling
+            show_zero : bool, default: false
+                If false, zero data is drawn as the background color
 
         Returns
         -------
@@ -148,6 +163,29 @@ class CNNmPMTEventDisplay(CNNmPMTDataset):
             path to the file containing 3D geometry of detector
         kwargs : optional
             Additional arguments to pass to `analysis.event_display.plot_event_3d`
+            Valid arguments are:
+            fig_size : (float, float), optional
+                Size of the figure
+            zoom : float, default: 1.4
+                Zoom factor to enlarge the 3D drawing
+            title : str, default: None
+                Title of the plot
+            style : str, optional
+                matplotlib style
+            color_label: str, default: "Charge"
+                Label to print next to the color scale
+            color_map : str or Colormap, default: plt.cm.plasma
+                Color map to use when plotting the data
+            color_norm : matplotlib.colors.Normalize, optional
+                Normalization to apply to color scale, by default uses log scaling
+            vertical_axis : str, default: 'y'
+                Vertical axis
+            view_azimuth : float, default: -120
+                Azimuthal angle of 3D camera view
+            view_elevation : float, default: 30
+                Elevation angle of 3D camera view
+            show_zero : bool, default: false
+                If false, zero data is drawn as the background color
 
         Returns
         -------
@@ -157,10 +195,10 @@ class CNNmPMTEventDisplay(CNNmPMTDataset):
         self.__getitem__(event)
         geo_file = np.load(geometry_file_path)
         pmt_coordinates = geo_file['position']
-        hit_coordinates = pmt_coordinates[self.event_hit_pmts, :]
+        data_coordinates = pmt_coordinates[self.event_hit_pmts, :]
         unhit_coordinates = np.delete(pmt_coordinates, self.event_hit_pmts, axis=0)
         data = np.array(self.event_hit_charges)
-        return plot_event_3d(data, hit_coordinates, unhit_coordinates, **kwargs)
+        return plot_event_3d(data, data_coordinates, unhit_coordinates, **kwargs)
 
     def plot_geometry(self, geometry_file_path, plot=('x', 'y', 'z'), view='2d', **kwargs):
         """
@@ -194,7 +232,8 @@ class CNNmPMTEventDisplay(CNNmPMTDataset):
         view : {'2d', '3d'}
             Whether to plot in 2D or 3D event display
         kwargs : optional
-            Additional arguments to pass to either `analysis.event_display.plot_event_2d` or `analysis.event_display.plot_event_3d`
+            Additional arguments to pass to the plotting function. See documentation for `plot_event_2d` and
+            `plot_event_3d` for details.
 
         Returns
         -------
