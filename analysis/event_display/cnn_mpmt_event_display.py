@@ -284,7 +284,7 @@ class CNNmPMTEventDisplay(CNNmPMTDataset):
         }
         title_map = {
             '1': None,
-            'i': "PMT ID"
+            'i': "PMT ID",
             'x': "PMT x-coordinate",
             'y': "PMT y-coordinate",
             'z': "PMT z-coordinate",
