@@ -230,6 +230,7 @@ class CNNmPMTEventDisplay(CNNmPMTDataset):
             `plot` color of each PMT marker in the plot
             ====== =======================================================================================
             '1'    The value 1 for all PMTs, to get the same colour at each PMT
+            'i'    The ID of the PMT
             'x'    The x-coordinate of the PMT's 3D position
             'y'    The y-coordinate of the PMT's 3D position
             'z'    The z-coordinate of the PMT's 3D position
@@ -267,6 +268,7 @@ class CNNmPMTEventDisplay(CNNmPMTDataset):
         pmt_mpmts = pmt_ids % 19
         data_map = {
             '1': np.ones(pmt_ids.shape),
+            'i': pmt_ids,
             'x': pmt_coordinates[:, 0],
             'y': pmt_coordinates[:, 1],
             'z': pmt_coordinates[:, 2],
@@ -282,6 +284,7 @@ class CNNmPMTEventDisplay(CNNmPMTDataset):
         }
         title_map = {
             '1': None,
+            'i': "PMT ID"
             'x': "PMT x-coordinate",
             'y': "PMT y-coordinate",
             'z': "PMT z-coordinate",
@@ -297,7 +300,7 @@ class CNNmPMTEventDisplay(CNNmPMTDataset):
         }
         figs, axes = [], []
         for p in plot:
-            if p in ['r', 'c', 'ch']:
+            if p in ['i', 'r', 'c', 'ch']:
                 color_map = cm.turbo
             elif p == '1':
                 color_map = cm.Greys
