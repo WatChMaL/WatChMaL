@@ -5,6 +5,7 @@ import numpy as np
 from analysis.event_display.event_display import plot_event_2d, plot_event_3d
 from watchmal.dataset.cnn_mpmt.cnn_mpmt_dataset import CNNmPMTDataset
 from matplotlib.pyplot import cm
+import torch
 
 
 def channel_position_offset(channel):
@@ -24,20 +25,22 @@ def channel_position_offset(channel):
     channel = channel % 19
     theta = (channel < 12)*2*np.pi*channel/12 + ((channel >= 12) & (channel < 18))*2*np.pi*(channel-12)/6
     radius = 0.2*(channel < 18) + 0.2*(channel < 12)
-    position = [radius*np.sin(theta), radius*np.cos(theta)]
+    position = np.column_stack((radius*np.sin(theta), radius*np.cos(theta)))
     return position
 
 
 def coordinates_from_data(data):
     """
-    Calculate plotting coordinates for each element of CNN data, where each element contains a PMT's data.
-    Plotting coordinates returned correspond to [y, x] coordinates for each PMT, including offsets for the PMT's
+    Calculate plotting coordinates for each element of CNN data, where each element of `data` contains a PMT's data.
+    The actual values in `data` don't matter, it just takes the data tensor that has dimensions of
+    (channel, image row, image column) and returns plotting coordinates for each element of the flattened data array.
+    Plotting coordinates returned correspond to [x, y] coordinates for each PMT, including offsets for the PMT's
     position in the mPMT.
 
     Parameters
     ----------
     data: array_like
-        Array of PMT data formatted for use in CNN, i.e. with dimensions of (channels, x, y)
+        Array of PMT data formatted for use in CNN, i.e. with dimensions of (channel, row, column)
 
     Returns
     -------
@@ -46,13 +49,13 @@ def coordinates_from_data(data):
     """
     indices = np.indices(data.shape)
     channels = indices[0].flatten()
-    coordinates = indices[[2, 1]].reshape(2, -1).astype(np.float64)
+    coordinates = indices[[2, 1]].reshape(2, -1).astype(np.float64).T
     coordinates += channel_position_offset(channels)
     return coordinates
 
 
 class CNNmPMTEventDisplay(CNNmPMTDataset):
-    def plot_data_2d(self, data, mpmt_positions, old_convention=False, **kwargs):
+    def plot_data_2d(self, data, transformations=None, **kwargs):
         """
         Plots CNN mPMT data as a 2D event-display-like image.
 
@@ -60,10 +63,9 @@ class CNNmPMTEventDisplay(CNNmPMTDataset):
         ----------
         data : array_like
             Array of PMT data formatted for use in CNN, i.e. with dimensions of (channels, x, y)
-        mpmt_positions : array_like
-            Array of coordinates of all mPMT modules
-        old_convention : bool, default:False
-            use the old convention where CNN image was vertically reversed
+        transformations : function or str or sequence of function or str, optional
+            Transformation function, or the name of a method of the dataset, or a sequence of functions or method names
+            to apply to the data, such as those used for augmentation.
         kwargs : optional
             Additional arguments to pass to `analysis.event_display.plot_event_2d`
 
@@ -72,17 +74,21 @@ class CNNmPMTEventDisplay(CNNmPMTDataset):
         fig: matplotlib.Figure
         ax: matplotlib.axes.Axes
         """
-        coordinates = coordinates_from_data(data)
         rows = self.mpmt_positions[:, 0]
         columns = self.mpmt_positions[:, 1]
-        if old_convention:
-            coordinates[0] = max(columns) - coordinates[0]
+        data = torch.Tensor(data)
+        mpmt_locations = torch.zeros_like(data, dtype=bool)  # fill a data-like array with False
+        mpmt_locations[18, rows, columns] = True  # replace channel 18 with True where there is an actual mPMT
+        if transformations is not None:
+            data = self.apply_transformation(transformations, data)
+            mpmt_locations = self.apply_transformation(transformations, mpmt_locations)
+        coordinates = coordinates_from_data(data)  # coordinates corresponding to each element of the data array
         data_nan = np.full_like(data, np.nan)  # fill an array with nan for positions where there's no actual PMTs
-        data_nan[:, rows, columns] = data[:, rows, columns]  # replace the nans with the data where there is a PMT
-        mpmt_coordinates = np.column_stack((columns, rows))
+        data_nan[:, mpmt_locations[18]] = data[:, mpmt_locations[18]]  # replace the nans with the data where there is a PMT
+        mpmt_coordinates = coordinates[mpmt_locations.flatten()]  # the coordinates of where the actual mPMTs are
         return plot_event_2d(data_nan.flatten(), coordinates, mpmt_coordinates, **kwargs)
 
-    def plot_event_2d(self, event, old_convention=False, **kwargs):
+    def plot_event_2d(self, event, transformations=None, **kwargs):
         """
         Plots an event as a 2D event-display-like image.
 
@@ -90,8 +96,9 @@ class CNNmPMTEventDisplay(CNNmPMTDataset):
         ----------
         event : int
             index of the event to plot
-        old_convention : bool, default:False
-            use the old convention where CNN image was vertically reversed
+        transformations : function or str or sequence of function or str, optional
+            Transformation function, or the name of a method of this class, or a sequence of functions or method names
+            to apply to the event data, such as those used for augmentation.
         kwargs : optional
             Additional arguments to pass to `analysis.event_display.plot_event_2d`
 
@@ -101,7 +108,33 @@ class CNNmPMTEventDisplay(CNNmPMTDataset):
         ax: matplotlib.axes.Axes
         """
         data = self[event]['data']
-        return self.plot_data_2d(data, self.mpmt_positions, old_convention=old_convention, **kwargs)
+        return self.plot_data_2d(data, transformations=transformations, **kwargs)
+
+    def apply_transformation(self, transformation, data):
+        """
+        Apply a transformation or sequence of transformations to data.
+
+        Parameters
+        ----------
+        transformation : function or str or sequence of function or str, optional
+            Transformation function, or the name of a method of this class, or a sequence of functions or method names
+            to apply to the event data, such as those used for augmentation.
+        data : array_like
+            Array of PMT data formatted for use in CNN, i.e. with dimensions of (channels, x, y)
+
+        Returns
+        -------
+        ndarray
+            transformed data
+        """
+        if isinstance(transformation, str):
+            transformation = getattr(self, transformation)
+        if callable(transformation):
+            return transformation(data)
+        else:
+            for t in transformation:
+                data = self.apply_transformation(t, data)
+            return data
 
     def plot_event_3d(self, event, geometry_file_path, **kwargs):
         """
@@ -158,8 +191,10 @@ class CNNmPMTEventDisplay(CNNmPMTDataset):
             'ch'   The channel of the PMT within the mPMT
             ====== =======================================================================================
             By default, plots are produced for 'x', 'y' and 'z'.
+        view : {'2d', '3d'}
+            Whether to plot in 2D or 3D event display
         kwargs : optional
-            Additional arguments to pass to `analysis.event_display.plot_event_3d` or `analysis.event_display.plot_event_3d`
+            Additional arguments to pass to either `analysis.event_display.plot_event_2d` or `analysis.event_display.plot_event_3d`
 
         Returns
         -------
@@ -226,7 +261,7 @@ class CNNmPMTEventDisplay(CNNmPMTDataset):
                 fig, ax = plot_event_3d(data, pmt_coordinates, **args)
             else:
                 data = self.process_data(pmt_ids, data_map[p])
-                fig, ax = self.plot_data_2d(data, self.mpmt_positions, **args)
+                fig, ax = self.plot_data_2d(data, **args)
             figs.append(fig)
             axes.append(ax)
         return figs, axes
