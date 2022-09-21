@@ -162,11 +162,11 @@ def plot_efficiency_profile(runs, binning, selection=..., fig_size=None, x_label
 
 
 class ClassificationRun(ABC):
-    def __init__(self, label, plot_args=None):
-        self.label = label
+    def __init__(self, run_label, plot_args=None):
+        self.label = run_label
         if plot_args is None:
             plot_args = {}
-        plot_args['label'] = label
+        plot_args['label'] = run_label
         self.plot_args = plot_args
         self.cut = None
 
@@ -303,7 +303,7 @@ class ClassificationRun(ABC):
 
 
 class WatChMaLClassification(ClassificationRun, WatChMaLOutput):
-    def __init__(self, directory, label, indices=None, **plot_args):
+    def __init__(self, directory, run_label, indices=None, **plot_args):
         """
         Constructs the object holding the results of a WatChMaL classification run.
 
@@ -311,7 +311,7 @@ class WatChMaLClassification(ClassificationRun, WatChMaLOutput):
         ----------
         directory: str
             Top-level output directory of a WatChMaL classification run.
-        label: str
+        run_label: str
             Label this run to use in plot legends, etc.
         indices: array_like of int, optional
             Array of indices of events to select out of the indices output by WatChMaL (by default use all events sorted
@@ -319,7 +319,7 @@ class WatChMaLClassification(ClassificationRun, WatChMaLOutput):
         plot_args: optional
             Additional arguments to pass to plotting functions.
         """
-        ClassificationRun.__init__(self, label=label, plot_args=plot_args)
+        ClassificationRun.__init__(self, run_label=run_label, plot_args=plot_args)
         WatChMaLOutput.__init__(self, directory)
         self.indices = indices
         self._softmaxes = None
@@ -429,8 +429,8 @@ class WatChMaLClassification(ClassificationRun, WatChMaLOutput):
 
 class FiTQunClassification(ClassificationRun):
 
-    def __init__(self, fitqun_output, label, indices=None, particle_labels=None, **plot_args):
-        super().__init__(label=label, plot_args=plot_args)
+    def __init__(self, fitqun_output, run_label, indices=None, particle_labels=None, **plot_args):
+        super().__init__(run_label=run_label, plot_args=plot_args)
         self.fitqun_output = fitqun_output
         self.indices = indices
         if particle_labels is None:
