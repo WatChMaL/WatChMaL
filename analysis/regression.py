@@ -1,50 +1,27 @@
 import numpy as np
-import analysis.utils.binning as bins
-import matplotlib.pyplot as plt
-import tabulate
 import glob
-from omegaconf import OmegaConf
-from os.path import dirname
+import tabulate
+import matplotlib.pyplot as plt
+from abc import ABC, abstractmethod
+from analysis.read import FiTQunOutput
+from analysis.utils.math import energy_from_momentum, momentum_from_energy, angle_between_directions, \
+    decompose_along_direction, direction_from_angles
 
-
-def get_predictions(run_directory, indices=None):
-    """
-    Read the predictions resulting from an evaluation run of a WatChMaL regression model.
-
-    Parameters
-    ----------
-    run_directory: str
-        Top-level output directory of a WatChMaL regression run.
-    indices: array_like of int, optional
-        array of indices of predictions to select out of the indices output by WatChMaL (by default return all
-        predictions sorted by their indices).
-
-    Returns
-    -------
-    ndarray
-        Array of predictions.
-    """
-    predictions = np.load(run_directory + "/outputs/predictions.npy")
-    output_indices = np.load(run_directory + "/outputs/indices.npy")
-    if indices is None:
-        return predictions[output_indices.argsort()].squeeze()
-    intersection = np.intersect1d(indices, output_indices, return_indices=True)
-    sorted_predictions = np.zeros(indices.shape + predictions.shape[1:])
-    sorted_predictions[intersection[1]] = predictions[intersection[2]]
-    return sorted_predictions.squeeze()
+import analysis.utils.binning as bins
+from analysis.read import WatChMaLOutput
 
 
 def plot_histograms(runs, quantity, selection=..., fig_size=None, x_label="", y_label="", legend='best', **hist_args):
     """
-    Plot overlaid histograms of results from a number of regression runs
+    Plot overlaid histograms of results from a number of regression runs.
 
     Parameters
     ----------
-    runs: dict
-        Dictionary of run results, with the key "quantity" giving an array-like of values to be histogrammed and the key
-        "args" containing a dictionary of arguments to the `hist` plotting function.
-    quantity: str
-        Key in `runs` that contains the quantities to be histogrammed
+    runs: sequence of RegressionRun
+        Sequence of run results.
+    quantity: str or callable
+        Name of the attribute in each run that contains the quantities, or function that takes the run as its only
+        argument and returns the quantities, to be histogrammed.
     selection: indexing expression, optional
         Selection of the values to be histogrammed (by default use all values).
     fig_size: (float, float), optional
@@ -70,8 +47,8 @@ def plot_histograms(runs, quantity, selection=..., fig_size=None, x_label="", y_
     hist_args.setdefault('lw', 2)
     fig, ax = plt.subplots(figsize=fig_size)
     for r in runs:
-        data = r[quantity][selection].flatten()
-        args = {**hist_args, **r['args']}
+        data = r.get_quantity(quantity)[selection].flatten()
+        args = {**hist_args, **r.plot_args}
         ax.hist(data, **args)
     ax.set_xlabel(x_label)
     ax.set_ylabel(y_label)
@@ -83,20 +60,19 @@ def plot_histograms(runs, quantity, selection=..., fig_size=None, x_label="", y_
 def plot_resolution_profile(runs, quantity, binning, selection=..., fig_size=None, x_label="", y_label="",
                             legend='best', y_lim=None, **plot_args):
     """
-    Plot binned resolutions for results from a number of regression runs.
-    The quantity being used from each run should correspond to residuals and these residuals are divided up into bins of
-    some quantity according to `binning`, before calculating the resolution (68th percentile of their absolute values)
-    in each bin. A selection can be provided to use only a subset of all the values. The same binning and selection is
-    applied to each run.
+    Plot binned resolutions for results from a set of regression runs. The quantity should be the name of an attribute
+    that contains residuals (or similar quantity representing reconstruction errors), and the set of residuals are
+    divided up into bins according to `binning`, before calculating the resolution (68th percentile of their absolute
+    values) in each bin. A selection can be provided to use only a subset of all the values. The same binning and
+    selection is applied to each run.
 
     Parameters
     ----------
-    runs: dict
-        Dictionary of run results, with the key "quantity" giving an array-like of values to be used and the key "args"
-        containing a dictionary of arguments to the plotting function.
+    runs: sequence of RegressionRun
+        Sequence of run results.
     quantity: str
-        Key in `runs` that contains the quantities whose resolutions would be plotted.
-    binning: (ndarray, ndarray)
+        Name of the attribute containing the reconstruction errors whose average resolution will be plotted.
+    binning: (np.ndarray, np.ndarray)
         Array of bin edges and array of bin indices, returned from `analysis.utils.binning.get_binning`.
     selection: indexing expression, optional
         Selection of the values to use in calculating the resolutions (by default use all values).
@@ -121,8 +97,8 @@ def plot_resolution_profile(runs, quantity, binning, selection=..., fig_size=Non
     """
     fig, ax = plt.subplots(figsize=fig_size)
     for r in runs:
-        args = {**plot_args, **r['args']}
-        plot_binned_resolution(r[quantity], ax, binning, selection, **args)
+        args = {**plot_args, **r.plot_args}
+        r.plot_binned_resolution(quantity, ax, binning, selection, **args)
     ax.set_xlabel(x_label)
     ax.set_ylabel(y_label)
     if legend:
@@ -132,111 +108,27 @@ def plot_resolution_profile(runs, quantity, binning, selection=..., fig_size=Non
     return fig, ax
 
 
-def plot_binned_resolution(values, ax, binning, selection=..., errors=False, x_errors=True, **plot_args):
-    """
-    Plot binned resolutions of the results of a regression run on an existing set of axes. The values should correspond
-    to residuals, and the set of residuals are divided up into bins of some quantity according to `binning`, before
-    calculating the resolution (68th percentile of their absolute values) in each bin. A selection can be provided to
-    use only a subset of all the values.
-
-    Parameters
-    ----------
-    values: array_like
-        Array of residuals to be binned and their corresponding resolutions plotted.
-    ax: axes.Axes
-        Axes to draw the plot.
-    binning: (ndarray, ndarray)
-        Array of bin edges and array of bin indices, returned from `analysis.utils.binning.get_binning`.
-    selection: indexing expression, optional
-        Selection of the values to use in calculating the resolutions (by default use all values).
-    errors: bool, optional
-        If True, plot error bars calculated as the standard deviation divided by sqrt(N) of the N values in the bin.
-    x_errors: bool, optional
-        If True, plot horizontal error bars corresponding to the width of the bin, only if `errors` is also True.
-    plot_args: optional
-        Additional arguments to pass to the plotting function. Note that these may be overridden by arguments
-        provided in `runs`.
-    """
-    plot_args.setdefault('lw', 2)
-    binned_values = bins.apply_binning(values, binning, selection)
-    y = bins.binned_resolutions(binned_values)
-    x = bins.bin_centres(binning[0])
-    if errors:
-        y_err = bins.binned_std_errors(binned_values)
-        x_err = bins.bin_halfwidths(binning[0]) if x_errors else None
-        plot_args.setdefault('marker', '')
-        plot_args.setdefault('capsize', 4)
-        plot_args.setdefault('capthick', 2)
-        ax.errorbar(x, y, yerr=y_err, xerr=x_err, **plot_args)
-    else:
-        plot_args.setdefault('marker', 'o')
-        ax.plot(x, y, **plot_args)
-
-
-def get_resolutions(runs, quantity, selection=...):
-    """
-    Return a list of resolutions (68th percentile) of values as some quantity in each run.
-
-    Parameters
-    ----------
-    runs: dict
-        Dictionary of run results, with the key "quantity" giving an array-like of values to be used and the key "args"
-        containing a dictionary of arguments including "label" to label the run.
-    quantity: str
-        Key in `runs` that contains the quantities whose resolutions would be calculated.
-    selection: indexing expression, optional
-        Selection of the values to use in calculating the resolutions (by default use all values).
-
-    Returns
-    -------
-    list of float
-        List of resolution of quantity of each run.
-    """
-    return [np.quantile(np.abs(r[quantity][selection]), 0.68) for r in runs]
-
-
-def get_means(runs, quantity, selection=...):
-    """
-    Return a list of means of values as some quantity in each run.
-
-    Parameters
-    ----------
-    runs: dict
-        Dictionary of run results, with the key "quantity" giving an array-like of values to be used and the key "args"
-        containing a dictionary of arguments including "label" to label the run.
-    quantity: str
-        Key in `runs` that contains the quantities whose means would be calculated.
-    selection: indexing expression, optional
-        Selection of the values to use in calculating the means (by default use all values).
-
-    Returns
-    -------
-    list of float
-        List of mean quantity of each run.
-    """
-    return [np.mean(r[quantity][selection]) for r in runs]
-
-
-def tabulate_statistics(runs, quantities, labels, selection=..., statistic="resolution", transpose=False,
+def tabulate_statistics(runs, quantities, stat_labels, statistic="resolution", selection=..., transpose=False,
                         **tabulate_args):
     """
     Return a table of summary statistics of quantities of runs.
 
     Parameters
     ----------
-    runs: dict
-        Dictionary of run results, with the key "quantity" giving an array-like of values to be used and the key "args"
-        containing a dictionary of arguments including "label" to label the run.
-    quantities: str or list of str
-        Key in `runs` that contains the quantities whose statistics would be calculated, or list of keys.
-    labels: str or list of str
-        Label for the quantities / statistics being calculated, or list of labels the same length as `quantities`.
+    runs: sequence of RegressionRun
+        Sequence of run results.
+    quantities: str or callable or sequence of str or sequence of callable
+        Name(s) of the attribute(s) that contain the quantities, or function(s) that takes the run as its only argument
+        and returns the quantities, whose statistics would be calculated.
+    stat_labels: str or sequence of str
+        Label(s) for the quantities / statistics being calculated, the same length as `quantities`.
     selection:
         Selection of the values to use in calculating the summary statistics (by default use all values).
-    statistic: {callable, 'resolution', 'mean'} or list of {callable, 'resolution', 'mean'}
+    statistic: {'resolution', 'mean', callable, list of callable, list of str}
         The summary statistic to apply to the quantity. If callable, should be a function that takes the array_like of
         values and returns the summary statistic. If `resolution` (default) use the 68th percentile. If `mean` use the
-        mean. If a list, should be the same length as `quantities` to specify the summary statistic of each quantity.
+        mean. If a list, should be the same length as `quantities` to specify the summary statistic of each quantity,
+        with each element of the list one of the alternatives described above.
     transpose: bool
         If True, table rows correspond to each run and columns correspond to each quantity summary statistic. Otherwise
         (default) rows correspond to summary statistics and columns correspond to runs.
@@ -252,46 +144,307 @@ def tabulate_statistics(runs, quantities, labels, selection=..., statistic="reso
     tabulate_args.setdefault('floatfmt', '.2f')
     if isinstance(quantities, str):
         quantities = [quantities]
-    if isinstance(labels, str):
-        labels = [labels]
+    if isinstance(stat_labels, str):
+        stat_labels = [stat_labels]
+    run_labels = [r.run_label for r in runs]
     statistic_map = {
-        "resolution": get_resolutions,
-        "mean": get_means,
+        "resolution": lambda x:  np.quantile(np.abs(x), 0.68),
+        "mean": lambda x: np.mean(x),
     }
-    if callable(statistic):
-        functions = [lambda rs, q, sel: [statistic(r[q][sel]) for r in rs]] * len(quantities)
-    elif isinstance(statistic, str):
+    if isinstance(statistic, str):
         functions = [statistic_map[statistic]]*len(quantities)
+    elif callable(statistic):
+        functions = [lambda x: [statistic(x)]]*len(quantities)
     else:
-        functions = [(lambda rs, q, sel: [s(r[q][sel]) for r in rs]) if callable(s)
-                     else statistic_map[s]
-                     for s in statistic]
+        functions = [statistic_map[stat] if isinstance(stat, str)
+                     else (lambda x: stat(x))
+                     for stat in statistic]
     data = []
     for f, q in zip(functions, quantities):
-        data.append(f(runs, q, selection))
+        data.append([f(r.get_quantity(q)[selection]) for r in runs])
     if transpose:
         data = list(zip(*data))
-        headers = labels
-        labels = [r['args']['label'] for r in runs]
+        return tabulate.tabulate(data, headers=stat_labels, showindex=run_labels, **tabulate_args)
     else:
-        headers = [r['args']['label'] for r in runs]
-    return tabulate.tabulate(data, headers=headers, showindex=labels, **tabulate_args)
+        return tabulate.tabulate(data, headers=run_labels, showindex=stat_labels, **tabulate_args)
 
 
-def load_training_log(run_directory):
-    train_files = glob.glob(run_directory+"/outputs/log_train*.csv")
-    if not train_files: # search for a previous training run with a saved state that was loaded
-        conf = OmegaConf.load(run_directory+'/.hydra/config.yaml')
-        state_file = conf.tasks.restore_state.weight_file
-        run_directory = dirname(dirname(state_file))
-    log_train = np.array([np.genfromtxt(f, delimiter=',', skip_header=1) for f in train_files])
-    train_iteration = log_train[0, :, 0]
-    train_epoch = log_train[0, :, 1]
-    it_per_epoch = np.min(train_iteration[train_epoch == 1]) - 1
-    train_epoch = train_iteration / it_per_epoch
-    train_loss = np.mean(log_train[:, :, 2], axis=0)
-    log_val = np.genfromtxt(run_directory+"/outputs/log_val.csv", delimiter=',',skip_header=1)
-    val_epoch = log_val[:, 0] / it_per_epoch
-    val_loss = log_val[:, 2]
-    val_best = log_val[:, 3].astype(bool)
-    return train_epoch, train_loss, val_epoch, val_loss, val_best
+class RegressionRun(ABC):
+    def __init__(self, run_label, **plot_args):
+        self.run_label = run_label
+        plot_args['label'] = run_label
+        self.plot_args = plot_args
+
+    def get_quantity(self, quantity):
+        """
+        Return either an attribute of the run results given the name of the attribute, or a function of the run results.
+        The attribute or function should return an array of values corresponding to a quantity whose resolution or mean
+        is to be plotted, tabulated, etc.
+
+        Parameters
+        ----------
+        quantity: str or callable
+            Either a string representing the name of an attribute containing the array of values  to return, or a
+            function that takes a RegressionRun as its only argument and returns an array of vales.
+
+        Returns
+        -------
+        ndarray:
+            One-dimensional array of values corresponding to the desired qunatity
+        """
+        if isinstance(quantity, str):
+            return getattr(self, quantity)
+        elif callable(quantity):
+            return quantity(self)
+        else:
+            raise TypeError("The quantity should be a string or function")
+
+    def plot_binned_resolution(self, quantity, ax, binning, selection=..., errors=False, x_errors=True, **plot_args):
+        """
+        Plot binned resolutions of the results of a regression run on an existing set of axes. The quantity should be
+        the name of an attribute that contains residuals (or similar quantity representing reconstruction errors), and
+        the set of residuals are divided up into bins according to `binning`, before calculating the resolution (68th
+        percentile of their absolute values) in each bin. A selection can be provided to use only a subset of all the
+        values.
+
+        Parameters
+        ----------
+        quantity: str or callable
+            Name of the attribute containing the array of values, or function that takes the run as its only argument
+            and returns the values, whose average resolution will be plotted.
+        ax: matplotlib.axes.Axes
+            Axes to draw the plot.
+        binning: (np.ndarray, np.ndarray)
+            Array of bin edges and array of bin indices, returned from `analysis.utils.binning.get_binning`.
+        selection: indexing expression, optional
+            Selection of the values to use in calculating the resolutions (by default use all values).
+        errors: bool, optional
+            If True, plot error bars calculated as the standard deviation divided by sqrt(N) of the N values in the bin.
+        x_errors: bool, optional
+            If True, plot horizontal error bars corresponding to the width of the bin, only if `errors` is also True.
+        plot_args: optional
+            Additional arguments to pass to the plotting function. Note that these may be overridden by arguments
+            provided in `runs`.
+        """
+        values = self.get_quantity(quantity)
+        plot_args.setdefault('lw', 2)
+        binned_values = bins.apply_binning(values, binning, selection)
+        y = bins.binned_resolutions(binned_values)
+        x = bins.bin_centres(binning[0])
+        if errors:
+            y_err = bins.binned_std_errors(binned_values)
+            x_err = bins.bin_halfwidths(binning[0]) if x_errors else None
+            plot_args.setdefault('marker', '')
+            plot_args.setdefault('capsize', 4)
+            plot_args.setdefault('capthick', 2)
+            ax.errorbar(x, y, yerr=y_err, xerr=x_err, **plot_args)
+        else:
+            plot_args.setdefault('marker', 'o')
+            ax.plot(x, y, **plot_args)
+
+
+class MomentumPrediction:
+    def __init__(self, true_momenta=None, true_labels=None):
+        self.true_labels = true_labels
+        self.true_momenta = true_momenta
+        self.true_energies = None
+        self.momentum_residuals = None
+        self.energy_residuals = None
+        if true_momenta is not None:
+            self.momentum_residuals = self.momentum_prediction - self.true_momenta
+            self.momentum_fractional_errors = self.momentum_residuals/self.true_momenta
+            if true_labels is not None:
+                self.true_energies = energy_from_momentum(true_momenta, true_labels)
+                self.energy_residuals = self.energy_prediction - self.true_energies
+                self.energy_fractional_errors = self.energy_residuals/self.true_energies
+
+    @property
+    @abstractmethod
+    def momentum_prediction(self):
+        """This attribute gives the predicted momenta"""
+
+    @property
+    def energy_prediction(self):
+        return energy_from_momentum(self.momentum_prediction, self.true_labels)
+
+
+class PositionPrediction:
+    def __init__(self, true_positions=None, true_directions=None):
+        self.true_positions = true_positions
+        self.position_longitudinal_errors = None
+        self.position_transverse_errors = None
+        self.position_3d_errors = None
+        if true_positions is not None:
+            self.position_residuals = self.position_prediction - self.true_positions
+            self.x_residuals = self.position_residuals[:, 0]
+            self.y_residuals = self.position_residuals[:, 1]
+            self.z_residuals = self.position_residuals[:, 2]
+            if true_directions is not None:
+                (self.position_3d_errors, self.position_longitudinal_errors,
+                 self.position_transverse_errors) = decompose_along_direction(self.position_residuals, true_directions)
+            else:
+                self.position_3d_errors = np.linalg.norm(self.position_residuals, axis=-1)
+
+    @property
+    @abstractmethod
+    def position_prediction(self):
+        """This attribute gives the predicted positions"""
+
+
+class DirectionPrediction:
+    def __init__(self, true_directions=None):
+        self.true_directions = true_directions
+        self.direction_errors = None
+        if true_directions is not None:
+            self.direction_errors = angle_between_directions(self.direction_prediction, true_directions, degrees=True)
+
+    @property
+    @abstractmethod
+    def direction_prediction(self):
+        """This attribute gives the predicted directions"""
+
+
+class FitQun1RingFit(RegressionRun, PositionPrediction, DirectionPrediction, MomentumPrediction):
+    def __init__(self, fitqun_output: FiTQunOutput, run_label, true_positions=None, true_directions=None,
+                 true_momenta=None, true_labels=None, indices=..., particle_label_map=None, **plot_args):
+        RegressionRun.__init__(self, run_label=run_label, **plot_args)
+        self.fitqun_output = fitqun_output
+        self.n_events = len(np.empty(len(fitqun_output.chain))[indices])
+        if isinstance(true_labels, int):
+            true_labels = np.repeat(true_labels, self.n_events)
+        self.true_labels = true_labels
+        if particle_label_map is None:
+            particle_label_map = {'gamma': 0, 'electron': 1, 'muon': 2, 'pi0': 3}
+        self.particle_label_map = particle_label_map
+        self.label_set = set(true_labels)
+        self.particle_indices = {p: (true_labels == l) for p, l in particle_label_map.items() if l in self.label_set}
+        self._momentum_prediction = None
+        self._position_prediction = None
+        self._direction_prediction = None
+        # use lambdas to delay prevent reading all the data until/unless it's actually used
+        self.momentum_map = {
+            'gamma': lambda: self.fitqun_output.electron_momentum[indices],
+            'electron': lambda: self.fitqun_output.electron_momentum[indices],
+            'muon': lambda: self.fitqun_output.muon_momentum[indices],
+            'pi0': lambda: self.fitqun_output.pi0_momentum[indices],
+        }
+        self.position_map = {
+            'gamma': lambda: self.fitqun_output.electron_position[indices],
+            'electron': lambda: self.fitqun_output.electron_position[indices],
+            'muon': lambda: self.fitqun_output.muon_position[indices],
+            'pi0': lambda: self.fitqun_output.pi0_position[indices],
+        }
+        self.direction_map = {
+            'gamma': lambda: self.fitqun_output.electron_direction[indices],
+            'electron': lambda: self.fitqun_output.electron_direction[indices],
+            'muon': lambda: self.fitqun_output.muon_direction[indices],
+            'pi0': lambda: self.fitqun_output.pi0_direction[indices],
+        }
+        PositionPrediction.__init__(self, true_positions=true_positions, true_directions=true_directions)
+        DirectionPrediction.__init__(self, true_directions=true_directions)
+        MomentumPrediction.__init__(self, true_labels=true_labels, true_momenta=true_momenta)
+
+    @property
+    def momentum_prediction(self):
+        if self._momentum_prediction is None:
+            self._momentum_prediction = np.zeros(self.n_events)
+            for p, i in self.particle_indices.items():
+                self._momentum_prediction[i] = self.momentum_map[p]()
+        return self._momentum_prediction
+
+    @property
+    def position_prediction(self):
+        if self._position_prediction is None:
+            self._position_prediction = np.zeros((self.n_events, 3))
+            for p, i in self.particle_indices.items():
+                self._position_prediction[i] = self.position_map[p]()
+        return self._position_prediction
+
+    @property
+    def direction_prediction(self):
+        if self._direction_prediction is None:
+            self._direction_prediction = np.zeros((self.n_events, 3))
+            for p, i in self.particle_indices.items():
+                self._direction_prediction[i] = self.direction_map[p]()
+        return self._direction_prediction
+
+
+class WatChMaLRegression(RegressionRun, WatChMaLOutput, ABC):
+    def __init__(self, directory, run_label, indices=None, **plot_args):
+        RegressionRun.__init__(self, run_label=run_label, **plot_args)
+        WatChMaLOutput.__init__(self, directory=directory, indices=indices)
+        self._predictions = None
+
+    def read_training_log_from_csv(self, directory):
+        train_files = glob.glob(directory + "/outputs/log_train*.csv")
+        log_train = np.array([np.genfromtxt(f, delimiter=',', skip_header=1) for f in train_files])
+        log_val = np.genfromtxt(directory + "/outputs/log_val.csv", delimiter=',', skip_header=1)
+        train_iteration = log_train[0, :, 0]
+        train_epoch = log_train[0, :, 1]
+        it_per_epoch = np.min(train_iteration[train_epoch == 1]) - 1
+        self._train_log_epoch = train_iteration / it_per_epoch
+        self._train_log_loss = np.mean(log_train[:, :, 2], axis=0)
+        self._val_log_epoch = log_val[:, 0] / it_per_epoch
+        self._val_log_loss = log_val[:, 2]
+        self._val_log_best = log_val[:, 3].astype(bool)
+        return self._train_log_epoch, self._train_log_loss, self._val_log_epoch, self._val_log_loss, self._val_log_best
+
+    @property
+    def predictions(self):
+        if self._predictions is None:
+            self._predictions = self.get_outputs("predictions")
+        return self._predictions
+
+
+class WatChMaLPositionRegression(WatChMaLRegression, PositionPrediction):
+    def __init__(self, directory, run_label, true_positions=None, true_directions=None, indices=None, **plot_args):
+        WatChMaLRegression.__init__(self, directory=directory, run_label=run_label, indices=indices, **plot_args)
+        PositionPrediction.__init__(self, true_positions=true_positions, true_directions=true_directions)
+
+    @property
+    def position_prediction(self):
+        return self.predictions
+
+
+class WatChMaLDirectionRegression(WatChMaLRegression, DirectionPrediction):
+    def __init__(self, directory, run_label, true_directions=None, indices=None, zenith_axis=None, **plot_args):
+        WatChMaLRegression.__init__(self, directory=directory, run_label=run_label, indices=indices, **plot_args)
+        self._direction_prediction = None
+        self.zenith_axis = zenith_axis
+        DirectionPrediction.__init__(self, true_directions=true_directions)
+
+    @property
+    def direction_prediction(self):
+        if self._direction_prediction is None:
+            self._direction_prediction = direction_from_angles(self.predictions, self.zenith_axis)
+        return self._direction_prediction
+
+
+class WatChMaLEnergyRegression(WatChMaLRegression, MomentumPrediction):
+    def __init__(self, directory, run_label, true_momenta=None, true_labels=None, indices=None, **plot_args):
+        WatChMaLRegression.__init__(self, directory=directory, run_label=run_label, indices=indices, **plot_args)
+        self._momentum_prediction = None
+        MomentumPrediction.__init__(self, true_momenta=true_momenta, true_labels=true_labels)
+
+    @property
+    def momentum_prediction(self):
+        if self._momentum_prediction is None:
+            self._momentum_prediction = momentum_from_energy(self.predictions, self.true_labels)
+        return self._momentum_prediction
+
+
+class CombinedRegressionRun(RegressionRun):
+    def __init__(self, combined_runs, run_label=None, **plot_args):
+        self.runs = combined_runs
+        if run_label is None:
+            run_label = combined_runs[0].run_label
+        if not plot_args:
+            plot_args = combined_runs[0].plot_args
+        RegressionRun.__init__(self, run_label=run_label, **plot_args)
+
+    def __getattr__(self, attr):
+        # Loop over the combined runs and look for the attribute in each, or raise exception if it's not found in any.
+        for r in self.runs:
+            if hasattr(r, attr):
+                return getattr(r, attr)
+        raise AttributeError(attr)
