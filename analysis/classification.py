@@ -2,9 +2,7 @@ import numpy as np
 import glob
 import matplotlib.pyplot as plt
 from abc import ABC, abstractmethod
-from os.path import dirname
 from sklearn import metrics
-from omegaconf import OmegaConf
 
 import analysis.utils.binning as bins
 import analysis.utils.plotting as plot
@@ -33,7 +31,7 @@ def combine_softmax(softmaxes, labels):
     return np.sum(softmaxes[:, labels], axis=1)
 
 
-def plot_rocs(runs, signal, signal_labels, background_labels, selection=..., fig_size=None, x_label="", y_label="",
+def plot_rocs(runs, signal_labels, background_labels, selection=..., fig_size=None, x_label="", y_label="",
               x_lim=None, y_lim=None, y_log=None, x_log=None, legend='best', mode='rejection', **plot_args):
     """
     Plot overlaid ROC curves of results from a number of classification runs
@@ -42,9 +40,6 @@ def plot_rocs(runs, signal, signal_labels, background_labels, selection=..., fig
     ----------
     runs: sequence of ClassificationRun
         Sequence of runs to plot
-    signal: array_like of bool
-        One dimensional array of boolean values, the same length as the number of events in each run, indicating whether
-        each event is classed as signal.
     signal_labels: int or sequence of ints
         Set of labels corresponding to signal classes. Can be either a single label or a sequence of labels.
     background_labels: int or sequence of ints
@@ -82,8 +77,8 @@ def plot_rocs(runs, signal, signal_labels, background_labels, selection=..., fig
     ax: axes.Axes
     """
     fig, ax = plt.subplots(figsize=fig_size)
-    selected_signal = signal[selection]
     for r in runs:
+        selected_signal = np.isin(r.true_labels, signal_labels)[selection]
         selected_discriminator = r.discriminator(signal_labels, background_labels)[selection]
         fpr, tpr, _ = metrics.roc_curve(selected_signal, selected_discriminator)
         auc = metrics.auc(fpr, tpr)
@@ -162,10 +157,9 @@ def plot_efficiency_profile(runs, binning, selection=..., fig_size=None, x_label
 
 
 class ClassificationRun(ABC):
-    def __init__(self, run_label, plot_args=None):
+    def __init__(self, run_label, true_labels=None, **plot_args):
         self.label = run_label
-        if plot_args is None:
-            plot_args = {}
+        self.true_labels = true_labels
         plot_args['label'] = run_label
         self.plot_args = plot_args
         self.cut = None
@@ -303,7 +297,7 @@ class ClassificationRun(ABC):
 
 
 class WatChMaLClassification(ClassificationRun, WatChMaLOutput):
-    def __init__(self, directory, run_label, indices=None, **plot_args):
+    def __init__(self, directory, run_label, true_labels=None, indices=None, **plot_args):
         """
         Constructs the object holding the results of a WatChMaL classification run.
 
@@ -319,22 +313,11 @@ class WatChMaLClassification(ClassificationRun, WatChMaLOutput):
         plot_args: optional
             Additional arguments to pass to plotting functions.
         """
-        ClassificationRun.__init__(self, run_label=run_label, plot_args=plot_args)
-        WatChMaLOutput.__init__(self, directory)
-        self.indices = indices
+        ClassificationRun.__init__(self, run_label=run_label, true_labels=true_labels, **plot_args)
+        WatChMaLOutput.__init__(self, directory=directory, indices=indices)
         self._softmaxes = None
         self._train_log_accuracy = None
         self._val_log_accuracy = None
-
-    def read_training_log(self):
-        train_files = glob.glob(self.directory + "/outputs/log_train*.csv")
-        if train_files:
-            return self.read_training_log_from_csv(self.directory)
-        else:  # search for a previous training run with a saved state that was loaded
-            conf = OmegaConf.load(self.directory + '/.hydra/config.yaml')
-            state_file = conf.tasks.restore_state.weight_file
-            directory = dirname(dirname(state_file))
-            return self.read_training_log_from_csv(directory)
 
     def read_training_log_from_csv(self, directory):
         train_files = glob.glob(self.directory + "/outputs/log_train*.csv")
@@ -352,25 +335,6 @@ class WatChMaLClassification(ClassificationRun, WatChMaLOutput):
         self._val_log_best = log_val[:, 3].astype(bool)
         return (self._train_log_epoch, self._train_log_loss, self._train_log_accuracy,
                 self._val_log_epoch, self._val_log_loss, self._val_log_accuracy, self._val_log_best)
-
-    def get_softmaxes(self):
-        """
-        Read the softmax predictions resulting from the evaluation run of a WatChMaL classification model.
-
-        Returns
-        -------
-        ndarray
-            Two dimensional array of predicted softmax values, where each row corresponds to an event and each column
-            contains the softmax values of a class.
-        """
-        softmaxes = np.load(self.directory + "/outputs/softmax.npy")
-        output_indices = np.load(self.directory + "/outputs/indices.npy")
-        if self.indices is None:
-            return softmaxes[output_indices.argsort()].squeeze()
-        intersection = np.intersect1d(self.indices, output_indices, return_indices=True)
-        sorted_softmaxes = np.zeros(self.indices.shape + softmaxes.shape[1:])
-        sorted_softmaxes[intersection[1]] = softmaxes[intersection[2]]
-        return sorted_softmaxes.squeeze()
 
     def plot_training_progression(self, plot_best=True, y_loss_lim=None, fig_size=None, title=None,
                                   legend='center right'):
@@ -423,24 +387,24 @@ class WatChMaLClassification(ClassificationRun, WatChMaLOutput):
     @property
     def softmaxes(self):
         if self._softmaxes is None:
-            self._softmaxes = self.get_softmaxes()
+            self._softmaxes = self.get_outputs("softmax")
         return self._softmaxes
 
 
 class FiTQunClassification(ClassificationRun):
 
-    def __init__(self, fitqun_output, run_label, indices=None, particle_labels=None, **plot_args):
-        super().__init__(run_label=run_label, plot_args=plot_args)
+    def __init__(self, fitqun_output, run_label, true_labels=None, indices=..., particle_label_map=None, **plot_args):
+        super().__init__(run_label=run_label, true_labels=true_labels, **plot_args)
         self.fitqun_output = fitqun_output
         self.indices = indices
-        if particle_labels is None:
-            particle_labels = {'gamma': 0, 'electron': 1, 'muon': 2, 'pi0': 3}
-        self.particle_labels = particle_labels
-        self.gammas = {particle_labels['gamma']}
-        self.electrons = {particle_labels['electron']}
-        self.muons = {particle_labels['muon']}
-        self.pi0s = {particle_labels['pi0']}
-        self.electron_like = {self.particle_labels[p] for p in ['electron', 'gamma']}
+        if particle_label_map is None:
+            particle_label_map = {'gamma': 0, 'electron': 1, 'muon': 2, 'pi0': 3}
+        self.particle_label_map = particle_label_map
+        self.gammas = {particle_label_map['gamma']}
+        self.electrons = {particle_label_map['electron']}
+        self.muons = {particle_label_map['muon']}
+        self.pi0s = {particle_label_map['pi0']}
+        self.electron_like = {self.particle_label_map[p] for p in ['electron', 'gamma']}
         self._electron_gamma_discriminator = None
         self._electron_muon_discriminator = None
 
@@ -454,13 +418,8 @@ class FiTQunClassification(ClassificationRun):
         elif set(signal_labels) <= self.gammas and set(background_labels) <= self.electrons:
             return self.gamma_electron_discriminator
         else:
-            raise NotImplementedError("A discriminator for these signal and background labels has not been implemented in fiTQun")
-
-    def set_electron_gamma_discriminator(self, discriminator):
-        if callable(discriminator):
-            self._electron_gamma_discriminator = discriminator(self.fitqun_output)
-        else:
-            self._electron_gamma_discriminator = discriminator
+            raise NotImplementedError("A discriminator for the labels given for the signal", signal_labels,
+                  "and background", background_labels, "has not yet been implemented for fiTQun outputs")
 
     @property
     def electron_muon_discriminator(self):
@@ -482,7 +441,7 @@ class FiTQunClassification(ClassificationRun):
     @electron_gamma_discriminator.setter
     def electron_gamma_discriminator(self, discriminator):
         if callable(discriminator):
-            self._electron_gamma_discriminator = discriminator(self.fitqun_output)
+            self._electron_gamma_discriminator = discriminator(self.fitqun_output)[self.indices]
         else:
             self._electron_gamma_discriminator = discriminator
 

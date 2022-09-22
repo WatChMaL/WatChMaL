@@ -1,11 +1,16 @@
-from abc import ABC, abstractmethod
-from matplotlib import pyplot as plt
 import uproot
+import glob
+import numpy as np
+from abc import ABC, abstractmethod
+from os.path import dirname
+from omegaconf import OmegaConf
+from matplotlib import pyplot as plt
 
 
 class WatChMaLOutput(ABC):
-    def __init__(self, directory):
+    def __init__(self, directory, indices=None):
         self.directory = directory
+        self.indices = indices
         self._training_log = None
         self._train_log_epoch = None
         self._train_log_loss = None
@@ -29,8 +34,42 @@ class WatChMaLOutput(ABC):
             ax.legend(loc=legend)
         return fig, ax
 
-    @abstractmethod
     def read_training_log(self):
+        train_files = glob.glob(self.directory + "/outputs/log_train*.csv")
+        if train_files:
+            return self.read_training_log_from_csv(self.directory)
+        else:  # search for a previous training run with a saved state that was loaded
+            conf = OmegaConf.load(self.directory + '/.hydra/config.yaml')
+            state_file = conf.tasks.restore_state.weight_file
+            directory = dirname(dirname(state_file))
+            return self.read_training_log_from_csv(directory)
+
+    def get_outputs(self, name):
+        """
+        Read the outputs resulting from the evaluation run of a WatChMaL model.
+
+        Parameters
+        ----------
+        name: str
+            name of the output to load
+
+        Returns
+        -------
+        ndarray
+            Two dimensional array of predicted softmax values, where each row corresponds to an event and each column
+            contains the softmax values of a class.
+        """
+        outputs = np.load(self.directory + "/outputs/" + name + ".npy")
+        output_indices = np.load(self.directory + "/outputs/indices.npy")
+        if self.indices is None:
+            return outputs[output_indices.argsort()].squeeze()
+        intersection = np.intersect1d(self.indices, output_indices, return_indices=True)
+        sorted_outputs = np.zeros(self.indices.shape + outputs.shape[1:])
+        sorted_outputs[intersection[1]] = outputs[intersection[2]]
+        return sorted_outputs.squeeze()
+
+    @abstractmethod
+    def read_training_log_from_csv(self, directory):
         """This method should load the training log, set the corresponding attributes and return a tuple of them."""
 
     @property
