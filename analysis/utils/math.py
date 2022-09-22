@@ -1,7 +1,10 @@
 import numpy as np
 
 
-def towall(position, angle, tank_half_height=300, tank_radius=400, tank_axis=1):
+DEFAULT_TANK_AXIS = 1
+
+
+def towall(position, angle, tank_half_height=300, tank_radius=400, tank_axis=None):
     """
     Calculate towall: distance from position to detector wall, in particle direction
 
@@ -15,14 +18,16 @@ def towall(position, angle, tank_half_height=300, tank_radius=400, tank_axis=1):
         half-height of the detector ID
     tank_radius : float, default: 400
         Radius of the detector ID
-    tank_axis : int, default: 1
-        axis along which the tank cylinder is oriented
+    tank_axis : int, optional
+        Axis along which the tank cylinder is oriented. By default use the y-axis.
 
     Returns
     -------
     ndarray or scalar
         array of towall values for each position, or scalar if only one position
     """
+    if tank_axis is None:
+        tank_axis = DEFAULT_TANK_AXIS
     pos_trans = np.delete(position, tank_axis, axis=-1)
     pos_along = position[..., tank_axis]
     dir_along, dir_trans = polar_to_cartesian(angle)
@@ -34,7 +39,7 @@ def towall(position, angle, tank_half_height=300, tank_radius=400, tank_axis=1):
     return np.minimum(towall_barrel, towall_endcap)
 
 
-def dwall(position, tank_half_height=300, tank_radius=400, tank_axis=1):
+def dwall(position, tank_half_height=300, tank_radius=400, tank_axis=None):
     """
     Calculate dwall: distance from position to nearest detector wall
 
@@ -46,14 +51,16 @@ def dwall(position, tank_half_height=300, tank_radius=400, tank_axis=1):
         half-height of the detector ID
     tank_radius : float, default: 400
         Radius of the detector ID
-    tank_axis : int, default: 1
-        axis along which the tank cylinder is oriented
+    tank_axis : int, optional
+        Axis along which the tank cylinder is oriented. By default use y-axis
 
     Returns
     -------
     ndarray or scalar
         array of dwall values for each position, or scalar if only one position
     """
+    if tank_axis is None:
+        tank_axis = DEFAULT_TANK_AXIS
     pos_along = position[..., tank_axis]
     pos_trans = np.delete(position, tank_axis, axis=-1)
     dwall_barrel = tank_radius - np.linalg.norm(pos_trans, axis=-1)
@@ -130,7 +137,7 @@ def polar_to_cartesian(angles):
     return dir_along, dir_trans
 
 
-def direction_from_angles(angles, zenith_axis=1):
+def direction_from_angles(angles, zenith_axis=None):
     """
     Calculate unit vector from azimuth and zenith angles
 
@@ -138,8 +145,8 @@ def direction_from_angles(angles, zenith_axis=1):
     ----------
     angles : array_like
         vector of (zenith, azimuth) of a direction or (N,2) array of (zenith, azimuth) angles for N directions
-    zenith_axis : int, default: 1
-        axis along which the zenith angle is relative to (i.e. the axis the tank is oriented)
+    zenith_axis : int, optional
+        Axis along which the zenith angle is relative to (i.e. the axis the tank is oriented). By default use y-axis.
 
     Returns
     -------
@@ -147,10 +154,12 @@ def direction_from_angles(angles, zenith_axis=1):
         array of unit vectors of each direction
     """
     dir_along, dir_trans = polar_to_cartesian(angles)
+    if zenith_axis is None:
+        zenith_axis = DEFAULT_TANK_AXIS
     return np.insert(dir_trans, zenith_axis, dir_along, axis=1)
 
 
-def angles_from_direction(direction, zenith_axis=1):
+def angles_from_direction(direction, zenith_axis=None):
     """
     Calculate azimuth and zenith angles from unit vector
 
@@ -158,8 +167,8 @@ def angles_from_direction(direction, zenith_axis=1):
     ----------
     direction : array_like
         vector of (x,y,z) components of a unit vector of a direction, or (N,3) array of (x,y,z) unit vector directions
-    zenith_axis : int, default: 1
-        axis along which the zenith angle is relative to (i.e. the axis the tank is oriented)
+    zenith_axis : int, optional
+        Axis along which the zenith angle is relative to (i.e. the axis the tank is oriented). By default use y-axis.
 
     Returns
     -------
@@ -167,6 +176,8 @@ def angles_from_direction(direction, zenith_axis=1):
         array of (zenith, azimuth) angles of each direction
 
     """
+    if zenith_axis is None:
+        zenith_axis = DEFAULT_TANK_AXIS
     dir_along = direction[..., zenith_axis]
     dir_trans = np.delete(direction, zenith_axis, axis=-1)
     zenith = np.arccos(dir_along)
