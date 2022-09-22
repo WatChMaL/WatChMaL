@@ -108,6 +108,57 @@ def plot_resolution_profile(runs, quantity, binning, selection=..., fig_size=Non
     return fig, ax
 
 
+def plot_bias_profile(runs, quantity, binning, selection=..., fig_size=None, x_label="", y_label="",
+                            legend='best', y_lim=None, **plot_args):
+    """
+    Plot binned resolutions for results from a set of regression runs. The quantity should be the name of an attribute
+    that contains residuals (or similar quantity representing reconstruction errors), and the set of residuals are
+    divided up into bins according to `binning`, before calculating the resolution (68th percentile of their absolute
+    values) in each bin. A selection can be provided to use only a subset of all the values. The same binning and
+    selection is applied to each run.
+
+    Parameters
+    ----------
+    runs: sequence of RegressionRun
+        Sequence of run results.
+    quantity: str
+        Name of the attribute containing the reconstruction errors whose average resolution will be plotted.
+    binning: (np.ndarray, np.ndarray)
+        Array of bin edges and array of bin indices, returned from `analysis.utils.binning.get_binning`.
+    selection: indexing expression, optional
+        Selection of the values to use in calculating the resolutions (by default use all values).
+    fig_size: (float, float), optional
+        Figure size.
+    x_label: str, optional
+        Label of the x-axis.
+    y_label: str, optional
+        Label of the y-axis.
+    legend: str or None, optional
+        Position of the legend, or None to have no legend. Attempts to find the best position by default.
+    y_lim: (float, float), optional
+        Limits of the y-axis.
+    plot_args: optional
+        Additional arguments to pass to the plotting function. Note that these may be overridden by arguments
+        provided in `runs`.
+
+    Returns
+    -------
+    fig: Figure
+    ax: axes.Axes
+    """
+    fig, ax = plt.subplots(figsize=fig_size)
+    for r in runs:
+        args = {**plot_args, **r.plot_args}
+        r.plot_binned_bias(quantity, ax, binning, selection, **args)
+    ax.set_xlabel(x_label)
+    ax.set_ylabel(y_label)
+    if legend:
+        ax.legend(loc=legend)
+    if y_lim is not None:
+        ax.set_ylim(y_lim)
+    return fig, ax
+
+
 def tabulate_statistics(runs, quantities, stat_labels, statistic="resolution", selection=..., transpose=False,
                         **tabulate_args):
     """
@@ -230,6 +281,48 @@ class RegressionRun(ABC):
         plot_args.setdefault('lw', 2)
         binned_values = bins.apply_binning(values, binning, selection)
         y = bins.binned_resolutions(binned_values)
+        x = bins.bin_centres(binning[0])
+        if errors:
+            y_err = bins.binned_std_errors(binned_values)
+            x_err = bins.bin_halfwidths(binning[0]) if x_errors else None
+            plot_args.setdefault('marker', '')
+            plot_args.setdefault('capsize', 4)
+            plot_args.setdefault('capthick', 2)
+            ax.errorbar(x, y, yerr=y_err, xerr=x_err, **plot_args)
+        else:
+            plot_args.setdefault('marker', 'o')
+            ax.plot(x, y, **plot_args)
+
+    def plot_binned_bias(self, quantity, ax, binning, selection=..., errors=False, x_errors=True, **plot_args):
+        """
+        Plot binned bias of the results of a regression run on an existing set of axes. The quantity should be the name
+        of an attribute that contains residuals (or similar quantity representing reconstruction errors), or a function
+        returning these residuals, and the set of residuals are divided up into bins according to `binning`, before
+        calculating the bias (mean) in each bin. A selection can be provided to use only a subset of all the values.
+
+        Parameters
+        ----------
+        quantity: str or callable
+            Name of the attribute containing the array of values, or function that takes the run as its only argument
+            and returns the values, whose average bias will be plotted.
+        ax: matplotlib.axes.Axes
+            Axes to draw the plot.
+        binning: (np.ndarray, np.ndarray)
+            Array of bin edges and array of bin indices, returned from `analysis.utils.binning.get_binning`.
+        selection: indexing expression, optional
+            Selection of the values to use in calculating the resolutions (by default use all values).
+        errors: bool, optional
+            If True, plot error bars calculated as the standard deviation divided by sqrt(N) of the N values in the bin.
+        x_errors: bool, optional
+            If True, plot horizontal error bars corresponding to the width of the bin, only if `errors` is also True.
+        plot_args: optional
+            Additional arguments to pass to the plotting function. Note that these may be overridden by arguments
+            provided in `runs`.
+        """
+        values = self.get_quantity(quantity)
+        plot_args.setdefault('lw', 2)
+        binned_values = bins.apply_binning(values, binning, selection)
+        y = bins.binned_mean(binned_values)
         x = bins.bin_centres(binning[0])
         if errors:
             y_err = bins.binned_std_errors(binned_values)
