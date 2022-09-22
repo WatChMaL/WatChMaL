@@ -158,7 +158,7 @@ def plot_efficiency_profile(runs, binning, selection=..., fig_size=None, x_label
 
 class ClassificationRun(ABC):
     def __init__(self, run_label, true_labels=None, **plot_args):
-        self.label = run_label
+        self.run_label = run_label
         self.true_labels = true_labels
         plot_args['label'] = run_label
         self.plot_args = plot_args
@@ -320,7 +320,7 @@ class WatChMaLClassification(ClassificationRun, WatChMaLOutput):
         self._val_log_accuracy = None
 
     def read_training_log_from_csv(self, directory):
-        train_files = glob.glob(self.directory + "/outputs/log_train*.csv")
+        train_files = glob.glob(directory + "/outputs/log_train*.csv")
         log_train = np.array([np.genfromtxt(f, delimiter=',', skip_header=1) for f in train_files])
         log_val = np.genfromtxt(directory + "/outputs/log_val.csv", delimiter=',', skip_header=1)
         train_iteration = log_train[0, :, 0]
