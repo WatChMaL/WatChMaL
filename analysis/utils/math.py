@@ -251,5 +251,7 @@ def binomial_error(x):
     """
     x = np.array(x)
     trials = x.size
+    if trials == 0:
+        return 0
     p = np.count_nonzero(x)/trials
     return np.sqrt(p*(1-p)/trials)
