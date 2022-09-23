@@ -70,8 +70,9 @@ def plot_resolution_profile(runs, quantity, binning, selection=..., fig_size=Non
     ----------
     runs: sequence of RegressionRun
         Sequence of run results.
-    quantity: str
-        Name of the attribute containing the reconstruction errors whose average resolution will be plotted.
+    quantity: str or callable
+        Name of the attribute containing the reconstruction errors, or function that takes the run as its only argument
+        and returns the reconstruction errors, whose average resolution will be plotted.
     binning: (np.ndarray, np.ndarray)
         Array of bin edges and array of bin indices, returned from `analysis.utils.binning.get_binning`.
     selection: indexing expression, optional
@@ -111,18 +112,19 @@ def plot_resolution_profile(runs, quantity, binning, selection=..., fig_size=Non
 def plot_bias_profile(runs, quantity, binning, selection=..., fig_size=None, x_label="", y_label="",
                             legend='best', y_lim=None, **plot_args):
     """
-    Plot binned resolutions for results from a set of regression runs. The quantity should be the name of an attribute
-    that contains residuals (or similar quantity representing reconstruction errors), and the set of residuals are
-    divided up into bins according to `binning`, before calculating the resolution (68th percentile of their absolute
-    values) in each bin. A selection can be provided to use only a subset of all the values. The same binning and
-    selection is applied to each run.
+    Plot binned bias for results from a set of regression runs. The quantity should be the name of an attribute that
+    contains residuals (or similar quantity representing reconstruction errors), or a function returning the residuals,
+    and the set of residuals are divided up into bins according to `binning`, before calculating the resolution (68th
+    percentile of their absolute values) in each bin. A selection can be provided to use only a subset of all the
+    values. The same binning and selection is applied to each run.
 
     Parameters
     ----------
     runs: sequence of RegressionRun
         Sequence of run results.
-    quantity: str
-        Name of the attribute containing the reconstruction errors whose average resolution will be plotted.
+    quantity: str or callable
+        Name of the attribute containing the reconstruction errors, or function that takes the run as its only argument
+        and returns the reconstrucion errors, whose average resolution will be plotted.
     binning: (np.ndarray, np.ndarray)
         Array of bin edges and array of bin indices, returned from `analysis.utils.binning.get_binning`.
     selection: indexing expression, optional
