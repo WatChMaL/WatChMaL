@@ -347,7 +347,7 @@ class WatChMaLClassification(ClassificationRun, WatChMaLOutput):
                      label='Best validation accuracy', color='darkred')
         ax2.set_ylabel("Accuracy", c='r')
         if legend:
-            ax1.legend(plot.combine_legends((ax1, ax2)), loc=legend)
+            fig.legend(*plot.combine_legends((ax1, ax2)), loc=legend)
         return fig, ax1, ax2
 
     def discriminator(self, signal_labels, background_labels):
