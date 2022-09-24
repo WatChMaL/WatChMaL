@@ -338,7 +338,7 @@ class WatChMaLClassification(ClassificationRun, WatChMaLOutput):
 
     def plot_training_progression(self, plot_best=True, y_loss_lim=None, fig_size=None, title=None,
                                   legend='center right'):
-        fig, ax1 = super().plot_training_progression(plot_best, y_loss_lim, fig_size, title, legend)
+        fig, ax1 = super().plot_training_progression(plot_best, y_loss_lim, fig_size, title, legend=None)
         ax2 = ax1.twinx()
         ax2.plot(self.train_log_epoch, self.train_log_accuracy, lw=2, label='Train accuracy', color='r', alpha=0.3)
         ax2.plot(self.val_log_epoch, self.val_log_accuracy, lw=2, label='Validation accuracy', color='r')
