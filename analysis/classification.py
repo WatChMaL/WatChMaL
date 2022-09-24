@@ -347,7 +347,7 @@ class WatChMaLClassification(ClassificationRun, WatChMaLOutput):
                      label='Best validation accuracy', color='darkred')
         ax2.set_ylabel("Accuracy", c='r')
         if legend:
-            fig.legend(*plot.combine_legends((ax1, ax2)), loc=legend)
+            ax1.legend(*plot.combine_legends((ax1, ax2)), loc=legend)
         return fig, ax1, ax2
 
     def discriminator(self, signal_labels, background_labels):
@@ -409,6 +409,8 @@ class FiTQunClassification(ClassificationRun):
         self._electron_muon_discriminator = None
 
     def discriminator(self, signal_labels, background_labels):
+        signal_labels = np.atleast_1d(signal_labels)
+        background_labels = np.atleast_1d(background_labels)
         if set(signal_labels) <= self.electron_like and set(background_labels) <= self.muons:
             return self.electron_muon_discriminator
         elif set(signal_labels) <= self.muons and set(background_labels) <= self.electron_like:
