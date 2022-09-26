@@ -44,7 +44,10 @@ def plot_histograms(runs, quantity, selection=..., ax=None, fig_size=None, x_lab
     hist_args.setdefault('density', True)
     hist_args.setdefault('histtype', 'step')
     hist_args.setdefault('lw', 2)
-    fig, ax = plt.subplots(figsize=fig_size)
+    if ax is None:
+        fig, ax = plt.subplots(figsize=fig_size)
+    else:
+        fig = ax.get_figure()
     for r in runs:
         data = r.get_quantity(quantity)[selection].flatten()
         args = {**hist_args, **r.plot_args}
@@ -97,7 +100,10 @@ def plot_resolution_profile(runs, quantity, binning, selection=..., ax=None, fig
     fig: Figure
     ax: axes.Axes
     """
-    fig, ax = plt.subplots(figsize=fig_size)
+    if ax is None:
+        fig, ax = plt.subplots(figsize=fig_size)
+    else:
+        fig = ax.get_figure()
     for r in runs:
         args = {**plot_args, **r.plot_args}
         r.plot_binned_resolution(quantity, ax, binning, selection, **args)
@@ -151,7 +157,10 @@ def plot_bias_profile(runs, quantity, binning, selection=..., ax=None, fig_size=
     fig: Figure
     ax: axes.Axes
     """
-    fig, ax = plt.subplots(figsize=fig_size)
+    if ax is None:
+        fig, ax = plt.subplots(figsize=fig_size)
+    else:
+        fig = ax.get_figure()
     for r in runs:
         args = {**plot_args, **r.plot_args}
         r.plot_binned_bias(quantity, ax, binning, selection, **args)
