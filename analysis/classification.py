@@ -31,7 +31,7 @@ def combine_softmax(softmaxes, labels):
     return np.sum(softmaxes[:, labels], axis=1)
 
 
-def plot_rocs(runs, signal_labels, background_labels, selection=..., fig_size=None, x_label="", y_label="",
+def plot_rocs(runs, signal_labels, background_labels, selection=..., ax=None, fig_size=None, x_label="", y_label="",
               x_lim=None, y_lim=None, y_log=None, x_log=None, legend='best', mode='rejection', **plot_args):
     """
     Plot overlaid ROC curves of results from a number of classification runs
@@ -46,8 +46,10 @@ def plot_rocs(runs, signal_labels, background_labels, selection=..., fig_size=No
         Set of labels corresponding to background classes. Can be either a single label or a sequence of labels.
     selection: indexing expression, optional
         Selection of the discriminator values to be used (by default use all values).
+    ax: matplotlib.axes.Axes
+        Axes to draw the plot. If not provided, a new figure and axes is created.
     fig_size: (float, float), optional
-        Figure size.
+        Figure size. Ignored if `ax` is provided.
     x_label: str, optional
         Label of the x-axis.
     y_label: str, optional
@@ -73,10 +75,13 @@ def plot_rocs(runs, signal_labels, background_labels, selection=..., fig_size=No
 
     Returns
     -------
-    fig: Figure
-    ax: axes.Axes
+    fig: matplotlib.figure.Figure
+    ax: matplotlib.axes.Axes
     """
-    fig, ax = plt.subplots(figsize=fig_size)
+    if ax is None:
+        fig, ax = plt.subplots(figsize=fig_size)
+    else:
+        fig = ax.get_figure()
     for r in runs:
         selected_signal = np.isin(r.true_labels, signal_labels)[selection]
         selected_discriminator = r.discriminator(signal_labels, background_labels)[selection]
@@ -108,7 +113,7 @@ def plot_rocs(runs, signal_labels, background_labels, selection=..., fig_size=No
     return fig, ax
 
 
-def plot_efficiency_profile(runs, binning, selection=..., fig_size=None, x_label="", y_label="", legend='best',
+def plot_efficiency_profile(runs, binning, selection=..., ax=None, fig_size=None, x_label="", y_label="", legend='best',
                             y_lim=None, **plot_args):
     """
     Plot binned efficiencies for a cut applied to a number of classification runs.
@@ -124,8 +129,10 @@ def plot_efficiency_profile(runs, binning, selection=..., fig_size=None, x_label
         Array of bin edges and array of bin indices, returned from `analysis.utils.binning.get_binning`.
     selection: indexing expression, optional
         Selection of the values to use in calculating the resolutions (by default use all values).
+    ax: matplotlib.axes.Axes
+        Axes to draw the plot. If not provided, a new figure and axes is created.
     fig_size: (float, float), optional
-        Figure size.
+        Figure size. Ignored if `ax` is provided.
     x_label: str, optional
         Label of the x-axis.
     y_label: str, optional
@@ -140,10 +147,13 @@ def plot_efficiency_profile(runs, binning, selection=..., fig_size=None, x_label
 
     Returns
     -------
-    fig: Figure
-    ax: axes.Axes
+    fig: matplotlib.figure.Figure
+    ax: matplotlib.axes.Axes
     """
-    fig, ax = plt.subplots(figsize=fig_size)
+    if ax is None:
+        fig, ax = plt.subplots(figsize=fig_size)
+    else:
+        fig = ax.get_figure()
     for r in runs:
         args = {**plot_args, **r.plot_args}
         r.plot_binned_efficiency(ax, binning, selection, **args)

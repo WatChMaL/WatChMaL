@@ -3,15 +3,12 @@ import glob
 import tabulate
 import matplotlib.pyplot as plt
 from abc import ABC, abstractmethod
-from analysis.read import FiTQunOutput
-from analysis.utils.math import energy_from_momentum, momentum_from_energy, angle_between_directions, \
-    decompose_along_direction, direction_from_angles
-
-import analysis.utils.binning as bins
 from analysis.read import WatChMaLOutput
+import analysis.utils.math as math
+import analysis.utils.binning as bins
 
 
-def plot_histograms(runs, quantity, selection=..., fig_size=None, x_label="", y_label="", legend='best', **hist_args):
+def plot_histograms(runs, quantity, selection=..., ax=None, fig_size=None, x_label="", y_label="", legend='best', **hist_args):
     """
     Plot overlaid histograms of results from a number of regression runs.
 
@@ -24,8 +21,10 @@ def plot_histograms(runs, quantity, selection=..., fig_size=None, x_label="", y_
         argument and returns the quantities, to be histogrammed.
     selection: indexing expression, optional
         Selection of the values to be histogrammed (by default use all values).
+    ax: matplotlib.axes.Axes
+        Axes to draw the plot. If not provided, a new figure and axes is created.
     fig_size: (float, float), optional
-        Figure size.
+        Figure size. Ignored if `ax` is provided.
     x_label: str, optional
         Label of the x-axis.
     y_label: str, optional
@@ -57,7 +56,7 @@ def plot_histograms(runs, quantity, selection=..., fig_size=None, x_label="", y_
     return fig, ax
 
 
-def plot_resolution_profile(runs, quantity, binning, selection=..., fig_size=None, x_label="", y_label="",
+def plot_resolution_profile(runs, quantity, binning, selection=..., ax=None, fig_size=None, x_label="", y_label="",
                             legend='best', y_lim=None, **plot_args):
     """
     Plot binned resolutions for results from a set of regression runs. The quantity should be the name of an attribute
@@ -77,8 +76,10 @@ def plot_resolution_profile(runs, quantity, binning, selection=..., fig_size=Non
         Array of bin edges and array of bin indices, returned from `analysis.utils.binning.get_binning`.
     selection: indexing expression, optional
         Selection of the values to use in calculating the resolutions (by default use all values).
+    ax: matplotlib.axes.Axes
+        Axes to draw the plot. If not provided, a new figure and axes is created.
     fig_size: (float, float), optional
-        Figure size.
+        Figure size. Ignored if `ax` is provided.
     x_label: str, optional
         Label of the x-axis.
     y_label: str, optional
@@ -109,7 +110,7 @@ def plot_resolution_profile(runs, quantity, binning, selection=..., fig_size=Non
     return fig, ax
 
 
-def plot_bias_profile(runs, quantity, binning, selection=..., fig_size=None, x_label="", y_label="",
+def plot_bias_profile(runs, quantity, binning, selection=..., ax=None, fig_size=None, x_label="", y_label="",
                             legend='best', y_lim=None, **plot_args):
     """
     Plot binned bias for results from a set of regression runs. The quantity should be the name of an attribute that
@@ -129,8 +130,10 @@ def plot_bias_profile(runs, quantity, binning, selection=..., fig_size=None, x_l
         Array of bin edges and array of bin indices, returned from `analysis.utils.binning.get_binning`.
     selection: indexing expression, optional
         Selection of the values to use in calculating the resolutions (by default use all values).
+    ax: matplotlib.axes.Axes
+        Axes to draw the plot. If not provided, a new figure and axes is created.
     fig_size: (float, float), optional
-        Figure size.
+        Figure size. Ignored if `ax` is provided.
     x_label: str, optional
         Label of the x-axis.
     y_label: str, optional
@@ -349,7 +352,7 @@ class MomentumPrediction:
             self.momentum_residuals = self.momentum_prediction - self.true_momenta
             self.momentum_fractional_errors = self.momentum_residuals/self.true_momenta
             if true_labels is not None:
-                self.true_energies = energy_from_momentum(true_momenta, true_labels)
+                self.true_energies = math.energy_from_momentum(true_momenta, true_labels)
                 self.energy_residuals = self.energy_prediction - self.true_energies
                 self.energy_fractional_errors = self.energy_residuals/self.true_energies
 
@@ -360,7 +363,7 @@ class MomentumPrediction:
 
     @property
     def energy_prediction(self):
-        return energy_from_momentum(self.momentum_prediction, self.true_labels)
+        return math.energy_from_momentum(self.momentum_prediction, self.true_labels)
 
 
 class PositionPrediction:
@@ -376,7 +379,7 @@ class PositionPrediction:
             self.z_residuals = self.position_residuals[:, 2]
             if true_directions is not None:
                 (self.position_3d_errors, self.position_longitudinal_errors,
-                 self.position_transverse_errors) = decompose_along_direction(self.position_residuals, true_directions)
+                 self.position_transverse_errors) = math.decompose_along_direction(self.position_residuals, true_directions)
             else:
                 self.position_3d_errors = np.linalg.norm(self.position_residuals, axis=-1)
 
@@ -391,7 +394,7 @@ class DirectionPrediction:
         self.true_directions = true_directions
         self.direction_errors = None
         if true_directions is not None:
-            self.direction_errors = angle_between_directions(self.direction_prediction, true_directions, degrees=True)
+            self.direction_errors = math.angle_between_directions(self.direction_prediction, true_directions, degrees=True)
 
     @property
     @abstractmethod
@@ -400,8 +403,8 @@ class DirectionPrediction:
 
 
 class FitQun1RingFit(RegressionRun, PositionPrediction, DirectionPrediction, MomentumPrediction):
-    def __init__(self, fitqun_output: FiTQunOutput, run_label, true_positions=None, true_directions=None,
-                 true_momenta=None, true_labels=None, indices=..., particle_label_map=None, **plot_args):
+    def __init__(self, fitqun_output, run_label, true_positions=None, true_directions=None, true_momenta=None,
+                 true_labels=None, indices=..., particle_label_map=None, **plot_args):
         RegressionRun.__init__(self, run_label=run_label, **plot_args)
         self.fitqun_output = fitqun_output
         self.n_events = len(np.empty(len(fitqun_output.chain))[indices])
@@ -511,7 +514,7 @@ class WatChMaLDirectionRegression(WatChMaLRegression, DirectionPrediction):
     @property
     def direction_prediction(self):
         if self._direction_prediction is None:
-            self._direction_prediction = direction_from_angles(self.predictions, self.zenith_axis)
+            self._direction_prediction = math.direction_from_angles(self.predictions, self.zenith_axis)
         return self._direction_prediction
 
 
@@ -524,7 +527,7 @@ class WatChMaLEnergyRegression(WatChMaLRegression, MomentumPrediction):
     @property
     def momentum_prediction(self):
         if self._momentum_prediction is None:
-            self._momentum_prediction = momentum_from_energy(self.predictions, self.true_labels)
+            self._momentum_prediction = math.momentum_from_energy(self.predictions, self.true_labels)
         return self._momentum_prediction
 
 
