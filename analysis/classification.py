@@ -196,7 +196,7 @@ class ClassificationRun(ABC):
         ----------
         select_labels: set of int
             Set of true labels to select
-        selection: index_expression, optionl
+        selection: index_expression, optional
             Selection over all events (by default use the run's predefined selection)
 
         Returns
@@ -492,8 +492,8 @@ class FiTQunClassification(ClassificationRun):
     @property
     def electron_muon_discriminator(self):
         if self._electron_muon_discriminator is None:
-            self._electron_muon_discriminator = (self.fitqun_output.muon_nll[self.indices]
-                                                 - self.fitqun_output.electron_nll[self.indices])
+            fq = self.fitqun_output
+            self._electron_muon_discriminator = fq.muon_nll[self.indices] - fq.electron_nll[self.indices]
         return self._electron_muon_discriminator
 
     @property
@@ -515,11 +515,20 @@ class FiTQunClassification(ClassificationRun):
     def electron_pi0_nll_pi0mass_discriminator(self):
         if self._nll_pi0mass_discriminator is None:
             fq = self.fitqun_output
-            if self._nll_pi0mass_factor is None:
-                self.tune_pi0mass_factor()
             self._nll_pi0mass_discriminator = (fq.pi0_nll[self.indices] - fq.electron_nll[self.indices]
-                                               + self._nll_pi0mass_factor*fq.pi0_mass)
+                                               + self.nll_pi0mass_factor*fq.pi0_mass)
         return self._nll_pi0mass_discriminator
+
+    @property
+    def nll_pi0mass_factor(self):
+        if self._nll_pi0mass_factor is None:
+            self.tune_pi0mass_factor()
+        return self._nll_pi0mass_factor
+
+    @nll_pi0mass_factor.setter
+    def nll_pi0mass_factor(self, f):
+        self._nll_pi0mass_factor = f
+        self._nll_pi0mass_discriminator = None  # Reset to be recalculated after changing factor
 
     def tune_pi0mass_factor(self, pi0_efficiency=None, electron_efficiency=None, selection=None):
         if selection is None:
@@ -527,26 +536,24 @@ class FiTQunClassification(ClassificationRun):
         electrons = self.true_labels[selection] == self.electrons
         pi0s = self.true_labels[selection] == self.pi0s
         nll_diff = self.electron_pi0_nll_discriminator[selection]
-        pi0mass = self.fitqun_output.pi0_mass[selection]
-        electron_nll_diff = nll_diff[electrons]
-        electron_pi0mass = pi0mass[electrons]
-        pi0_nll_diff = nll_diff[pi0s]
-        pi0_pi0mass = pi0mass[pi0s]
+        fq = self.fitqun_output
+        pi0mass = fq.pi0_mass[self.indices][selection]
         if electron_efficiency is not None:  # Optimise cut to minimise pi0 mis-ID for given electron efficiency
             def pi_misid(cut_gradient):
-                e_discriminator = electron_nll_diff + cut_gradient*electron_pi0mass
-                cut_intercept = np.quantile(e_discriminator, electron_efficiency)
-                return np.mean(pi0_nll_diff + cut_gradient*pi0_pi0mass > cut_intercept)
+                discriminator = nll_diff + cut_gradient*pi0mass
+                cut_intercept = np.quantile(discriminator[electrons], electron_efficiency)
+                return np.mean(discriminator[pi0s] > cut_intercept)
             min_func = pi_misid
         elif pi0_efficiency is not None:  # Optimise cut to minimise electron mis-ID for given pi0 efficiency
             def e_misid(cut_gradient):
-                pi0_discriminator = pi0_nll_diff + cut_gradient*pi0_pi0mass
-                cut_intercept = np.quantile(pi0_discriminator, pi0_efficiency)
-                return np.mean(electron_nll_diff + cut_gradient*electron_pi0mass <= cut_intercept)
+                discriminator = nll_diff + cut_gradient*pi0mass
+                cut_intercept = np.quantile(discriminator[pi0s], pi0_efficiency)
+                return np.mean(discriminator[electrons] <= cut_intercept)
             min_func = e_misid
         else:  # Optimise cut to minimise sum of ranks for electrons (equivalent to Mann–Whitney U test)
             def u_test(cut_gradient):
-                ranks = np.argsort(nll_diff + cut_gradient*pi0mass)
+                discriminator = nll_diff + cut_gradient*pi0mass
+                ranks = np.argsort(discriminator)
                 return np.sum(ranks[electrons])
             min_func = u_test
         result = opt.minimize_scalar(min_func, method='Golden')
