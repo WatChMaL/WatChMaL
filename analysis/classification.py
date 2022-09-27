@@ -530,7 +530,7 @@ class FiTQunClassification(ClassificationRun):
         self._nll_pi0mass_factor = f
         self._nll_pi0mass_discriminator = None  # Reset to be recalculated after changing factor
 
-    def tune_pi0mass_factor(self, pi0_efficiency=None, electron_efficiency=None, selection=None):
+    def tune_pi0mass_factor(self, pi0_efficiency=None, electron_efficiency=None, selection=None, **opt_args):
         if selection is None:
             selection = self.selection
         electrons = self.true_labels[selection] == self.electrons
@@ -556,7 +556,8 @@ class FiTQunClassification(ClassificationRun):
                 ranks = np.argsort(discriminator)
                 return np.sum(ranks[electrons])
             min_func = u_test
-        result = opt.minimize_scalar(min_func, method='Golden')
+        opt_args.setdefault('method', 'golden')
+        result = opt.minimize_scalar(min_func, **opt_args)
         self._nll_pi0mass_factor = result.x
         return self._nll_pi0mass_factor
 
