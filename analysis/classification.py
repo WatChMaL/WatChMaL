@@ -369,7 +369,7 @@ class WatChMaLClassification(ClassificationRun, WatChMaLOutput):
         plot_args: optional
             Additional arguments to pass to plotting functions.
         """
-        ClassificationRun.__init__(self, run_label=run_label, true_labels=true_labels, selection=selection **plot_args)
+        ClassificationRun.__init__(self, run_label=run_label, true_labels=true_labels, selection=selection, **plot_args)
         WatChMaLOutput.__init__(self, directory=directory, indices=indices)
         self._softmaxes = None
         self._train_log_accuracy = None
