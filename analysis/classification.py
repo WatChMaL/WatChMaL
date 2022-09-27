@@ -512,11 +512,18 @@ class FiTQunClassification(ClassificationRun):
         self._electron_pi0_discriminator = self.get_discriminator(discriminator)
 
     @property
+    def electron_pi0_nll_discriminator(self):
+        if self._electron_pi0_nll_discriminator is None:
+            fq = self.fitqun_output
+            self._electron_pi0_nll_discriminator = fq.pi0_nll[self.indices] - fq.electron_nll[self.indices]
+        return self._electron_pi0_nll_discriminator
+
+    @property
     def electron_pi0_nll_pi0mass_discriminator(self):
         if self._nll_pi0mass_discriminator is None:
             fq = self.fitqun_output
             self._nll_pi0mass_discriminator = (fq.pi0_nll[self.indices] - fq.electron_nll[self.indices]
-                                               + self.nll_pi0mass_factor*fq.pi0_mass)
+                                               + self.nll_pi0mass_factor*fq.pi0_mass[self.indices])
         return self._nll_pi0mass_discriminator
 
     @property
@@ -560,13 +567,6 @@ class FiTQunClassification(ClassificationRun):
         result = opt.minimize_scalar(min_func, **opt_args)
         self._nll_pi0mass_factor = result.x
         return self._nll_pi0mass_factor
-
-    @property
-    def electron_pi0_nll_discriminator(self):
-        if self._electron_pi0_nll_discriminator is None:
-            self._electron_pi0_nll_discriminator = (self.fitqun_output.pi0_nll[self.indices]
-                                                    - self.fitqun_output.electron_nll[self.indices])
-        return self._electron_pi0_nll_discriminator
 
     @property
     def pi0_electron_discriminator(self):
