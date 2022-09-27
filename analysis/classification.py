@@ -295,8 +295,8 @@ class ClassificationRun(ABC):
             The threshold applied by the cut.
         """
         selection = self.select_labels(select_labels, selection)
-        discriminator_values = self.discriminator(signal_labels, background_labels)[selection]
-        threshold = np.quantile(discriminator_values, 1 - efficiency)
+        discriminator_values = self.discriminator(signal_labels, background_labels)
+        threshold = np.quantile(discriminator_values[selection], 1 - efficiency)
         self.cut = np.array(discriminator_values) > threshold
         if return_threshold:
             return self.cut, threshold
