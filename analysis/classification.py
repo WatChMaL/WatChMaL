@@ -543,19 +543,18 @@ class FiTQunClassification(ClassificationRun):
         electrons = np.isin(self.true_labels[selection], list(self.electrons))
         pi0s = np.isin(self.true_labels[selection], list(self.pi0s))
         nll_diff = self.electron_pi0_nll_discriminator[selection]
-        fq = self.fitqun_output
-        pi0mass = fq.pi0_mass[self.indices][selection]
+        pi0mass = self.fitqun_output.pi0_mass[self.indices][selection]
         if electron_efficiency is not None:  # Optimise cut to minimise pi0 mis-ID for given electron efficiency
             def pi_misid(cut_gradient):
                 discriminator = nll_diff + cut_gradient*pi0mass
-                cut_intercept = np.quantile(discriminator[electrons], electron_efficiency)
-                return np.mean(discriminator[pi0s] > cut_intercept)
+                cut_threshold = np.quantile(discriminator[electrons], 1-electron_efficiency)
+                return np.mean(discriminator[pi0s] > cut_threshold)
             min_func = pi_misid
         elif pi0_efficiency is not None:  # Optimise cut to minimise electron mis-ID for given pi0 efficiency
             def e_misid(cut_gradient):
                 discriminator = nll_diff + cut_gradient*pi0mass
-                cut_intercept = np.quantile(discriminator[pi0s], pi0_efficiency)
-                return np.mean(discriminator[electrons] <= cut_intercept)
+                cut_threshold = np.quantile(discriminator[pi0s], 1-pi0_efficiency)
+                return np.mean(discriminator[electrons] <= cut_threshold)
             min_func = e_misid
         else:  # Optimise cut to minimise sum of ranks for pi0s (equivalent to Mann–Whitney U test)
             def u_test(cut_gradient):
