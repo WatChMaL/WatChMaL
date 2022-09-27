@@ -545,20 +545,23 @@ class FiTQunClassification(ClassificationRun):
         pi0mass = self.fitqun_output.pi0_mass[self.indices]
         electrons = np.isin(self.true_labels[selection], list(self.electrons))
         pi0s = np.isin(self.true_labels[selection], list(self.pi0s))
+
         if binning is not None:
             n_bins = len(binning[0]) + 1
-            self.nll_pi0mass_factor = np.zeros(n_bins)
+            nll_pi0mass_factors = np.zeros(n_bins)
             for b in range(n_bins):
                 bin_selection = np.zeros_like(self.true_labels, dtype=bool)
                 bin_selection[selection] = True
-                bin_selection &= binning[1] == b
+                bin_selection &= (binning[1] == b)
                 if np.any(bin_selection):
-                    self.nll_pi0mass_factor[b] = self.tune_nll_pi0mass_discriminator(pi0_efficiency, electron_efficiency,
-                                                                                     bin_selection, **opt_args)
-            self._nll_pi0mass_discriminator = nll_diff + self.nll_pi0mass_factor[binning[1]]*pi0mass
+                    nll_pi0mass_factors[b] = self.tune_nll_pi0mass_discriminator(pi0_efficiency, electron_efficiency,
+                                                                                 bin_selection, **opt_args)
+            self.nll_pi0mass_factor = nll_pi0mass_factors
+            self._nll_pi0mass_discriminator = nll_diff + nll_pi0mass_factors[binning[1]]*pi0mass
             self.electron_pi0_discriminator = self._nll_pi0mass_discriminator
-            return self.nll_pi0mass_factor
-        elif electron_efficiency is not None:  # Optimise cut to minimise pi0 mis-ID for given electron efficiency
+            return nll_pi0mass_factors
+
+        if electron_efficiency is not None:  # Optimise cut to minimise pi0 mis-ID for given electron efficiency
             def pi_misid(cut_gradient):
                 discriminator = nll_diff[selection] + cut_gradient*pi0mass[selection]
                 cut_threshold = np.quantile(discriminator[electrons], 1-electron_efficiency)
