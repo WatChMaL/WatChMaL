@@ -557,11 +557,11 @@ class FiTQunClassification(ClassificationRun):
                 cut_intercept = np.quantile(discriminator[pi0s], pi0_efficiency)
                 return np.mean(discriminator[electrons] <= cut_intercept)
             min_func = e_misid
-        else:  # Optimise cut to minimise sum of ranks for electrons (equivalent to Mann–Whitney U test)
+        else:  # Optimise cut to minimise sum of ranks for pi0s (equivalent to Mann–Whitney U test)
             def u_test(cut_gradient):
                 discriminator = nll_diff + cut_gradient*pi0mass
                 ranks = np.argsort(discriminator)
-                return np.sum(ranks[electrons])
+                return np.sum(ranks[pi0s])
             min_func = u_test
         opt_args.setdefault('method', 'golden')
         result = opt.minimize_scalar(min_func, **opt_args)
