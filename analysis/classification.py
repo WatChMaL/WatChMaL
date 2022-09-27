@@ -473,9 +473,9 @@ class FiTQunClassification(ClassificationRun):
             return self.electron_gamma_discriminator
         elif set(signal_labels) <= self.gammas and set(background_labels) <= self.electrons:
             return self.gamma_electron_discriminator
-        elif set(signal_labels) <= self.electrons and set(background_labels) <= self.pi0s:
+        elif set(signal_labels) <= self.electron_like and set(background_labels) <= self.pi0s:
             return self.electron_pi0_discriminator
-        elif set(signal_labels) <= self.pi0s and set(background_labels) <= self.electrons:
+        elif set(signal_labels) <= self.pi0s and set(background_labels) <= self.electron_like:
             return self.pi0_electron_discriminator
         else:
             raise NotImplementedError("A discriminator for the labels given for the signal", signal_labels,
