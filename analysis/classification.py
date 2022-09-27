@@ -504,7 +504,7 @@ class FiTQunClassification(ClassificationRun):
     def electron_pi0_discriminator(self):
         if self._electron_pi0_discriminator is None:
             # By default, use simple discriminator using only the log-likelihood difference
-            return self._electron_pi0_nll_discriminator
+            return self.electron_pi0_nll_discriminator
         return self._electron_pi0_discriminator
 
     @electron_pi0_discriminator.setter
