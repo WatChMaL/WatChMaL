@@ -31,7 +31,7 @@ def combine_softmax(softmaxes, labels):
     return np.sum(softmaxes[:, labels], axis=1)
 
 
-def plot_rocs(runs, signal_labels, background_labels, selection=..., ax=None, fig_size=None, x_label="", y_label="",
+def plot_rocs(runs, signal_labels, background_labels, selection=None, ax=None, fig_size=None, x_label="", y_label="",
               x_lim=None, y_lim=None, y_log=None, x_log=None, legend='best', mode='rejection', **plot_args):
     """
     Plot overlaid ROC curves of results from a number of classification runs
@@ -45,7 +45,8 @@ def plot_rocs(runs, signal_labels, background_labels, selection=..., ax=None, fi
     background_labels: int or sequence of ints
         Set of labels corresponding to background classes. Can be either a single label or a sequence of labels.
     selection: indexing expression, optional
-        Selection of the discriminator values to be used (by default use all values).
+        Selection of the discriminator values to be used (by default use each run's predefined selection, or all events
+        if none is defined).
     ax: matplotlib.axes.Axes
         Axes to draw the plot. If not provided, a new figure and axes is created.
     fig_size: (float, float), optional
@@ -83,6 +84,8 @@ def plot_rocs(runs, signal_labels, background_labels, selection=..., ax=None, fi
     else:
         fig = ax.get_figure()
     for r in runs:
+        if selection is None:
+            selection = r.selection
         selected_signal = np.isin(r.true_labels, signal_labels)[selection]
         selected_discriminator = r.discriminator(signal_labels, background_labels)[selection]
         fpr, tpr, _ = metrics.roc_curve(selected_signal, selected_discriminator)
@@ -113,7 +116,7 @@ def plot_rocs(runs, signal_labels, background_labels, selection=..., ax=None, fi
     return fig, ax
 
 
-def plot_efficiency_profile(runs, binning, selection=..., select_labels=None, ax=None, fig_size=None, x_label="",
+def plot_efficiency_profile(runs, binning, selection=None, select_labels=None, ax=None, fig_size=None, x_label="",
                             y_label="", legend='best', y_lim=None, **plot_args):
     """
     Plot binned efficiencies for a cut applied to a number of classification runs.
@@ -128,7 +131,8 @@ def plot_efficiency_profile(runs, binning, selection=..., select_labels=None, ax
     binning: (ndarray, ndarray)
         Array of bin edges and array of bin indices, returned from `analysis.utils.binning.get_binning`.
     selection: indexing expression, optional
-        Selection of the values to use in calculating the resolutions (by default use all values).
+        Selection of the values to use in calculating the efficiencies (by default use each run's predefined selection,
+        or all events if none is defined).
     select_labels: set of int
         Set of true labels to select events to use.
     ax: matplotlib.axes.Axes
@@ -158,6 +162,8 @@ def plot_efficiency_profile(runs, binning, selection=..., select_labels=None, ax
         fig = ax.get_figure()
     for r in runs:
         args = {**plot_args, **r.plot_args}
+        if selection is None:
+            selection = r.selection
         r.plot_binned_efficiency(ax, binning, selection, select_labels, **args)
     ax.set_xlabel(x_label)
     ax.set_ylabel(y_label)
@@ -169,9 +175,12 @@ def plot_efficiency_profile(runs, binning, selection=..., select_labels=None, ax
 
 
 class ClassificationRun(ABC):
-    def __init__(self, run_label, true_labels=None, **plot_args):
+    def __init__(self, run_label, true_labels=None, selection=None, **plot_args):
         self.run_label = run_label
         self.true_labels = true_labels
+        if selection is None:
+            selection = ...
+        self.selection = selection
         plot_args['label'] = run_label
         self.plot_args = plot_args
         self.cut = None
@@ -180,7 +189,7 @@ class ClassificationRun(ABC):
     def discriminator(self, signal_labels, background_labels):
         """This method should return the discriminator for the given signal and background labels"""
 
-    def select_labels(self, selection, select_labels):
+    def select_labels(self, select_labels, selection=None):
         """
         Combine a selection of events with the additional requirement of having chosen true labels.
 
@@ -188,21 +197,23 @@ class ClassificationRun(ABC):
         ----------
         select_labels: set of int
             Set of true labels to select
-        selection: index_expression
-            Selection over all events
+        selection: index_expression, optionl
+            Selection over all events (by default use the run's predefined selection)
 
         Returns
         -------
         ndarray
             Array of indices that are both selected by `selection` and have true label in `select_labels`
         """
+        if selection is None:
+            selection = self.selection
         if select_labels is not None:
             s = np.zeros_like(self.true_labels, dtype=bool)
             s[selection] = True
             selection = s & np.isin(self.true_labels, np.atleast_1d(select_labels))
         return selection
 
-    def cut_with_constant_binned_efficiency(self, signal_labels, background_labels, efficiency, binning, selection=...,
+    def cut_with_constant_binned_efficiency(self, signal_labels, background_labels, efficiency, binning, selection=None,
                                             select_labels=None, return_thresholds=False):
         """
         Generate array of boolean values indicating whether each event passes a cut defined such that, in each bin of
@@ -225,7 +236,7 @@ class ClassificationRun(ABC):
             Array of bin edges and array of bin indices, returned from `analysis.utils.binning.get_binning`.
         selection: indexing expression, optional
             Selection of the discriminator values to use in calculating the thresholds applied by the cut in each bin
-            (by default use all values).
+            (by default use the run's predefined selection, or all events if none is defined).
         select_labels: set of int
             Set of true labels to select events to use in calculating the thresholds.
         return_thresholds:
@@ -238,7 +249,7 @@ class ClassificationRun(ABC):
         thresholds: ndarray of float, optional
             One-dimensional array giving the threshold applied by the cut to events in each bin.
         """
-        selection = self.select_labels(selection, select_labels)
+        selection = self.select_labels(select_labels, selection)
         discriminator_values = self.discriminator(signal_labels, background_labels)
         binned_discriminators = bins.apply_binning(discriminator_values, binning, selection)
         thresholds = bins.binned_quantiles(binned_discriminators, 1 - efficiency)
@@ -250,7 +261,7 @@ class ClassificationRun(ABC):
         else:
             return self.cut
 
-    def cut_with_fixed_efficiency(self, signal_labels, background_labels, efficiency, selection=..., select_labels=None,
+    def cut_with_fixed_efficiency(self, signal_labels, background_labels, efficiency, selection=None, select_labels=None,
                                   return_threshold=False):
         """
         Generate array of boolean values indicating whether each event passes a cut defined such that a fixed proportion
@@ -284,7 +295,7 @@ class ClassificationRun(ABC):
         threshold: float, optional
             The threshold applied by the cut.
         """
-        selection = self.select_labels(selection, select_labels)
+        selection = self.select_labels(select_labels, selection)
         discriminator_values = self.discriminator(signal_labels, background_labels)[selection]
         threshold = np.quantile(discriminator_values, 1 - efficiency)
         self.cut = np.array(discriminator_values) > threshold
@@ -293,7 +304,7 @@ class ClassificationRun(ABC):
         else:
             return self.cut
 
-    def plot_binned_efficiency(self, ax, binning, selection=..., select_labels=None, reverse=False, errors=False,
+    def plot_binned_efficiency(self, ax, binning, selection=None, select_labels=None, reverse=False, errors=False,
                                x_errors=True, **plot_args):
         """
         Plot binned efficiencies of the cut applied to the classification run on an existing set of axes.
@@ -323,7 +334,7 @@ class ClassificationRun(ABC):
             provided in `runs`.
         """
         plot_args.setdefault('lw', 2)
-        selection = self.select_labels(selection, select_labels)
+        selection = self.select_labels(select_labels, selection)
         binned_cut = bins.apply_binning(self.cut, binning, selection)
         y = bins.binned_efficiencies(binned_cut, errors, reverse=reverse)
         x = bins.bin_centres(binning[0])
@@ -340,7 +351,7 @@ class ClassificationRun(ABC):
 
 
 class WatChMaLClassification(ClassificationRun, WatChMaLOutput):
-    def __init__(self, directory, run_label, true_labels=None, indices=None, **plot_args):
+    def __init__(self, directory, run_label, true_labels=None, indices=None, selection=None, **plot_args):
         """
         Constructs the object holding the results of a WatChMaL classification run.
 
@@ -353,10 +364,12 @@ class WatChMaLClassification(ClassificationRun, WatChMaLOutput):
         indices: array_like of int, optional
             Array of indices of events to select out of the indices output by WatChMaL (by default use all events sorted
             by their indices).
+        selection: index_expression, optional
+            Additional selection of events to use in plotting, calculating efficiencies, etc.
         plot_args: optional
             Additional arguments to pass to plotting functions.
         """
-        ClassificationRun.__init__(self, run_label=run_label, true_labels=true_labels, **plot_args)
+        ClassificationRun.__init__(self, run_label=run_label, true_labels=true_labels, selection=selection **plot_args)
         WatChMaLOutput.__init__(self, directory=directory, indices=indices)
         self._softmaxes = None
         self._train_log_accuracy = None
@@ -436,9 +449,12 @@ class WatChMaLClassification(ClassificationRun, WatChMaLOutput):
 
 class FiTQunClassification(ClassificationRun):
 
-    def __init__(self, fitqun_output, run_label, true_labels=None, indices=..., particle_label_map=None, **plot_args):
-        super().__init__(run_label=run_label, true_labels=true_labels, **plot_args)
+    def __init__(self, fitqun_output, run_label, true_labels=None, indices=None, selection=None,
+                 particle_label_map=None, **plot_args):
+        super().__init__(run_label=run_label, true_labels=true_labels, selection=selection, **plot_args)
         self.fitqun_output = fitqun_output
+        if indices is None:
+            indices = ...
         self.indices = indices
         if particle_label_map is None:
             particle_label_map = {'gamma': 0, 'electron': 1, 'muon': 2, 'pi0': 3}
