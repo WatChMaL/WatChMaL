@@ -51,8 +51,8 @@ def plot_histograms(runs, quantity, selection=None, ax=None, fig_size=None, x_la
         fig = ax.get_figure()
     for r in runs:
         if selection is None:
-            selection = r.selection
-        data = r.get_quantity(quantity)[selection].flatten()
+            run_selection = r.selection if selection is None else selection
+        data = r.get_quantity(quantity)[run_selection].flatten()
         args = {**hist_args, **r.plot_args}
         ax.hist(data, **args)
     ax.set_xlabel(x_label)
@@ -229,7 +229,7 @@ def tabulate_statistics(runs, quantities, stat_labels, statistic="resolution", s
                      for stat in statistic]
     data = []
     for f, q in zip(functions, quantities):
-        data.append([f(r.get_quantity(q)[selection if selection is not None else r.selection]) for r in runs])
+        data.append([f(r.get_quantity(q)[r.selection if selection is None else selection]) for r in runs])
     if transpose:
         data = list(zip(*data))
         return tabulate.tabulate(data, headers=stat_labels, showindex=run_labels, **tabulate_args)

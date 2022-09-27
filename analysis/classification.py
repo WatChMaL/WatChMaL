@@ -84,10 +84,9 @@ def plot_rocs(runs, signal_labels, background_labels, selection=None, ax=None, f
     else:
         fig = ax.get_figure()
     for r in runs:
-        if selection is None:
-            selection = r.selection
-        selected_signal = np.isin(r.true_labels, signal_labels)[selection]
-        selected_discriminator = r.discriminator(signal_labels, background_labels)[selection]
+        run_selection = r.selection if selection is None else selection
+        selected_signal = np.isin(r.true_labels, signal_labels)[run_selection]
+        selected_discriminator = r.discriminator(signal_labels, background_labels)[run_selection]
         fpr, tpr, _ = metrics.roc_curve(selected_signal, selected_discriminator)
         auc = metrics.auc(fpr, tpr)
         args = {**plot_args, **r.plot_args}
@@ -162,9 +161,8 @@ def plot_efficiency_profile(runs, binning, selection=None, select_labels=None, a
         fig = ax.get_figure()
     for r in runs:
         args = {**plot_args, **r.plot_args}
-        if selection is None:
-            selection = r.selection
-        r.plot_binned_efficiency(ax, binning, selection, select_labels, **args)
+        run_selection = r.selection if selection is None else selection
+        r.plot_binned_efficiency(ax, binning, run_selection, select_labels, **args)
     ax.set_xlabel(x_label)
     ax.set_ylabel(y_label)
     if legend:
