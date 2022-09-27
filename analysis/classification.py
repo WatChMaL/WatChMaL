@@ -1,6 +1,7 @@
 import numpy as np
 import glob
 import matplotlib.pyplot as plt
+import scipy.optimize as opt
 from abc import ABC, abstractmethod
 from sklearn import metrics
 
@@ -456,6 +457,10 @@ class FiTQunClassification(ClassificationRun):
         self.electron_like = {self.particle_label_map[p] for p in ['electron', 'gamma']}
         self._electron_gamma_discriminator = None
         self._electron_muon_discriminator = None
+        self._electron_pi0_nll_discriminator = None
+        self._nll_pi0mass_discriminator = None
+        self._electron_pi0_discriminator = None
+        self._nll_pi0mass_factor = None
 
     def discriminator(self, signal_labels, background_labels):
         signal_labels = np.atleast_1d(signal_labels)
@@ -468,16 +473,28 @@ class FiTQunClassification(ClassificationRun):
             return self.electron_gamma_discriminator
         elif set(signal_labels) <= self.gammas and set(background_labels) <= self.electrons:
             return self.gamma_electron_discriminator
+        elif set(signal_labels) <= self.electrons and set(background_labels) <= self.pi0s:
+            return self.electron_pi0_discriminator
+        elif set(signal_labels) <= self.pi0s and set(background_labels) <= self.electrons:
+            return self.pi0_electron_discriminator
         else:
             raise NotImplementedError("A discriminator for the labels given for the signal", signal_labels,
                                       "and background", background_labels,
                                       "has not yet been implemented for fiTQun outputs")
 
+    def get_discriminator(self, discriminator):
+        if callable(discriminator):
+            return discriminator(self.fitqun_output)[self.indices]
+        elif isinstance(discriminator, str):
+            return getattr(self, discriminator)
+        else:
+            return discriminator
+
     @property
     def electron_muon_discriminator(self):
         if self._electron_muon_discriminator is None:
-            self._electron_muon_discriminator = self.fitqun_output.muon_nll[self.indices] - \
-                                                self.fitqun_output.electron_nll[self.indices]
+            self._electron_muon_discriminator = (self.fitqun_output.muon_nll[self.indices]
+                                                 - self.fitqun_output.electron_nll[self.indices])
         return self._electron_muon_discriminator
 
     @property
@@ -485,18 +502,79 @@ class FiTQunClassification(ClassificationRun):
         return -self.electron_muon_discriminator
 
     @property
+    def electron_pi0_discriminator(self):
+        if self._electron_pi0_discriminator is None:
+            # By default, use simple discriminator using only the log-likelihood difference
+            return self._electron_pi0_nll_discriminator
+        return self._electron_pi0_discriminator
+
+    @electron_pi0_discriminator.setter
+    def electron_pi0_discriminator(self, discriminator):
+        self._electron_pi0_discriminator = self.get_discriminator(discriminator)
+
+    @property
+    def electron_pi0_nll_pi0mass_discriminator(self):
+        if self._nll_pi0mass_discriminator is None:
+            fq = self.fitqun_output
+            if self._nll_pi0mass_factor is None:
+                self.tune_pi0mass_factor()
+            self._nll_pi0mass_discriminator = (fq.pi0_nll[self.indices] - fq.electron_nll[self.indices]
+                                               + self._nll_pi0mass_factor*fq.pi0_mass)
+        return self._nll_pi0mass_discriminator
+
+    def tune_pi0mass_factor(self, pi0_efficiency=None, electron_efficiency=None, selection=None):
+        if selection is None:
+            selection = self.selection
+        electrons = self.true_labels[selection] == self.electrons
+        pi0s = self.true_labels[selection] == self.pi0s
+        nll_diff = self.electron_pi0_nll_discriminator[selection]
+        pi0mass = self.fitqun_output.pi0_mass[selection]
+        electron_nll_diff = nll_diff[electrons]
+        electron_pi0mass = pi0mass[electrons]
+        pi0_nll_diff = nll_diff[pi0s]
+        pi0_pi0mass = pi0mass[pi0s]
+        if electron_efficiency is not None:  # Optimise cut to minimise pi0 mis-ID for given electron efficiency
+            def pi_misid(cut_gradient):
+                e_discriminator = electron_nll_diff + cut_gradient*electron_pi0mass
+                cut_intercept = np.quantile(e_discriminator, electron_efficiency)
+                return np.mean(pi0_nll_diff + cut_gradient*pi0_pi0mass > cut_intercept)
+            min_func = pi_misid
+        elif pi0_efficiency is not None:  # Optimise cut to minimise electron mis-ID for given pi0 efficiency
+            def e_misid(cut_gradient):
+                pi0_discriminator = pi0_nll_diff + cut_gradient*pi0_pi0mass
+                cut_intercept = np.quantile(pi0_discriminator, pi0_efficiency)
+                return np.mean(electron_nll_diff + cut_gradient*electron_pi0mass <= cut_intercept)
+            min_func = e_misid
+        else:  # Optimise cut to minimise sum of ranks for electrons (equivalent to Mann–Whitney U test)
+            def u_test(cut_gradient):
+                ranks = np.argsort(nll_diff + cut_gradient*pi0mass)
+                return np.sum(ranks[electrons])
+            min_func = u_test
+        result = opt.minimize_scalar(min_func, method='Golden')
+        self._nll_pi0mass_factor = result.x
+        return self._nll_pi0mass_factor
+
+    @property
+    def electron_pi0_nll_discriminator(self):
+        if self._electron_pi0_nll_discriminator is None:
+            self._electron_pi0_nll_discriminator = (self.fitqun_output.pi0_nll[self.indices]
+                                                    - self.fitqun_output.electron_nll[self.indices])
+        return self._electron_pi0_nll_discriminator
+
+    @property
+    def pi0_electron_discriminator(self):
+        return -self.electron_pi0_discriminator
+
+    @property
     def electron_gamma_discriminator(self):
         if self._electron_gamma_discriminator is None:
             #  fiTQun gamma hypotheses doesn't work well, so just use e/mu nll by default
-            self._electron_gamma_discriminator = self.muon_electron_discriminator
+            return self.muon_electron_discriminator
         return self._electron_gamma_discriminator
 
     @electron_gamma_discriminator.setter
     def electron_gamma_discriminator(self, discriminator):
-        if callable(discriminator):
-            self._electron_gamma_discriminator = discriminator(self.fitqun_output)[self.indices]
-        else:
-            self._electron_gamma_discriminator = discriminator
+        self._electron_gamma_discriminator = self.get_discriminator(discriminator)
 
     @property
     def gamma_electron_discriminator(self):
