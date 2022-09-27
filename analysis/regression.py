@@ -6,6 +6,7 @@ from abc import ABC, abstractmethod
 from analysis.read import WatChMaLOutput
 import analysis.utils.math as math
 import analysis.utils.binning as bins
+from analysis.utils.plotting import plot_binned_values
 
 
 def plot_histograms(runs, quantity, selection=..., ax=None, fig_size=None, x_label="", y_label="", legend='best', **hist_args):
@@ -292,20 +293,7 @@ class RegressionRun(ABC):
             provided in `runs`.
         """
         values = self.get_quantity(quantity)
-        plot_args.setdefault('lw', 2)
-        binned_values = bins.apply_binning(values, binning, selection)
-        y = bins.binned_resolutions(binned_values)
-        x = bins.bin_centres(binning[0])
-        if errors:
-            y_err = bins.binned_std_errors(binned_values)
-            x_err = bins.bin_halfwidths(binning[0]) if x_errors else None
-            plot_args.setdefault('marker', '')
-            plot_args.setdefault('capsize', 4)
-            plot_args.setdefault('capthick', 2)
-            ax.errorbar(x, y, yerr=y_err, xerr=x_err, **plot_args)
-        else:
-            plot_args.setdefault('marker', 'o')
-            ax.plot(x, y, **plot_args)
+        return plot_binned_values(ax, bins.binned_resolutions, values, binning, selection, errors, x_errors, **plot_args)
 
     def plot_binned_bias(self, quantity, ax, binning, selection=..., errors=False, x_errors=True, **plot_args):
         """
@@ -334,20 +322,7 @@ class RegressionRun(ABC):
             provided in `runs`.
         """
         values = self.get_quantity(quantity)
-        plot_args.setdefault('lw', 2)
-        binned_values = bins.apply_binning(values, binning, selection)
-        y = bins.binned_mean(binned_values)
-        x = bins.bin_centres(binning[0])
-        if errors:
-            y_err = bins.binned_std_errors(binned_values)
-            x_err = bins.bin_halfwidths(binning[0]) if x_errors else None
-            plot_args.setdefault('marker', '')
-            plot_args.setdefault('capsize', 4)
-            plot_args.setdefault('capthick', 2)
-            ax.errorbar(x, y, yerr=y_err, xerr=x_err, **plot_args)
-        else:
-            plot_args.setdefault('marker', 'o')
-            ax.plot(x, y, **plot_args)
+        return plot_binned_values(ax, bins.binned_mean, values, binning, selection, errors, x_errors, **plot_args)
 
 
 class MomentumPrediction:

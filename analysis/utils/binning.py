@@ -98,7 +98,7 @@ def unapply_binning(binned_values, binning, selection=...):
         data[selection][data_bins == b+1] = v
 
 
-def binned_resolutions(binned_residuals):
+def binned_resolutions(binned_residuals, return_errors=True):
     """
     Calculate resolution defined as 68th percentile of the absolute residuals for each of a list of arrays of residuals
 
@@ -106,13 +106,23 @@ def binned_resolutions(binned_residuals):
     ----------
     binned_residuals: list of array_like
         list of arrays of float residuals in each bin
+    return_errors: bool
+        if True, return array of standard error on the mean of each list of values (as a proxy for the standard error on
+        each list's 68th percentile).
 
     Returns
     -------
-    ndarray
+    resolutions: ndarray
         array of resolutions of the bins' residuals
+    errors: ndarray
+        array of standard errors on the means of the residuals
     """
-    return np.array([np.quantile(np.abs(x), 0.68) for x in binned_residuals])
+    resolutions = np.array([np.quantile(np.abs(x), 0.68) for x in binned_residuals])
+    if return_errors:
+        errors = binned_std_errors(binned_residuals)
+        return resolutions, errors
+    else:
+        return resolutions
 
 
 def binned_quantiles(binned_values, quantile):
@@ -134,7 +144,7 @@ def binned_quantiles(binned_values, quantile):
     return np.array([np.quantile(x, quantile) for x in binned_values])
 
 
-def binned_mean(binned_values):
+def binned_mean(binned_values, return_errors=True):
     """
     Calculate mean of the values for each of a list of arrays of values
 
@@ -142,13 +152,22 @@ def binned_mean(binned_values):
     ----------
     binned_values: list of array_like
         list of arrays of values in each bin
+    return_errors: bool
+        if True, return array of standard error on the mean of each list of values
 
     Returns
     -------
-    ndarray
+    means: ndarray
         array of means of the bins' values
+    errors: ndarray, optional
+        array of standard errors of the means
     """
-    return np.array([np.mean(x) for x in binned_values])
+    means = np.array([np.mean(x) for x in binned_values])
+    if return_errors:
+        errors = binned_std_errors(binned_values)
+        return means, errors
+    else:
+        return means
 
 
 def binned_efficiencies(binned_cut, return_errors=True, reverse=False):
@@ -169,17 +188,17 @@ def binned_efficiencies(binned_cut, return_errors=True, reverse=False):
     -------
     efficiencies: ndarray
         array of percentage of true values in each bin
-    errors: ndarray
+    errors: ndarray, optional
         array of binomial standard errors
     """
     efficiencies = binned_mean(binned_cut)*100
     if reverse:
         efficiencies = 100 - efficiencies
-    if not return_errors:
-        return efficiencies
-    else:
-        errors = binned_binomial_errors(binned_cut)*100
+    if return_errors:
+        errors = binned_binomial_errors(binned_cut) * 100
         return efficiencies, errors
+    else:
+        return efficiencies
 
 
 def binned_std_errors(binned_residuals):

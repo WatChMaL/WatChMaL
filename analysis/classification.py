@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from abc import ABC, abstractmethod
 from sklearn import metrics
 
-import analysis.utils.binning as bins
+from analysis.utils.binning import apply_binning, binned_quantiles, binned_efficiencies
 import analysis.utils.plotting as plot
 from analysis.read import WatChMaLOutput
 
@@ -251,8 +251,8 @@ class ClassificationRun(ABC):
         """
         selection = self.select_labels(select_labels, selection)
         discriminator_values = self.discriminator(signal_labels, background_labels)
-        binned_discriminators = bins.apply_binning(discriminator_values, binning, selection)
-        thresholds = bins.binned_quantiles(binned_discriminators, 1 - efficiency)
+        binned_discriminators = apply_binning(discriminator_values, binning, selection)
+        thresholds = binned_quantiles(binned_discriminators, 1 - efficiency)
         # put inf as first and last threshold for overflow bins
         padded_thresholds = np.concatenate(([np.inf], thresholds, [np.inf]))
         self.cut = np.array(discriminator_values) > padded_thresholds[binning[1]]
@@ -333,21 +333,9 @@ class ClassificationRun(ABC):
             Additional arguments to pass to the plotting function. Note that these may be overridden by arguments
             provided in `runs`.
         """
-        plot_args.setdefault('lw', 2)
         selection = self.select_labels(select_labels, selection)
-        binned_cut = bins.apply_binning(self.cut, binning, selection)
-        y = bins.binned_efficiencies(binned_cut, errors, reverse=reverse)
-        x = bins.bin_centres(binning[0])
-        if errors:
-            y_values, y_errors = y
-            x_errors = bins.bin_halfwidths(binning[0]) if x_errors else None
-            plot_args.setdefault('marker', '')
-            plot_args.setdefault('capsize', 4)
-            plot_args.setdefault('capthick', 2)
-            ax.errorbar(x, y_values, yerr=y_errors, xerr=x_errors, **plot_args)
-        else:
-            plot_args.setdefault('marker', 'o')
-            ax.plot(x, y, **plot_args)
+        func = lambda b, e: binned_efficiencies(b, e, reverse=reverse)
+        return plot.plot_binned_values(ax, func, self.cut, binning, selection, errors, x_errors, **plot_args)
 
 
 class WatChMaLClassification(ClassificationRun, WatChMaLOutput):
