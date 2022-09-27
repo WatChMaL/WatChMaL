@@ -23,15 +23,15 @@ def plot_legend(ax):
 def plot_binned_values(ax, func, values, binning, selection=None, errors=False, x_errors=True, **plot_args):
     plot_args.setdefault('lw', 2)
     binned_values = bins.apply_binning(values, binning, selection)
-    y = func(binned_values, errors)
     x = bins.bin_centres(binning[0])
     if errors:
-        y_values, y_errors = y
+        y_values, y_errors = func(binned_values, errors)
         x_errors = bins.bin_halfwidths(binning[0]) if x_errors else None
         plot_args.setdefault('marker', '')
         plot_args.setdefault('capsize', 4)
         plot_args.setdefault('capthick', 2)
         ax.errorbar(x, y_values, yerr=y_errors, xerr=x_errors, **plot_args)
     else:
+        y = func(binned_values, errors)
         plot_args.setdefault('marker', 'o')
         ax.plot(x, y, **plot_args)

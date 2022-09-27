@@ -191,7 +191,7 @@ def binned_efficiencies(binned_cut, return_errors=True, reverse=False):
     errors: ndarray, optional
         array of binomial standard errors
     """
-    efficiencies = binned_mean(binned_cut)*100
+    efficiencies = binned_mean(binned_cut, return_errors=False)*100
     if reverse:
         efficiencies = 100 - efficiencies
     if return_errors:
