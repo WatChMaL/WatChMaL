@@ -478,9 +478,8 @@ class FiTQunClassification(ClassificationRun):
         elif set(signal_labels) <= self.pi0s and set(background_labels) <= self.electron_like:
             return self.pi0_electron_discriminator
         else:
-            raise NotImplementedError("A discriminator for the labels given for the signal", signal_labels,
-                                      "and background", background_labels,
-                                      "has not yet been implemented for fiTQun outputs")
+            raise NotImplementedError(f"A discriminator for the labels given for the signal {signal_labels} and "
+                                      f"background {background_labels} has not yet been implemented for fiTQun outputs")
 
     def get_discriminator(self, discriminator):
         if callable(discriminator):
