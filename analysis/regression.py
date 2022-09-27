@@ -9,7 +9,7 @@ import analysis.utils.binning as bins
 from analysis.utils.plotting import plot_binned_values
 
 
-def plot_histograms(runs, quantity, selection=..., ax=None, fig_size=None, x_label="", y_label="", legend='best', **hist_args):
+def plot_histograms(runs, quantity, selection=None, ax=None, fig_size=None, x_label="", y_label="", legend='best', **hist_args):
     """
     Plot overlaid histograms of results from a number of regression runs.
 
@@ -50,6 +50,8 @@ def plot_histograms(runs, quantity, selection=..., ax=None, fig_size=None, x_lab
     else:
         fig = ax.get_figure()
     for r in runs:
+        if selection is None:
+            selection = r.selection
         data = r.get_quantity(quantity)[selection].flatten()
         args = {**hist_args, **r.plot_args}
         ax.hist(data, **args)
@@ -60,7 +62,7 @@ def plot_histograms(runs, quantity, selection=..., ax=None, fig_size=None, x_lab
     return fig, ax
 
 
-def plot_resolution_profile(runs, quantity, binning, selection=..., ax=None, fig_size=None, x_label="", y_label="",
+def plot_resolution_profile(runs, quantity, binning, selection=None, ax=None, fig_size=None, x_label="", y_label="",
                             legend='best', y_lim=None, **plot_args):
     """
     Plot binned resolutions for results from a set of regression runs. The quantity should be the name of an attribute
@@ -117,7 +119,7 @@ def plot_resolution_profile(runs, quantity, binning, selection=..., ax=None, fig
     return fig, ax
 
 
-def plot_bias_profile(runs, quantity, binning, selection=..., ax=None, fig_size=None, x_label="", y_label="",
+def plot_bias_profile(runs, quantity, binning, selection=None, ax=None, fig_size=None, x_label="", y_label="",
                             legend='best', y_lim=None, **plot_args):
     """
     Plot binned bias for results from a set of regression runs. The quantity should be the name of an attribute that
@@ -174,7 +176,7 @@ def plot_bias_profile(runs, quantity, binning, selection=..., ax=None, fig_size=
     return fig, ax
 
 
-def tabulate_statistics(runs, quantities, stat_labels, statistic="resolution", selection=..., transpose=False,
+def tabulate_statistics(runs, quantities, stat_labels, statistic="resolution", selection=None, transpose=False,
                         **tabulate_args):
     """
     Return a table of summary statistics of quantities of runs.
@@ -227,7 +229,7 @@ def tabulate_statistics(runs, quantities, stat_labels, statistic="resolution", s
                      for stat in statistic]
     data = []
     for f, q in zip(functions, quantities):
-        data.append([f(r.get_quantity(q)[selection]) for r in runs])
+        data.append([f(r.get_quantity(q)[selection if selection is not None else r.selection]) for r in runs])
     if transpose:
         data = list(zip(*data))
         return tabulate.tabulate(data, headers=stat_labels, showindex=run_labels, **tabulate_args)
@@ -236,7 +238,10 @@ def tabulate_statistics(runs, quantities, stat_labels, statistic="resolution", s
 
 
 class RegressionRun(ABC):
-    def __init__(self, run_label, **plot_args):
+    def __init__(self, run_label, selection=None, **plot_args):
+        if selection is None:
+            selection = ...
+        self.selection = selection
         self.run_label = run_label
         plot_args['label'] = run_label
         self.plot_args = plot_args
@@ -265,7 +270,7 @@ class RegressionRun(ABC):
         else:
             raise TypeError("The quantity should be a string or function")
 
-    def plot_binned_resolution(self, quantity, ax, binning, selection=..., errors=False, x_errors=True, **plot_args):
+    def plot_binned_resolution(self, quantity, ax, binning, selection=None, errors=False, x_errors=True, **plot_args):
         """
         Plot binned resolutions of the results of a regression run on an existing set of axes. The quantity should be
         the name of an attribute that contains residuals (or similar quantity representing reconstruction errors), and
@@ -292,10 +297,12 @@ class RegressionRun(ABC):
             Additional arguments to pass to the plotting function. Note that these may be overridden by arguments
             provided in `runs`.
         """
+        if selection is None:
+            selection = self.selection
         values = self.get_quantity(quantity)
         return plot_binned_values(ax, bins.binned_resolutions, values, binning, selection, errors, x_errors, **plot_args)
 
-    def plot_binned_bias(self, quantity, ax, binning, selection=..., errors=False, x_errors=True, **plot_args):
+    def plot_binned_bias(self, quantity, ax, binning, selection=None, errors=False, x_errors=True, **plot_args):
         """
         Plot binned bias of the results of a regression run on an existing set of axes. The quantity should be the name
         of an attribute that contains residuals (or similar quantity representing reconstruction errors), or a function
@@ -321,6 +328,8 @@ class RegressionRun(ABC):
             Additional arguments to pass to the plotting function. Note that these may be overridden by arguments
             provided in `runs`.
         """
+        if selection is None:
+            selection = self.selection
         values = self.get_quantity(quantity)
         return plot_binned_values(ax, bins.binned_mean, values, binning, selection, errors, x_errors, **plot_args)
 
@@ -388,8 +397,8 @@ class DirectionPrediction:
 
 class FitQun1RingFit(RegressionRun, PositionPrediction, DirectionPrediction, MomentumPrediction):
     def __init__(self, fitqun_output, run_label, true_positions=None, true_directions=None, true_momenta=None,
-                 true_labels=None, indices=..., particle_label_map=None, **plot_args):
-        RegressionRun.__init__(self, run_label=run_label, **plot_args)
+                 true_labels=None, indices=..., selection=None, particle_label_map=None, **plot_args):
+        RegressionRun.__init__(self, run_label=run_label, selection=selection, **plot_args)
         self.fitqun_output = fitqun_output
         self.n_events = len(np.empty(len(fitqun_output.chain))[indices])
         if isinstance(true_labels, int):
@@ -452,8 +461,8 @@ class FitQun1RingFit(RegressionRun, PositionPrediction, DirectionPrediction, Mom
 
 
 class WatChMaLRegression(RegressionRun, WatChMaLOutput, ABC):
-    def __init__(self, directory, run_label, indices=None, **plot_args):
-        RegressionRun.__init__(self, run_label=run_label, **plot_args)
+    def __init__(self, directory, run_label, indices=None, selection=None, **plot_args):
+        RegressionRun.__init__(self, run_label=run_label, selection=selection, **plot_args)
         WatChMaLOutput.__init__(self, directory=directory, indices=indices)
         self._predictions = None
 
@@ -516,13 +525,15 @@ class WatChMaLEnergyRegression(WatChMaLRegression, MomentumPrediction):
 
 
 class CombinedRegressionRun(RegressionRun):
-    def __init__(self, combined_runs, run_label=None, **plot_args):
+    def __init__(self, combined_runs, run_label=None, selection=None, **plot_args):
         self.runs = combined_runs
         if run_label is None:
             run_label = combined_runs[0].run_label
         if not plot_args:
             plot_args = combined_runs[0].plot_args
-        RegressionRun.__init__(self, run_label=run_label, **plot_args)
+        if selection is None:
+            selection = combined_runs[0].selection
+        RegressionRun.__init__(self, run_label=run_label, selection=selection, **plot_args)
 
     def __getattr__(self, attr):
         # Loop over the combined runs and look for the attribute in each, or raise exception if it's not found in any.
