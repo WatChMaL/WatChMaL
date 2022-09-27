@@ -96,7 +96,7 @@ def plot_rocs(runs, signal_labels, background_labels, selection=None, ax=None, f
             if y_log is None:
                 y_log = True
             with np.errstate(divide='ignore'):
-                ax.plot(tpr, 1/fpr, **args)
+                ax.plot(tpr, 1 / fpr, **args)
         elif mode == 'efficiency':
             ax.plot(fpr, tpr, **args)
         else:
@@ -261,7 +261,8 @@ class ClassificationRun(ABC):
         else:
             return self.cut
 
-    def cut_with_fixed_efficiency(self, signal_labels, background_labels, efficiency, selection=None, select_labels=None,
+    def cut_with_fixed_efficiency(self, signal_labels, background_labels, efficiency, selection=None,
+                                  select_labels=None,
                                   return_threshold=False):
         """
         Generate array of boolean values indicating whether each event passes a cut defined such that a fixed proportion
@@ -334,7 +335,10 @@ class ClassificationRun(ABC):
             provided in `runs`.
         """
         selection = self.select_labels(select_labels, selection)
-        func = lambda b, e: binned_efficiencies(b, e, reverse=reverse)
+
+        def func(binned_cut, return_errors):
+            return binned_efficiencies(binned_cut, return_errors, reverse=reverse)
+
         return plot.plot_binned_values(ax, func, self.cut, binning, selection, errors, x_errors, **plot_args)
 
 
@@ -468,12 +472,14 @@ class FiTQunClassification(ClassificationRun):
             return self.gamma_electron_discriminator
         else:
             raise NotImplementedError("A discriminator for the labels given for the signal", signal_labels,
-                  "and background", background_labels, "has not yet been implemented for fiTQun outputs")
+                                      "and background", background_labels,
+                                      "has not yet been implemented for fiTQun outputs")
 
     @property
     def electron_muon_discriminator(self):
         if self._electron_muon_discriminator is None:
-            self._electron_muon_discriminator = self.fitqun_output.muon_nll[self.indices] - self.fitqun_output.electron_nll[self.indices]
+            self._electron_muon_discriminator = self.fitqun_output.muon_nll[self.indices] - \
+                                                self.fitqun_output.electron_nll[self.indices]
         return self._electron_muon_discriminator
 
     @property

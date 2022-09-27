@@ -120,7 +120,7 @@ def plot_resolution_profile(runs, quantity, binning, selection=None, ax=None, fi
 
 
 def plot_bias_profile(runs, quantity, binning, selection=None, ax=None, fig_size=None, x_label="", y_label="",
-                            legend='best', y_lim=None, **plot_args):
+                      legend='best', y_lim=None, **plot_args):
     """
     Plot binned bias for results from a set of regression runs. The quantity should be the name of an attribute that
     contains residuals (or similar quantity representing reconstruction errors), or a function returning the residuals,
@@ -134,7 +134,7 @@ def plot_bias_profile(runs, quantity, binning, selection=None, ax=None, fig_size
         Sequence of run results.
     quantity: str or callable
         Name of the attribute containing the reconstruction errors, or function that takes the run as its only argument
-        and returns the reconstrucion errors, whose average resolution will be plotted.
+        and returns the reconstruction errors, whose average resolution will be plotted.
     binning: (np.ndarray, np.ndarray)
         Array of bin edges and array of bin indices, returned from `analysis.utils.binning.get_binning`.
     selection: indexing expression, optional
@@ -261,7 +261,7 @@ class RegressionRun(ABC):
         Returns
         -------
         ndarray:
-            One-dimensional array of values corresponding to the desired qunatity
+            One-dimensional array of values corresponding to the desired quantity
         """
         if isinstance(quantity, str):
             return getattr(self, quantity)
