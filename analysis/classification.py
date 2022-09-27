@@ -113,8 +113,8 @@ def plot_rocs(runs, signal_labels, background_labels, selection=..., ax=None, fi
     return fig, ax
 
 
-def plot_efficiency_profile(runs, binning, selection=..., ax=None, fig_size=None, x_label="", y_label="", legend='best',
-                            y_lim=None, **plot_args):
+def plot_efficiency_profile(runs, binning, selection=..., select_labels=None, ax=None, fig_size=None, x_label="",
+                            y_label="", legend='best', y_lim=None, **plot_args):
     """
     Plot binned efficiencies for a cut applied to a number of classification runs.
     Each run should already have had a cut generated, then in each bin the proportion of events passing the cut is
@@ -129,6 +129,8 @@ def plot_efficiency_profile(runs, binning, selection=..., ax=None, fig_size=None
         Array of bin edges and array of bin indices, returned from `analysis.utils.binning.get_binning`.
     selection: indexing expression, optional
         Selection of the values to use in calculating the resolutions (by default use all values).
+    select_labels: set of int
+        Set of true labels to select events to use.
     ax: matplotlib.axes.Axes
         Axes to draw the plot. If not provided, a new figure and axes is created.
     fig_size: (float, float), optional
@@ -156,7 +158,7 @@ def plot_efficiency_profile(runs, binning, selection=..., ax=None, fig_size=None
         fig = ax.get_figure()
     for r in runs:
         args = {**plot_args, **r.plot_args}
-        r.plot_binned_efficiency(ax, binning, selection, **args)
+        r.plot_binned_efficiency(ax, binning, selection, select_labels, **args)
     ax.set_xlabel(x_label)
     ax.set_ylabel(y_label)
     if legend:
@@ -178,8 +180,30 @@ class ClassificationRun(ABC):
     def discriminator(self, signal_labels, background_labels):
         """This method should return the discriminator for the given signal and background labels"""
 
+    def select_labels(self, selection, select_labels):
+        """
+        Combine a selection of events with the additional requirement of having chosen true labels.
+
+        Parameters
+        ----------
+        select_labels: set of int
+            Set of true labels to select
+        selection: index_expression
+            Selection over all events
+
+        Returns
+        -------
+        ndarray
+            Array of indices that are both selected by `selection` and have true label in `select_labels`
+        """
+        if select_labels is not None:
+            s = np.zeros_like(self.true_labels, dtype=bool)
+            s[selection] = True
+            selection = s & np.isin(self.true_labels, np.atleast_1d(select_labels))
+        return selection
+
     def cut_with_constant_binned_efficiency(self, signal_labels, background_labels, efficiency, binning, selection=...,
-                                            return_thresholds=False):
+                                            select_labels=None, return_thresholds=False):
         """
         Generate array of boolean values indicating whether each event passes a cut defined such that, in each bin of
         some binning of the events, a constant proportion of the selected events pass the cut.
@@ -202,6 +226,8 @@ class ClassificationRun(ABC):
         selection: indexing expression, optional
             Selection of the discriminator values to use in calculating the thresholds applied by the cut in each bin
             (by default use all values).
+        select_labels: set of int
+            Set of true labels to select events to use in calculating the thresholds.
         return_thresholds:
             If True, return also the array of cut thresholds calculated for each bin.
 
@@ -212,6 +238,7 @@ class ClassificationRun(ABC):
         thresholds: ndarray of float, optional
             One-dimensional array giving the threshold applied by the cut to events in each bin.
         """
+        selection = self.select_labels(selection, select_labels)
         discriminator_values = self.discriminator(signal_labels, background_labels)
         binned_discriminators = bins.apply_binning(discriminator_values, binning, selection)
         thresholds = bins.binned_quantiles(binned_discriminators, 1 - efficiency)
@@ -223,7 +250,7 @@ class ClassificationRun(ABC):
         else:
             return self.cut
 
-    def cut_with_fixed_efficiency(self, signal_labels, background_labels, efficiency, selection=...,
+    def cut_with_fixed_efficiency(self, signal_labels, background_labels, efficiency, selection=..., select_labels=None,
                                   return_threshold=False):
         """
         Generate array of boolean values indicating whether each event passes a cut defined such that a fixed proportion
@@ -245,6 +272,8 @@ class ClassificationRun(ABC):
         selection: indexing expression, optional
             Selection of the discriminator values to use in calculating the threshold applied by the cut (by default use
             all values).
+        select_labels: set of int
+            Set of true labels to select events to use.
         return_threshold: bool, optional
             If True, return also the cut threshold.
 
@@ -255,16 +284,17 @@ class ClassificationRun(ABC):
         threshold: float, optional
             The threshold applied by the cut.
         """
-        discriminator_values = self.discriminator(signal_labels, background_labels)
-        threshold = np.quantile(discriminator_values[selection], 1 - efficiency)
+        selection = self.select_labels(selection, select_labels)
+        discriminator_values = self.discriminator(signal_labels, background_labels)[selection]
+        threshold = np.quantile(discriminator_values, 1 - efficiency)
         self.cut = np.array(discriminator_values) > threshold
         if return_threshold:
             return self.cut, threshold
         else:
             return self.cut
 
-    def plot_binned_efficiency(self, ax, binning, selection=..., reverse=False, errors=False, x_errors=True,
-                               **plot_args):
+    def plot_binned_efficiency(self, ax, binning, selection=..., select_labels=None, reverse=False, errors=False,
+                               x_errors=True, **plot_args):
         """
         Plot binned efficiencies of the cut applied to the classification run on an existing set of axes.
         The cut values corresponding to booleans indicating whether each event passes the cut are divided up into bins
@@ -279,6 +309,8 @@ class ClassificationRun(ABC):
             Array of bin edges and array of bin indices, returned from `analysis.utils.binning.get_binning`.
         selection: indexing expression, optional
             Selection of the values to use in calculating the resolutions (by default use all values).
+        select_labels: set of int
+            Set of true labels to select events to use.
         reverse: bool
             If True, reverse the cut to plot percentage of events failing the cut. By default the percentage of events
             passing the cut is plotted
@@ -291,6 +323,7 @@ class ClassificationRun(ABC):
             provided in `runs`.
         """
         plot_args.setdefault('lw', 2)
+        selection = self.select_labels(selection, select_labels)
         binned_cut = bins.apply_binning(self.cut, binning, selection)
         y = bins.binned_efficiencies(binned_cut, errors, reverse=reverse)
         x = bins.bin_centres(binning[0])
