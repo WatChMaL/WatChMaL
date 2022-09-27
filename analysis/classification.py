@@ -540,8 +540,8 @@ class FiTQunClassification(ClassificationRun):
     def tune_pi0mass_factor(self, pi0_efficiency=None, electron_efficiency=None, selection=None, **opt_args):
         if selection is None:
             selection = self.selection
-        electrons = self.true_labels[selection] == self.electrons
-        pi0s = self.true_labels[selection] == self.pi0s
+        electrons = np.isin(self.true_labels[selection], self.electrons)
+        pi0s = np.isin(self.true_labels[selection], self.pi0s)
         nll_diff = self.electron_pi0_nll_discriminator[selection]
         fq = self.fitqun_output
         pi0mass = fq.pi0_mass[self.indices][selection]
