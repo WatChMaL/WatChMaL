@@ -1,5 +1,4 @@
 import numpy as np
-import glob
 import tabulate
 import matplotlib.pyplot as plt
 from abc import ABC, abstractmethod
@@ -38,8 +37,8 @@ def plot_histograms(runs, quantity, selection=None, ax=None, fig_size=None, x_la
 
     Returns
     -------
-    fig: Figure
-    ax: axes.Axes
+    fig: matplotlib.figure.Figure
+    ax: matplotlib.axes.Axes
     """
     hist_args.setdefault('bins', 200)
     hist_args.setdefault('density', True)
@@ -100,8 +99,8 @@ def plot_resolution_profile(runs, quantity, binning, selection=None, ax=None, fi
 
     Returns
     -------
-    fig: Figure
-    ax: axes.Axes
+    fig: matplotlib.figure.Figure
+    ax: matplotlib.axes.Axes
     """
     if ax is None:
         fig, ax = plt.subplots(figsize=fig_size)
@@ -157,8 +156,8 @@ def plot_bias_profile(runs, quantity, binning, selection=None, ax=None, fig_size
 
     Returns
     -------
-    fig: Figure
-    ax: axes.Axes
+    fig: matplotlib.figure.Figure
+    ax: matplotlib.axes.Axes
     """
     if ax is None:
         fig, ax = plt.subplots(figsize=fig_size)
@@ -198,7 +197,7 @@ def tabulate_statistics(runs, quantities, stat_labels, statistic="resolution", s
         mean. If a list, should be the same length as `quantities` to specify the summary statistic of each quantity,
         with each element of the list one of the alternatives described above.
     transpose: bool
-        If True, table rows correspond to each run and columns correspond to each quantity summary statistic. Otherwise
+        If True, table rows correspond to each run and columns correspond to each quantity summary statistic. Otherwise,
         (default) rows correspond to summary statistics and columns correspond to runs.
     tabulate_args: optional
         Additional named arguments to pass to `tabulate.tabulate`. By default, set table format to `html` and float
@@ -238,7 +237,24 @@ def tabulate_statistics(runs, quantities, stat_labels, statistic="resolution", s
 
 
 class RegressionRun(ABC):
+    """
+    Base class for regression results
+    """
     def __init__(self, run_label, selection=None, **plot_args):
+        """
+        Create object to hold regression results
+
+        Parameters
+        ----------
+        run_label: str
+            Label to describe this set of results to use in plot legends, etc.
+        selection: index_expression, optional
+            Selection to apply to the set of events to only use a subset of all events when plotting results, etc.
+            By default, use all results.
+        plot_args: optional
+            Additional arguments to pass to plotting functions, used to set the style when plotting these results
+            together with other runs' results.
+        """
         if selection is None:
             selection = ...
         self.selection = selection
@@ -260,7 +276,7 @@ class RegressionRun(ABC):
 
         Returns
         -------
-        ndarray:
+        np.ndarray:
             One-dimensional array of values corresponding to the desired quantity
         """
         if isinstance(quantity, str):
@@ -334,8 +350,31 @@ class RegressionRun(ABC):
         return plot_binned_values(ax, bins.binned_mean, values, binning, selection, errors, x_errors, **plot_args)
 
 
-class MomentumPrediction:
+class MomentumPrediction(ABC):
+    """
+    Base class for predictions of the magnitude of a particle's momentum.
+
+    The following attributes are calculated and provided if the required truth information is given:
+
+    ===================================================================================================================
+    `momentum_residuals`            true minus reconstructed momentum magnitude
+    `energy_residuals`              true minus reconstructed energy, calculated from the momentum using the mass of the
+                                    true particle type
+    `momentum_fractional_errors`    `momentum_residuals` divided by the true momentum
+    `energy_fractional_errors`      `energy_residuals` divided by the true energy
+    ===================================================================================================================
+    """
     def __init__(self, true_momenta=None, true_labels=None):
+        """
+        Create object to hold momentum predictions.
+
+        Parameters
+        ----------
+        true_momenta: array_like of float, optional
+            Array of true momenta, used in calculating residuals
+        true_labels: int or array_like of int, optional
+            PID label or array of PID labels, used to know the particle type to convert between momentum and energy
+        """
         self.true_labels = true_labels
         self.true_momenta = true_momenta
         self.true_energies = None
@@ -356,15 +395,49 @@ class MomentumPrediction:
 
     @property
     def energy_prediction(self):
+        """Energy prediction calculated from the momentum prediction and true particle type label"""
         return math.energy_from_momentum(self.momentum_prediction, self.true_labels)
 
 
-class PositionPrediction:
+class PositionPrediction(ABC):
+    """
+    Base class for position predictions.
+
+    The following attributes are calculated and provided if the required truth information is given:
+
+    ============================================================================================================
+    `position_residuals`            (x,y,z) components of the true position minus reconstructed position
+    `x_residuals`                   x component of the true position minus reconstructed position
+    `y_residuals`                   y component of the true position minus reconstructed position
+    `z_residuals`                   z component of the true position minus reconstructed position
+    `position_3d_errors`            3D distance between the true and reconstructed position
+    `position_longitudinal_errors`  True position minus reconstructed position in the particle's true direction
+    `position_transverse_errors`    2D distance between the true and reconstructed position perpendicular to the
+                                    particle's true direction
+    ============================================================================================================
+    """
     def __init__(self, true_positions=None, true_directions=None):
+        """
+        Create object to hold momentum predictions. If true positions are provided, the position residuals are
+        calculated. If true directions are provided, also calculated is the decomposition of the position residuals into
+        longitudinal (in direction of particle) and transverse (perpendicular to particle direction).
+
+        Parameters
+        ----------
+        true_positions: array_like of float, optional
+            Array of true positions, used in calculating residuals.
+        true_directions: array_like of int, optional
+            Array of true directions, used to decompose the position prediction residuals into longitudinal and
+            transverse components.
+        """
         self.true_positions = true_positions
+        self.position_residuals = None
+        self.x_residuals = None
+        self.y_residuals = None
+        self.z_residuals = None
+        self.position_3d_errors = None
         self.position_longitudinal_errors = None
         self.position_transverse_errors = None
-        self.position_3d_errors = None
         if true_positions is not None:
             self.position_residuals = self.position_prediction - self.true_positions
             self.x_residuals = self.position_residuals[:, 0]
@@ -382,8 +455,25 @@ class PositionPrediction:
         """This attribute gives the predicted positions"""
 
 
-class DirectionPrediction:
+class DirectionPrediction(ABC):
+    """
+    Base class for direction predictions.
+
+    The following attribute is calculated and provided if the required truth information is given:
+
+    ===============================================================================================
+    `direction_errors`              Angle between the true and reconstructed directions, in degrees
+    ===============================================================================================
+    """
     def __init__(self, true_directions=None):
+        """
+        Create object to hold momentum predictions.
+
+        Parameters
+        ----------
+        true_directions: array_like of float, optional
+            Array of true directions, used in calculating residuals
+        """
         self.true_directions = true_directions
         self.direction_errors = None
         if true_directions is not None:
@@ -396,8 +486,37 @@ class DirectionPrediction:
 
 
 class FitQun1RingFit(RegressionRun, PositionPrediction, DirectionPrediction, MomentumPrediction):
+    """Class to hold position, direction and momentum predictions of a fiTQun reconstruction run"""
     def __init__(self, fitqun_output, run_label, true_positions=None, true_directions=None, true_momenta=None,
                  true_labels=None, indices=..., selection=None, particle_label_map=None, **plot_args):
+        """
+        Construct object to hold position, direction and momentum predictions of a fiTQun reconstruction run.
+
+        Parameters
+        ----------
+        fitqun_output: analysis.read.FiTQunOutput
+            Output from a fiTQun reconstruction run
+        run_label: str
+            Label to describe this set of results to use in plot legends, etc.
+        true_positions array_like of float, optional
+            Array of true positions for the events in these reconstruction results
+        true_directions array_like of int, optional
+            Array of true directions for the events in these reconstruction results
+        true_momenta array_like of int, optional
+            Array of true momenta for the events in these reconstruction results
+        true_labels: int or array_like of int, optional
+            PID label or array of PID labels for the events in these reconstruction results
+        indices: array_like of int, optional
+            Array of indices of events to select out of the events in the fiTQun output (by default use all events).
+        selection: index_expression, optional
+            Selection to apply to the set of events to only use a subset of all events when plotting results, etc.
+            (by default use all events).
+        particle_label_map: dict
+            Dictionary mapping particle type names to label integers. By default, use gamma:0, electron:1, muon:2, pi0:3
+        plot_args: optional
+            Additional arguments to pass to plotting functions, used to set the style when plotting these results
+            together with other runs' results.
+        """
         RegressionRun.__init__(self, run_label=run_label, selection=selection, **plot_args)
         self.fitqun_output = fitqun_output
         self.n_events = len(np.empty(len(fitqun_output.chain))[indices])
@@ -437,6 +556,7 @@ class FitQun1RingFit(RegressionRun, PositionPrediction, DirectionPrediction, Mom
 
     @property
     def momentum_prediction(self):
+        """Momentum prediction from fiTQun for the single ring fit of the particle type(s) set during construction"""
         if self._momentum_prediction is None:
             self._momentum_prediction = np.zeros(self.n_events)
             for p, i in self.particle_indices.items():
@@ -445,6 +565,7 @@ class FitQun1RingFit(RegressionRun, PositionPrediction, DirectionPrediction, Mom
 
     @property
     def position_prediction(self):
+        """Position prediction from fiTQun for the single ring fit of the particle type(s) set during construction"""
         if self._position_prediction is None:
             self._position_prediction = np.zeros((self.n_events, 3))
             for p, i in self.particle_indices.items():
@@ -453,6 +574,7 @@ class FitQun1RingFit(RegressionRun, PositionPrediction, DirectionPrediction, Mom
 
     @property
     def direction_prediction(self):
+        """Direction prediction from fiTQun for the single ring fit of the particle type(s) set during construction"""
         if self._direction_prediction is None:
             self._direction_prediction = np.zeros((self.n_events, 3))
             for p, i in self.particle_indices.items():
@@ -461,78 +583,218 @@ class FitQun1RingFit(RegressionRun, PositionPrediction, DirectionPrediction, Mom
 
 
 class WatChMaLRegression(RegressionRun, WatChMaLOutput, ABC):
+    """Base class to hold predictions of a WatChMaL regression run"""
     def __init__(self, directory, run_label, indices=None, selection=None, **plot_args):
+        """
+        Constructs the object holding the results of a WatChMaL regression run.
+
+        Parameters
+        ----------
+        directory: str
+            Top-level output directory of a WatChMaL regression run.
+        run_label: str
+            Label to describe this set of results to use in plot legends, etc.
+        indices: array_like of int, optional
+            Array of indices of events to select out of the indices output by WatChMaL (by default use all events sorted
+            by their indices).
+        selection: index_expression, optional
+            Selection to apply to the set of events to only use a subset of all events when plotting results, etc.
+            By default, use all results.
+        plot_args: optional
+            Additional arguments to pass to plotting functions, used to set the style when plotting these results
+            together with other runs' results.
+        """
         RegressionRun.__init__(self, run_label=run_label, selection=selection, **plot_args)
         WatChMaLOutput.__init__(self, directory=directory, indices=indices)
         self._predictions = None
 
     def read_training_log_from_csv(self, directory):
-        train_files = glob.glob(directory + "/outputs/log_train*.csv")
-        log_train = np.array([np.genfromtxt(f, delimiter=',', skip_header=1) for f in train_files])
-        log_val = np.genfromtxt(directory + "/outputs/log_val.csv", delimiter=',', skip_header=1)
-        train_iteration = log_train[0, :, 0]
-        train_epoch = log_train[0, :, 1]
-        it_per_epoch = np.min(train_iteration[train_epoch == 1]) - 1
-        self._train_log_epoch = train_iteration / it_per_epoch
-        self._train_log_loss = np.mean(log_train[:, :, 2], axis=0)
-        self._val_log_epoch = log_val[:, 0] / it_per_epoch
-        self._val_log_loss = log_val[:, 2]
-        self._val_log_best = log_val[:, 3].astype(bool)
+        """
+        Read the training progression logs from the given directory.
+
+        Parameters
+        ----------
+        directory: str
+            Path to the directory of the training run.
+
+        Returns
+        -------
+        np.ndarray
+            Array of train epoch values for each entry in the training progression log.
+        np.ndarray
+            Array of train loss values for each entry in the training progression log.
+        np.ndarray
+            Array of validation epoch values for each entry in the training progression log
+        np.ndarray
+            Array of validation loss values for each entry in the training progression log
+        np.ndarray
+            Array of boolean values indicating whether each entry had the best validation loss so far in the training
+            progression log
+        """
+        super().read_training_log_from_csv(directory)
+        self._val_log_loss = self._log_val[:, 2]
+        self._val_log_best = self._log_val[:, 3].astype(bool)
         return self._train_log_epoch, self._train_log_loss, self._val_log_epoch, self._val_log_loss, self._val_log_best
 
     @property
     def predictions(self):
+        """Predictions output from the WatChMaL regression run"""
         if self._predictions is None:
             self._predictions = self.get_outputs("predictions")
         return self._predictions
 
 
 class WatChMaLPositionRegression(WatChMaLRegression, PositionPrediction):
-    def __init__(self, directory, run_label, true_positions=None, true_directions=None, indices=None, **plot_args):
-        WatChMaLRegression.__init__(self, directory=directory, run_label=run_label, indices=indices, **plot_args)
+    """Class to hold position predictions of a WatChMaL regression run"""
+    def __init__(self, directory, run_label, true_positions=None, true_directions=None, indices=None, selection=None,
+                 **plot_args):
+        """
+        Constructs the object holding the results of a WatChMaL position regression run.
+
+        Parameters
+        ----------
+        directory: str
+            Top-level output directory of a WatChMaL regression run.
+        run_label: str
+            Label to describe this set of results to use in plot legends, etc.
+        true_positions: array_like of int, optional
+            Array of true positions for the events in these regression results, to calculate position residuals
+        true_directions: array_like of int, optional
+            Array of true directions for the events in these regression results, to decompose position residuals
+        indices: array_like of int, optional
+            Array of indices of events to select out of the indices output by WatChMaL (by default use all events sorted
+            by their indices).
+        selection: index_expression, optional
+            Selection to apply to the set of events to only use a subset of all events when plotting results, etc.
+            By default, use all results.
+        plot_args: optional
+            Additional arguments to pass to plotting functions, used to set the style when plotting these results
+            together with other runs' results.
+        """
+        WatChMaLRegression.__init__(self, directory=directory, run_label=run_label, indices=indices,
+                                    selection=selection, **plot_args)
         PositionPrediction.__init__(self, true_positions=true_positions, true_directions=true_directions)
 
     @property
     def position_prediction(self):
+        """Position predictions output from the WatChMaL regression run"""
         return self.predictions
 
 
 class WatChMaLDirectionRegression(WatChMaLRegression, DirectionPrediction):
-    def __init__(self, directory, run_label, true_directions=None, indices=None, zenith_axis=None, **plot_args):
-        WatChMaLRegression.__init__(self, directory=directory, run_label=run_label, indices=indices, **plot_args)
+    """Class to hold direction predictions of a WatChMaL regression run"""
+    def __init__(self, directory, run_label, true_directions=None, indices=None, zenith_axis=None, selection=None,
+                 **plot_args):
+        """
+        Constructs the object holding the results of a WatChMaL direction regression run.
+
+        Parameters
+        ----------
+        directory: str
+            Top-level output directory of a WatChMaL regression run.
+        run_label: str
+            Label to describe this set of results to use in plot legends, etc.
+        true_directions: array_like of int, optional
+            Array of true directions for the events in these regression results to calculate direction prediction errors
+        indices: array_like of int, optional
+            Array of indices of events to select out of the indices output by WatChMaL (by default use all events sorted
+            by their indices).
+        zenith_axis: int, optional
+            Axis representing the zenith direction, for converting from WatChMaL's predicted zenith and azimuth angles
+            into unit vector directions. By default, use the default tank axis set in `analysis.utils.math`.
+        selection: index_expression, optional
+            Selection to apply to the set of events to only use a subset of all events when plotting results, etc.
+            By default, use all results.
+        plot_args: optional
+            Additional arguments to pass to plotting functions, used to set the style when plotting these results
+            together with other runs' results.
+        """
+        WatChMaLRegression.__init__(self, directory=directory, run_label=run_label, indices=indices,
+                                    selection=selection, **plot_args)
         self._direction_prediction = None
         self.zenith_axis = zenith_axis
         DirectionPrediction.__init__(self, true_directions=true_directions)
 
     @property
     def direction_prediction(self):
+        """Direction predictions calculated from predicted angles output from the WatChMaL regression run"""
         if self._direction_prediction is None:
             self._direction_prediction = math.direction_from_angles(self.predictions, self.zenith_axis)
         return self._direction_prediction
 
 
 class WatChMaLEnergyRegression(WatChMaLRegression, MomentumPrediction):
-    def __init__(self, directory, run_label, true_momenta=None, true_labels=None, indices=None, **plot_args):
-        WatChMaLRegression.__init__(self, directory=directory, run_label=run_label, indices=indices, **plot_args)
+    """Class to hold momentum predictions of a WatChMaL regression run"""
+    def __init__(self, directory, run_label, true_momenta=None, true_labels=None, indices=None, selection=None,
+                 **plot_args):
+        """
+        Constructs the object holding the results of a WatChMaL energy regression run.
+
+        Parameters
+        ----------
+        directory: str
+            Top-level output directory of a WatChMaL regression run.
+        run_label: str
+            Label to describe this set of results to use in plot legends, etc.
+        true_momenta: array_like of float, optional
+            Array of true momenta for the events in these regression results to calculate momentum prediction residuals
+        true_labels: int or array_like of int, optional
+            PID label or array of PID labels for the events in these reconstruction results
+        indices: array_like of int, optional
+            Array of indices of events to select out of the indices output by WatChMaL (by default use all events sorted
+            by their indices).
+        selection: index_expression, optional
+            Selection to apply to the set of events to only use a subset of all events when plotting results, etc.
+            By default, use all results.
+        plot_args: optional
+            Additional arguments to pass to plotting functions, used to set the style when plotting these results
+            together with other runs' results.
+        """
+        WatChMaLRegression.__init__(self, directory=directory, run_label=run_label, indices=indices,
+                                    selection=selection, **plot_args)
         self._momentum_prediction = None
         MomentumPrediction.__init__(self, true_momenta=true_momenta, true_labels=true_labels)
 
     @property
     def momentum_prediction(self):
+        """Momentum predictions calculated from predicted energies output from the WatChMaL regression run"""
         if self._momentum_prediction is None:
             self._momentum_prediction = math.momentum_from_energy(self.predictions, self.true_labels)
         return self._momentum_prediction
 
 
 class CombinedRegressionRun(RegressionRun):
+    """
+    Class used to combine different regression runs that each provide different predicted quantities. The combined run
+    can be used like a single run that provides the predictions of each of the combined runs. When getting an attribute
+    such as predictions or residuals, each of the combined runs is searched in turn until a run with the desired
+    attribute is provided.
+    """
     def __init__(self, combined_runs, run_label=None, selection=None, **plot_args):
+        """
+
+        Parameters
+        ----------
+        combined_runs: sequence of RegressionRun
+            Set of regression runs providing different predictions to combine.
+        run_label: str, optional
+            Label to describe this set of results to use in plot legends, etc. By default, use the label of the first of
+            the combined runs.
+        selection: index_expression, optional
+            Selection to apply to the set of events to only use a subset of all events when plotting results, etc.
+            By default, use the selection of the first of the combined runs.
+        plot_args: optional
+            Additional arguments to pass to plotting functions, used to set the style when plotting these results
+            together with other runs' results. By default, use the plot arguments of the first of the combined runs.
+        """
         self.runs = combined_runs
+        first_run = next(iter(combined_runs))
         if run_label is None:
-            run_label = combined_runs[0].run_label
+            run_label = first_run.run_label
         if not plot_args:
-            plot_args = combined_runs[0].plot_args
+            plot_args = first_run.plot_args
         if selection is None:
-            selection = combined_runs[0].selection
+            selection = first_run.selection
         RegressionRun.__init__(self, run_label=run_label, selection=selection, **plot_args)
 
     def __getattr__(self, attr):

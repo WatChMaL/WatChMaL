@@ -1,3 +1,6 @@
+"""
+Utility functions for binning events in some quantity and manipulating other quantities based on the binning
+"""
 import numpy as np
 from analysis.utils.math import binomial_error
 
@@ -10,7 +13,7 @@ def get_binning(x, bins=None, minimum=None, maximum=None, width=None):
     Parameters
     ----------
     x: array_like
-        Input array to be binned
+        Input array to be binned.
     bins: array_like, optional
         If `bins` is an int, it defines the number of equal-width bins in the range (200, by default). If `bins` is an
         array, it is the array of bin edges and must be 1-dimensional and monotonic.
@@ -23,9 +26,9 @@ def get_binning(x, bins=None, minimum=None, maximum=None, width=None):
 
     Returns
     -------
-    bins: ndarray
+    bins: np.ndarray
         array of bin edges
-    indices: ndarray
+    indices: np.ndarray
         output array of indices, of same shape as x
     """
     bin_array = np.array(bins)
@@ -52,7 +55,7 @@ def apply_binning(values, binning, selection=...):
     values: array_like
         Values to be partitioned into bins
 
-    binning: (ndarray, ndarray)
+    binning: (np.ndarray, np.ndarray)
         Array of bin edges and array of bin indices, returned from `get_binning`
 
     selection: index expression, optional
@@ -61,7 +64,7 @@ def apply_binning(values, binning, selection=...):
 
     Returns
     -------
-    list of ndarray
+    list of np.ndarray
         List of arrays of values assigned to each bin
     """
     data = values[selection]
@@ -76,10 +79,10 @@ def unapply_binning(binned_values, binning, selection=...):
 
     Parameters
     ----------
-    binned_values: list of ndarrays
+    binned_values: list of np.ndarray
         Binned values returned by `apply_binning`
 
-    binning: (ndarray, ndarray)
+    binning: (np.ndarray, np.ndarray)
         Array of bin edges and array of bin indices, returned from `get_binning`
 
     selection: index expression, optional
@@ -89,7 +92,7 @@ def unapply_binning(binned_values, binning, selection=...):
 
     Returns
     -------
-    list of ndarray
+    list of np.ndarray
         List of arrays of values assigned to each bin
     """
     data = np.zeros(binning[1].shape)
@@ -112,9 +115,9 @@ def binned_resolutions(binned_residuals, return_errors=True):
 
     Returns
     -------
-    resolutions: ndarray
+    resolutions: np.ndarray
         array of resolutions of the bins' residuals
-    errors: ndarray
+    errors: np.ndarray
         array of standard errors on the means of the residuals
     """
     resolutions = np.array([np.quantile(np.abs(x), 0.68) for x in binned_residuals])
@@ -138,7 +141,7 @@ def binned_quantiles(binned_values, quantile):
 
     Returns
     -------
-    ndarray
+    np.ndarray
         array of quantiles of the bins' values
     """
     return np.array([np.quantile(x, quantile) for x in binned_values])
@@ -157,9 +160,9 @@ def binned_mean(binned_values, return_errors=True):
 
     Returns
     -------
-    means: ndarray
+    means: np.ndarray
         array of means of the bins' values
-    errors: ndarray, optional
+    errors: np.ndarray, optional
         array of standard errors of the means
     """
     means = np.array([np.mean(x) for x in binned_values])
@@ -179,16 +182,16 @@ def binned_efficiencies(binned_cut, return_errors=True, reverse=False):
     binned_cut: list of array_like
         list of arrays of booleans in each bin
     reverse: bool
-        If True, reverse the cut to give percentage of events failing the cut. By default give percentage of events
+        If True, reverse the cut to give percentage of events failing the cut. By default, give percentage of events
         passing the cut
     return_errors: bool
         if True, return array of each list of booleans' binomial standard error
 
     Returns
     -------
-    efficiencies: ndarray
+    efficiencies: np.ndarray
         array of percentage of true values in each bin
-    errors: ndarray, optional
+    errors: np.ndarray, optional
         array of binomial standard errors
     """
     efficiencies = binned_mean(binned_cut, return_errors=False)*100
@@ -212,7 +215,7 @@ def binned_std_errors(binned_residuals):
 
     Returns
     -------
-    ndarray
+    np.ndarray
         array of standard errors of the bins' residuals
     """
     return np.array([np.std(x)/np.sqrt(x.size) for x in binned_residuals])
@@ -229,7 +232,7 @@ def binned_binomial_errors(binned_results):
 
     Returns
     -------
-    ndarray
+    np.ndarray
         array of binomial errors of the bins' results
     """
     return np.array([binomial_error(x) for x in binned_results])

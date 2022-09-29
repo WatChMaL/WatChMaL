@@ -19,7 +19,7 @@ def channel_position_offset(channel):
 
     Returns
     -------
-    ndarray:
+    np.ndarray:
         Array of (y, x) coordinate offsets
     """
     channel = channel % 19
@@ -44,7 +44,7 @@ def coordinates_from_data(data):
 
     Returns
     -------
-    coordinates: ndarray
+    coordinates: np.ndarray
         Coordinates for plotting the data
     """
     indices = np.indices(data.shape)
@@ -55,6 +55,9 @@ def coordinates_from_data(data):
 
 
 class CNNmPMTEventDisplay(CNNmPMTDataset):
+    """
+    This class extends the CNNmPMTDataset class to provide event display functionality.
+    """
     def plot_data_2d(self, data, transformations=None, **kwargs):
         """
         Plots CNN mPMT data as a 2D event-display-like image.
@@ -86,7 +89,7 @@ class CNNmPMTEventDisplay(CNNmPMTDataset):
 
         Returns
         -------
-        fig: matplotlib.Figure
+        fig: matplotlib.figure.Figure
         ax: matplotlib.axes.Axes
         """
         rows = self.mpmt_positions[:, 0]
@@ -134,7 +137,7 @@ class CNNmPMTEventDisplay(CNNmPMTDataset):
 
         Returns
         -------
-        fig: matplotlib.Figure
+        fig: matplotlib.figure.Figure
         ax: matplotlib.axes.Axes
         """
         data = self[event]['data']
@@ -154,7 +157,7 @@ class CNNmPMTEventDisplay(CNNmPMTDataset):
 
         Returns
         -------
-        ndarray
+        np.ndarray
             transformed data
         """
         if isinstance(transformation, str):
@@ -204,7 +207,7 @@ class CNNmPMTEventDisplay(CNNmPMTDataset):
 
         Returns
         -------
-        fig: matplotlib.Figure
+        fig: matplotlib.figure.Figure
         ax: matplotlib.axes.Axes
         """
         self.__getitem__(event)
@@ -253,7 +256,7 @@ class CNNmPMTEventDisplay(CNNmPMTDataset):
 
         Returns
         -------
-        figs: Tuple of matplotlib.Figure
+        figs: Tuple of matplotlib.figure.Figure
         axes: Tuple of matplotlib.axes.Axes
         """
         if isinstance(plot, str):

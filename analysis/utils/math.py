@@ -1,3 +1,7 @@
+"""
+Utility functions for performing mathematical, physical, statistical, geometrical operations
+"""
+
 import numpy as np
 
 
@@ -19,11 +23,11 @@ def towall(position, angle, tank_half_height=300, tank_radius=400, tank_axis=Non
     tank_radius : float, default: 400
         Radius of the detector ID
     tank_axis : int, optional
-        Axis along which the tank cylinder is oriented. By default use the y-axis.
+        Axis along which the tank cylinder is oriented. By default, use the y-axis.
 
     Returns
     -------
-    ndarray or scalar
+    np.ndarray or scalar
         array of towall values for each position, or scalar if only one position
     """
     if tank_axis is None:
@@ -41,7 +45,7 @@ def towall(position, angle, tank_half_height=300, tank_radius=400, tank_axis=Non
 
 def dwall(position, tank_half_height=300, tank_radius=400, tank_axis=None):
     """
-    Calculate dwall: distance from position to nearest detector wall
+    Calculate dwall: distance from position to the nearest detector wall
 
     Parameters
     ----------
@@ -52,11 +56,11 @@ def dwall(position, tank_half_height=300, tank_radius=400, tank_axis=None):
     tank_radius : float, default: 400
         Radius of the detector ID
     tank_axis : int, optional
-        Axis along which the tank cylinder is oriented. By default use y-axis
+        Axis along which the tank cylinder is oriented. By default, use y-axis
 
     Returns
     -------
-    ndarray or scalar
+    np.ndarray or scalar
         array of dwall values for each position, or scalar if only one position
     """
     if tank_axis is None:
@@ -84,7 +88,7 @@ def momentum_from_energy(energy, label, particle_masses=np.array((0, 0.511, 105.
 
     Returns
     -------
-    ndarray or scalar
+    np.ndarray or scalar
         array of momentum values for each energy, or scalar if only one energy
     """
     mass = particle_masses[label]
@@ -107,7 +111,7 @@ def energy_from_momentum(momentum, label, particle_masses=np.array((0, 0.511, 10
 
     Returns
     -------
-    ndarray or scalar
+    np.ndarray or scalar
         array of energy values for each momentum, or scalar if only one momentum
     """
     mass = particle_masses[label]
@@ -125,9 +129,9 @@ def polar_to_cartesian(angles):
 
     Returns
     -------
-    dir_along: ndarray or scalar
+    dir_along: np.ndarray or scalar
         array of the component along zenith direction for unit vector of each direction, or scalar if only one direction
-    dir_trans: ndarray
+    dir_trans: np.ndarray
         array of the components transverse to zenith direction for unit vector of each direction
     """
     zenith = angles[..., 0]
@@ -146,11 +150,11 @@ def direction_from_angles(angles, zenith_axis=None):
     angles : array_like
         vector of (zenith, azimuth) of a direction or (N,2) array of (zenith, azimuth) angles for N directions
     zenith_axis : int, optional
-        Axis along which the zenith angle is relative to (i.e. the axis the tank is oriented). By default use y-axis.
+        Axis along which the zenith angle is relative to (i.e. the axis the tank is oriented). By default, use y-axis.
 
     Returns
     -------
-    ndarray
+    np.ndarray
         array of unit vectors of each direction
     """
     dir_along, dir_trans = polar_to_cartesian(angles)
@@ -168,11 +172,11 @@ def angles_from_direction(direction, zenith_axis=None):
     direction : array_like
         vector of (x,y,z) components of a unit vector of a direction, or (N,3) array of (x,y,z) unit vector directions
     zenith_axis : int, optional
-        Axis along which the zenith angle is relative to (i.e. the axis the tank is oriented). By default use y-axis.
+        Axis along which the zenith angle is relative to (i.e. the axis the tank is oriented). By default, use y-axis.
 
     Returns
     -------
-    ndarray
+    np.ndarray
         array of (zenith, azimuth) angles of each direction
 
     """
@@ -200,7 +204,7 @@ def angle_between_directions(direction1, direction2, degrees=False):
 
     Returns
     -------
-    angle: ndarray or scalar
+    angle: np.ndarray or scalar
         array of angles between direction1 and direction2, or scalar if direction1 and direction2 are single directions
     """
     angle = np.arccos(np.clip(np.einsum('...i,...i', direction1, direction2), -1.0, 1.0))
@@ -215,18 +219,18 @@ def decompose_along_direction(vector, direction):
 
     Parameters
     ----------
-    vector: ndarray
+    vector: np.ndarray
         vector of (x,y,z) components or (N,3) array of N (x,y,z) vectors
-    direction: ndarray
+    direction: np.ndarray
         vector of (x,y,z) components of a unit vector of a direction, or (N,3) array of (x,y,z) unit vector directions
 
     Returns
     -------
-    total_magnitude: ndarray or scalar
+    total_magnitude: np.ndarray or scalar
         array of magnitudes of each vector, or scalar if only one vector
-    longitudinal_component: ndarray or scalar
+    longitudinal_component: np.ndarray or scalar
         array of component of each vector along direction, or scalar if only one vector
-    transverse_component: ndarray or scalar
+    transverse_component: np.ndarray or scalar
         array of component of each vector transverse to direction, or scalar if only one vector
     """
     total_magnitude = np.linalg.norm(vector, axis=-1)

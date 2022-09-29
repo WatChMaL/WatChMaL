@@ -1,7 +1,6 @@
 import numpy as np
-import glob
 import matplotlib.pyplot as plt
-import scipy.optimize as opt
+from scipy.optimize import minimize_scalar
 from abc import ABC, abstractmethod
 from sklearn import metrics
 
@@ -16,7 +15,7 @@ def combine_softmax(softmaxes, labels):
 
     Parameters
     ----------
-    softmaxes: ndarray
+    softmaxes: np.ndarray
         Two dimensional array of predicted softmax values, where each row corresponds to an event and each column
         contains the softmax values of a class.
     labels: int or sequence of ints
@@ -25,7 +24,7 @@ def combine_softmax(softmaxes, labels):
 
     Returns
     -------
-    ndarray
+    np.ndarray
         One-dimensional array of summed softmax values, with length equal to the first dimension of `softmaxes`.
     """
     labels = np.atleast_1d(labels)
@@ -63,8 +62,8 @@ def plot_rocs(runs, signal_labels, background_labels, selection=None, ax=None, f
     x_log: bool, optional
         If True, plot the x-axis with log scale, otherwise use linear scale (default).
     y_log: str, optional
-        If True, plot the y-axis with log scale (default for 'rejection' mode, otherwise use linear scale (default for
-        'efficiency' mode.
+        If True, plot the y-axis with log scale (default for 'rejection' mode), otherwise use linear scale (default for
+        'efficiency' mode).
     legend: str or None, optional
         Position of the legend, or None to have no legend. Attempts to find the best position by default.
     mode: {'rejection', 'efficiency'}, optional
@@ -128,12 +127,12 @@ def plot_efficiency_profile(runs, binning, selection=None, select_labels=None, a
     ----------
     runs: sequence of ClassificationRun
         Sequence of runs to plot
-    binning: (ndarray, ndarray)
+    binning: (np.ndarray, np.ndarray)
         Array of bin edges and array of bin indices, returned from `analysis.utils.binning.get_binning`.
     selection: indexing expression, optional
         Selection of the values to use in calculating the efficiencies (by default use each run's predefined selection,
         or all events if none is defined).
-    select_labels: set of int
+    select_labels: set of int, optional
         Set of true labels to select events to use.
     ax: matplotlib.axes.Axes
         Axes to draw the plot. If not provided, a new figure and axes is created.
@@ -174,7 +173,24 @@ def plot_efficiency_profile(runs, binning, selection=None, select_labels=None, a
 
 
 class ClassificationRun(ABC):
+    """Base class for classification results"""
     def __init__(self, run_label, true_labels=None, selection=None, **plot_args):
+        """
+        Create object to hold classification results
+
+        Parameters
+        ----------
+        run_label: str
+            Label to describe this set of results to use in plot legends, etc.
+        true_labels: array_like of int, optional
+            Array of true labels for the events in these classification results
+        selection: index_expression, optional
+            Selection to apply to the set of events to only use a subset of all events when plotting results, etc.
+            By default, use all results.
+        plot_args: optional
+            Additional arguments to pass to plotting functions, used to set the style when plotting these results
+            together with other runs' results.
+        """
         self.run_label = run_label
         self.true_labels = true_labels
         if selection is None:
@@ -201,7 +217,7 @@ class ClassificationRun(ABC):
 
         Returns
         -------
-        ndarray
+        np.ndarray
             Array of indices that are both selected by `selection` and have true label in `select_labels`
         """
         if selection is None:
@@ -231,21 +247,21 @@ class ClassificationRun(ABC):
             Set of labels corresponding to background classes. Can be either a single label or a sequence of labels.
         efficiency: float
             The fixed efficiency to ensure in each bin.
-        binning: (ndarray, ndarray)
+        binning: (np.ndarray, np.ndarray)
             Array of bin edges and array of bin indices, returned from `analysis.utils.binning.get_binning`.
         selection: indexing expression, optional
             Selection of the discriminator values to use in calculating the thresholds applied by the cut in each bin
             (by default use the run's predefined selection, or all events if none is defined).
-        select_labels: set of int
+        select_labels: set of int, optional
             Set of true labels to select events to use in calculating the thresholds.
-        return_thresholds:
+        return_thresholds: bool, optional
             If True, return also the array of cut thresholds calculated for each bin.
 
         Returns
         -------
-        cut: ndarray of bool
+        cut: np.ndarray of bool
             One-dimensional array, length of the total number of events, indicating whether each event passes the cut.
-        thresholds: ndarray of float, optional
+        thresholds: np.ndarray of float, optional
             One-dimensional array giving the threshold applied by the cut to events in each bin.
         """
         selection = self.select_labels(select_labels, selection)
@@ -261,8 +277,7 @@ class ClassificationRun(ABC):
             return self.cut
 
     def cut_with_fixed_efficiency(self, signal_labels, background_labels, efficiency, selection=None,
-                                  select_labels=None,
-                                  return_threshold=False):
+                                  select_labels=None, return_threshold=False):
         """
         Generate array of boolean values indicating whether each event passes a cut defined such that a fixed proportion
         of the selected events pass the cut.
@@ -290,7 +305,7 @@ class ClassificationRun(ABC):
 
         Returns
         -------
-        cut: ndarray of bool
+        cut: np.ndarray of bool
             One-dimensional array the same length as `discriminator_values` indicating whether each event passes the cut.
         threshold: float, optional
             The threshold applied by the cut.
@@ -314,16 +329,16 @@ class ClassificationRun(ABC):
 
         Parameters
         ----------
-        ax: axes.Axes
+        ax: matplotlib.axes.Axes
             Axes to draw the plot.
-        binning: (ndarray, ndarray)
+        binning: (np.ndarray, np.ndarray)
             Array of bin edges and array of bin indices, returned from `analysis.utils.binning.get_binning`.
         selection: indexing expression, optional
             Selection of the values to use in calculating the resolutions (by default use all values).
         select_labels: set of int
             Set of true labels to select events to use.
         reverse: bool
-            If True, reverse the cut to plot percentage of events failing the cut. By default the percentage of events
+            If True, reverse the cut to plot percentage of events failing the cut. By default, the percentage of events
             passing the cut is plotted
         errors: bool, optional
             If True, plot error bars calculated as the standard deviation divided by sqrt(N) of the N values in the bin.
@@ -342,6 +357,7 @@ class ClassificationRun(ABC):
 
 
 class WatChMaLClassification(ClassificationRun, WatChMaLOutput):
+    """Class to hold results of a WatChMaL classification run"""
     def __init__(self, directory, run_label, true_labels=None, indices=None, selection=None, **plot_args):
         """
         Constructs the object holding the results of a WatChMaL classification run.
@@ -351,14 +367,18 @@ class WatChMaLClassification(ClassificationRun, WatChMaLOutput):
         directory: str
             Top-level output directory of a WatChMaL classification run.
         run_label: str
-            Label this run to use in plot legends, etc.
+            Label to describe this set of results to use in plot legends, etc.
+        true_labels: array_like of int, optional
+            Array of true labels for the events in these classification results
         indices: array_like of int, optional
             Array of indices of events to select out of the indices output by WatChMaL (by default use all events sorted
             by their indices).
         selection: index_expression, optional
-            Additional selection of events to use in plotting, calculating efficiencies, etc.
+            Selection to apply to the set of events to only use a subset of all events when plotting results, etc.
+            By default, use all results.
         plot_args: optional
-            Additional arguments to pass to plotting functions.
+            Additional arguments to pass to plotting functions, used to set the style when plotting these results
+            together with other runs' results.
         """
         ClassificationRun.__init__(self, run_label=run_label, true_labels=true_labels, selection=selection, **plot_args)
         WatChMaLOutput.__init__(self, directory=directory, indices=indices)
@@ -367,24 +387,63 @@ class WatChMaLClassification(ClassificationRun, WatChMaLOutput):
         self._val_log_accuracy = None
 
     def read_training_log_from_csv(self, directory):
-        train_files = glob.glob(directory + "/outputs/log_train*.csv")
-        log_train = np.array([np.genfromtxt(f, delimiter=',', skip_header=1) for f in train_files])
-        log_val = np.genfromtxt(directory + "/outputs/log_val.csv", delimiter=',', skip_header=1)
-        train_iteration = log_train[0, :, 0]
-        train_epoch = log_train[0, :, 1]
-        it_per_epoch = np.min(train_iteration[train_epoch == 1]) - 1
-        self._train_log_epoch = train_iteration / it_per_epoch
-        self._train_log_loss = np.mean(log_train[:, :, 2], axis=0)
-        self._train_log_accuracy = np.mean(log_train[:, :, 3], axis=0)
-        self._val_log_epoch = log_val[:, 0] / it_per_epoch
-        self._val_log_loss = log_val[:, 1]
-        self._val_log_accuracy = log_val[:, 2]
-        self._val_log_best = log_val[:, 3].astype(bool)
+        """
+        Read the training progression logs from the given directory.
+
+        Parameters
+        ----------
+        directory: str
+            Path to the directory of the training run.
+
+        Returns
+        -------
+        np.ndarray
+            Array of train epoch values for each entry in the training progression log.
+        np.ndarray
+            Array of train loss values for each entry in the training progression log.
+        np.ndarray
+            Array of train accuracy values for each entry in the training progression log.
+        np.ndarray
+            Array of validation epoch values for each entry in the training progression log
+        np.ndarray
+            Array of validation loss values for each entry in the training progression log
+        np.ndarray
+            Array of validation accuracy values for each entry in the training progression log
+        np.ndarray
+            Array of boolean values indicating whether each entry had the best validation loss so far in the training
+            progression log
+        """
+        super().read_training_log_from_csv(directory)
+        self._train_log_accuracy = np.mean(self._log_train[:, :, 3], axis=0)
+        self._val_log_loss = self._log_val[:, 1]
+        self._val_log_accuracy = self._log_val[:, 2]
+        self._val_log_best = self._log_val[:, 3].astype(bool)
         return (self._train_log_epoch, self._train_log_loss, self._train_log_accuracy,
                 self._val_log_epoch, self._val_log_loss, self._val_log_accuracy, self._val_log_best)
 
     def plot_training_progression(self, plot_best=True, y_loss_lim=None, fig_size=None, title=None,
                                   legend='center right'):
+        """
+        Plot the progression of training and validation loss and accuracy from the run's logs
+
+        Parameters
+        ----------
+        plot_best: bool, optional
+            If true (default), plot points indicating the best validation loss and accuracy
+        y_loss_lim: (int, int), optional
+            Range for the loss y-axis. By default, the range will expand to show all loss values in the logs.
+        fig_size: (float, float), optional
+            Size of the figure
+        title: str, optional
+            Title of the figure. By default, do not plot a title.
+        legend: str, optional
+            Position to plot the legend. By default, the legend is placed in the center right. For no legend use `None`.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+        matplotlib.axes.Axes
+        """
         fig, ax1 = super().plot_training_progression(plot_best, y_loss_lim, fig_size, title, legend=None)
         ax2 = ax1.twinx()
         ax2.plot(self.train_log_epoch, self.train_log_accuracy, lw=2, label='Train accuracy', color='r', alpha=0.3)
@@ -412,8 +471,8 @@ class WatChMaLClassification(ClassificationRun, WatChMaLOutput):
 
         Returns
         -------
-        ndarray
-            One-dimensional array of discriminator values, with length equal to the first dimension of `softmaxes`.
+        np.ndarray
+            One-dimensional array of discriminator values, with length equal to the number of events in this run.
         """
         signal_softmax = combine_softmax(self.softmaxes, signal_labels)
         background_softmax = combine_softmax(self.softmaxes, background_labels)
@@ -421,27 +480,52 @@ class WatChMaLClassification(ClassificationRun, WatChMaLOutput):
 
     @property
     def train_log_accuracy(self):
+        """Array of train accuracy values for each entry in the training progression log."""
         if self._training_log is None:
             self._training_log = self.read_training_log()
         return self._train_log_accuracy
 
     @property
     def val_log_accuracy(self):
+        """Array of validation accuracy values for each entry in the training progression log."""
         if self._training_log is None:
             self._training_log = self.read_training_log()
         return self._val_log_accuracy
 
     @property
     def softmaxes(self):
+        """Array of softmax outputs"""
         if self._softmaxes is None:
             self._softmaxes = self.get_outputs("softmax")
         return self._softmaxes
 
 
 class FiTQunClassification(ClassificationRun):
-
+    """Class to hold classification results of a fiTQun reconstruction run"""
     def __init__(self, fitqun_output, run_label, true_labels=None, indices=None, selection=None,
                  particle_label_map=None, **plot_args):
+        """
+        Create object containing classification results from a fiTQun reconstruction run
+
+        Parameters
+        ----------
+        fitqun_output: analysis.read.FiTQunOutput
+            Output from a fiTQun reconstruction run
+        run_label: str
+            Label to describe this set of results to use in plot legends, etc.
+        true_labels: array_like of int, optional
+            Array of true labels for the events in these classification results
+        indices: array_like of int, optional
+            Array of indices of events to select out of the events in the fiTQun output (by default use all events).
+        selection: index_expression, optional
+            Selection to apply to the set of events to only use a subset of all events when plotting results, etc.
+            (by default use all events).
+        particle_label_map: dict
+            Dictionary mapping particle type names to label integers. By default, use gamma:0, electron:1, muon:2, pi0:3
+        plot_args: optional
+            Additional arguments to pass to plotting functions, used to set the style when plotting these results
+            together with other runs' results.
+        """
         super().__init__(run_label=run_label, true_labels=true_labels, selection=selection, **plot_args)
         self.fitqun_output = fitqun_output
         if indices is None:
@@ -463,6 +547,26 @@ class FiTQunClassification(ClassificationRun):
         self._nll_pi0mass_factor = None
 
     def discriminator(self, signal_labels, background_labels):
+        """
+        Returns discriminator values given sets of labels representing the signal and background.
+        For electron and/or gamma vs muon, use `electron_muon_discriminator`.
+        For electron vs pi0, use `electron_pi0_discriminator`.
+        For electron vs gamma, use `electron_gamma_discriminator`.
+        No other combination of signal and background has currently been implemented for fiTQun results (other than
+        swapping signal and background in any of the above cases, which returns the discriminator multiplied by -1).
+
+        Parameters
+        ----------
+        signal_labels: int or sequence of ints
+            Set of labels corresponding to signal classes. Can be either a single label or a sequence of labels.
+        background_labels: int or sequence of ints
+            Set of labels corresponding to background classes. Can be either a single label or a sequence of labels.
+
+        Returns
+        -------
+        np.ndarray
+            One-dimensional array of discriminator values, with length equal to the number of events in this run.
+        """
         signal_labels = np.atleast_1d(signal_labels)
         background_labels = np.atleast_1d(background_labels)
         if set(signal_labels) <= self.electron_like and set(background_labels) <= self.muons:
@@ -482,6 +586,22 @@ class FiTQunClassification(ClassificationRun):
                                       f"background {background_labels} has not yet been implemented for fiTQun outputs")
 
     def get_discriminator(self, discriminator):
+        """
+        Helper function for defining a particular discriminator. If `discriminator` is a function, it should take the
+        fiTQun output as its only argument and return the discriminator, in which case the function called on this run's
+        output is returned by this function. If `discriminator` is a string, it should name an attribute of this class
+        to use as the discriminator, in which case that attribute is returned. In any other case the input is returned
+        unchanged, for example if `discriminator` is already an array of discriminator values.
+
+        Parameters
+        ----------
+        discriminator: callable or str or array_like of float
+
+        Returns
+        -------
+        ndarray of float
+            Array of discriminator values
+        """
         if callable(discriminator):
             return discriminator(self.fitqun_output)[self.indices]
         elif isinstance(discriminator, str):
@@ -491,6 +611,7 @@ class FiTQunClassification(ClassificationRun):
 
     @property
     def electron_muon_discriminator(self):
+        """Negative log-likelihood difference for electrons and muons: ln(L_e) - ln(L_mu)"""
         if self._electron_muon_discriminator is None:
             fq = self.fitqun_output
             self._electron_muon_discriminator = fq.muon_nll[self.indices] - fq.electron_nll[self.indices]
@@ -498,10 +619,12 @@ class FiTQunClassification(ClassificationRun):
 
     @property
     def muon_electron_discriminator(self):
+        """Negative log-likelihood difference for electrons and muons: ln(L_mu) - ln(L_e)"""
         return -self.electron_muon_discriminator
 
     @property
     def electron_pi0_discriminator(self):
+        """Discriminator for electron vs pi0, by default the log-likelihood difference: ln(L_e) - ln(L_pi0)"""
         if self._electron_pi0_discriminator is None:
             # By default, use simple discriminator using only the log-likelihood difference
             return self.electron_pi0_nll_discriminator
@@ -509,10 +632,12 @@ class FiTQunClassification(ClassificationRun):
 
     @electron_pi0_discriminator.setter
     def electron_pi0_discriminator(self, discriminator):
+        """Set the discriminator for electron vs pi0"""
         self._electron_pi0_discriminator = self.get_discriminator(discriminator)
 
     @property
     def electron_pi0_nll_discriminator(self):
+        """Electron vs pi0 log-likelihood difference: ln(L_e) - ln(L_pi0)"""
         if self._electron_pi0_nll_discriminator is None:
             fq = self.fitqun_output
             self._electron_pi0_nll_discriminator = fq.pi0_nll[self.indices] - fq.electron_nll[self.indices]
@@ -520,6 +645,7 @@ class FiTQunClassification(ClassificationRun):
 
     @property
     def electron_pi0_nll_pi0mass_discriminator(self):
+        """Linear 2D cut for electron vs pi0, in ln(L_e) - ln(L_pi0) and reconstructed pi0 mass"""
         if self._nll_pi0mass_discriminator is None:
             fq = self.fitqun_output
             self._nll_pi0mass_discriminator = (fq.pi0_nll[self.indices] - fq.electron_nll[self.indices]
@@ -528,17 +654,50 @@ class FiTQunClassification(ClassificationRun):
 
     @property
     def nll_pi0mass_factor(self):
+        """Gradient of the linear 2D cut in n(L_e) - ln(L_pi0) and reconstructed pi0 mass"""
         if self._nll_pi0mass_factor is None:
             self.tune_nll_pi0mass_discriminator()
         return self._nll_pi0mass_factor
 
     @nll_pi0mass_factor.setter
     def nll_pi0mass_factor(self, f):
+        """Set the gradient of the linear 2D cut in n(L_e) - ln(L_pi0) and reconstructed pi0 mass"""
         self._nll_pi0mass_factor = f
         self._nll_pi0mass_discriminator = None  # Reset to be recalculated after changing factor
 
     def tune_nll_pi0mass_discriminator(self, pi0_efficiency=None, electron_efficiency=None, selection=None, binning=None,
                                        **opt_args):
+        """
+        Tune the gradient of the cut line for a linear 2D cut in n(L_e) - ln(L_pi0) and reconstructed pi0 mass.
+        By default, optimize the gradient of the cut such that the Mann–Whitney U test is minimised. This minimises the
+        sum of the ranks of the pi0 discriminator values when ranked together with the electron discriminator values.
+        If `pi0_efficiency` is given, then the gradient is optimized to minimise the electron mis-PID when fixing a cut
+        threshold that gives the desired pi0 efficiency.
+        If `electron_efficiency` is given, then the gradient is optimized to minimise the pi0 mis-PID when fixing a cut
+        threshold that gives the desired electron efficiency.
+        If `binning` is provided, then the cut line gradient is tuned separately in each bin.
+
+        Parameters
+        ----------
+        pi0_efficiency: float, optional
+            Fixed pi0 efficiency for which to minimise electron mis-PID
+        electron_efficiency: float, optional
+            Fixed electron efficiency for which to minimise pi0 mis-PID
+        selection: index_expression, optional
+            If provided, only consider selected events when optimising the cut. By default, use the run's pre-defined
+            selection, if any.
+        binning: (np.ndarray, np.ndarray), optional
+            Result of `analysis.utils.binning.get_binning` to use to tune the cut separately in each bin. By default,
+            the cut is tuned once for all events without binning.
+        opt_args: optional
+            Additional arguments to pass to `scipy.optimize.minimize_scalar`
+
+        Returns
+        -------
+        float or ndarray of floats
+            The value of the optimal cut line gradient, or array of optimal cut line gradients in each bin if `binning`
+            is provided.
+        """
         if selection is None:
             selection = self.selection
         nll_diff = self.electron_pi0_nll_discriminator
@@ -561,18 +720,18 @@ class FiTQunClassification(ClassificationRun):
             self.electron_pi0_discriminator = self._nll_pi0mass_discriminator
             return nll_pi0mass_factors
 
-        if electron_efficiency is not None:  # Optimise cut to minimise pi0 mis-ID for given electron efficiency
-            def pi_misid(cut_gradient):
-                discriminator = nll_diff[selection] + cut_gradient*pi0mass[selection]
-                cut_threshold = np.quantile(discriminator[electrons], 1-electron_efficiency)
-                return np.mean(discriminator[pi0s] > cut_threshold)
-            min_func = pi_misid
-        elif pi0_efficiency is not None:  # Optimise cut to minimise electron mis-ID for given pi0 efficiency
+        if pi0_efficiency is not None:  # Optimize cut to minimise electron mis-ID for given pi0 efficiency
             def e_misid(cut_gradient):
                 discriminator = nll_diff[selection] + cut_gradient*pi0mass[selection]
                 cut_threshold = np.quantile(discriminator[pi0s], 1-pi0_efficiency)
                 return np.mean(discriminator[electrons] <= cut_threshold)
             min_func = e_misid
+        elif electron_efficiency is not None:  # Optimize cut to minimise pi0 mis-ID for given electron efficiency
+            def pi_misid(cut_gradient):
+                discriminator = nll_diff[selection] + cut_gradient*pi0mass[selection]
+                cut_threshold = np.quantile(discriminator[electrons], 1-electron_efficiency)
+                return np.mean(discriminator[pi0s] > cut_threshold)
+            min_func = pi_misid
         else:  # Optimise cut to minimise sum of ranks for pi0s (equivalent to Mann–Whitney U test)
             def u_test(cut_gradient):
                 discriminator = nll_diff[selection] + cut_gradient*pi0mass[selection]
@@ -580,16 +739,21 @@ class FiTQunClassification(ClassificationRun):
                 return np.sum(ranks[pi0s])
             min_func = u_test
         opt_args.setdefault('method', 'golden')
-        result = opt.minimize_scalar(min_func, **opt_args)
+        result = minimize_scalar(min_func, **opt_args)
         self.nll_pi0mass_factor = result.x
         return self.nll_pi0mass_factor
 
     @property
     def pi0_electron_discriminator(self):
+        """Discriminator for pi0 vs electron, by default the log-likelihood difference: ln(L_pi0) - ln(L_e)"""
         return -self.electron_pi0_discriminator
 
     @property
     def electron_gamma_discriminator(self):
+        """
+        Discriminator for electron vs gamma. The fiTQun gamma hypothesis doesn't work well, so by default the muon vs
+        electron log-likelihood difference: ln(L_mu) - ln(L_gamma)
+        """
         if self._electron_gamma_discriminator is None:
             #  fiTQun gamma hypotheses doesn't work well, so just use e/mu nll by default
             return self.muon_electron_discriminator
@@ -597,8 +761,13 @@ class FiTQunClassification(ClassificationRun):
 
     @electron_gamma_discriminator.setter
     def electron_gamma_discriminator(self, discriminator):
+        """Set the discriminator for electron vs gamma"""
         self._electron_gamma_discriminator = self.get_discriminator(discriminator)
 
     @property
     def gamma_electron_discriminator(self):
+        """
+        Discriminator for gamma vs electron. The fiTQun gamma hypothesis doesn't work well, so by default the electron
+        vs gamma log-likelihood difference: ln(L_gamma) - ln(L_mu)
+        """
         return -self.electron_gamma_discriminator

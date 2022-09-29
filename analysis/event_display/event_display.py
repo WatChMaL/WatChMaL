@@ -41,7 +41,7 @@ def plot_event_2d(pmt_data, data_coordinates, pmt_coordinates, fig_width=None, t
 
     Returns
     -------
-    fig: matplotlib.Figure
+    fig: matplotlib.figure.Figure
     ax: matplotlib.axes.Axes
     """
     if not show_zero:
@@ -63,7 +63,7 @@ def plot_event_2d(pmt_data, data_coordinates, pmt_coordinates, fig_width=None, t
         fig, ax = plt.subplots(figsize=fig_size)
         ax.set_aspect(1)
         ax.add_collection(PatchCollection(pmt_circles, facecolor='none', linewidths=1*scale, edgecolors=edge_color))
-        pmts = ax.scatter(data_coordinates[:,0], data_coordinates[:,1], c=pmt_data.flatten(), s=7*scale*scale, cmap=color_map, norm=color_norm)
+        pmts = ax.scatter(data_coordinates[:, 0], data_coordinates[:, 1], c=pmt_data.flatten(), s=7*scale*scale, cmap=color_map, norm=color_norm)
         ax_min = np.min(pmt_coordinates, axis=0) - 1
         ax_max = np.max(pmt_coordinates, axis=0) + 1
         ax.set_xlim([ax_min[0], ax_max[0]])
@@ -115,7 +115,7 @@ def plot_event_3d(pmt_data, data_coordinates, unhit_pmt_coordinates=None, fig_si
 
     Returns
     -------
-    fig: matplotlib.Figure
+    fig: matplotlib.figure.Figure
     ax: matplotlib.axes.Axes
     """
     if not show_zero:
