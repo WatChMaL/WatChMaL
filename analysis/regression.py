@@ -485,8 +485,11 @@ class DirectionPrediction(ABC):
         """This attribute gives the predicted directions"""
 
 
-class FitQun1RingFit(RegressionRun, PositionPrediction, DirectionPrediction, MomentumPrediction):
-    """Class to hold position, direction and momentum predictions of a fiTQun reconstruction run"""
+class FitQun1ParticleFit(RegressionRun, PositionPrediction, DirectionPrediction, MomentumPrediction):
+    """
+    Class to hold position, direction and momentum predictions of a fiTQun reconstruction run.
+    The muon-like and electron-like single-ring fits and the unconstrained mass pi0 fit are used.
+    """
     def __init__(self, fitqun_output, run_label, true_positions=None, true_directions=None, true_momenta=None,
                  true_labels=None, indices=..., selection=None, particle_label_map=None, **plot_args):
         """
@@ -556,7 +559,9 @@ class FitQun1RingFit(RegressionRun, PositionPrediction, DirectionPrediction, Mom
 
     @property
     def momentum_prediction(self):
-        """Momentum prediction from fiTQun for the single ring fit of the particle type(s) set during construction"""
+        """
+        Momentum prediction from fiTQun for the single particle fit of the particle type(s) set during construction
+        """
         if self._momentum_prediction is None:
             self._momentum_prediction = np.zeros(self.n_events)
             for p, i in self.particle_indices.items():
@@ -565,7 +570,9 @@ class FitQun1RingFit(RegressionRun, PositionPrediction, DirectionPrediction, Mom
 
     @property
     def position_prediction(self):
-        """Position prediction from fiTQun for the single ring fit of the particle type(s) set during construction"""
+        """
+        Position prediction from fiTQun for the single particle fit of the particle type(s) set during construction
+        """
         if self._position_prediction is None:
             self._position_prediction = np.zeros((self.n_events, 3))
             for p, i in self.particle_indices.items():
@@ -574,7 +581,9 @@ class FitQun1RingFit(RegressionRun, PositionPrediction, DirectionPrediction, Mom
 
     @property
     def direction_prediction(self):
-        """Direction prediction from fiTQun for the single ring fit of the particle type(s) set during construction"""
+        """
+        Direction prediction from fiTQun for the single particle fit of the particle type(s) set during construction
+        """
         if self._direction_prediction is None:
             self._direction_prediction = np.zeros((self.n_events, 3))
             for p, i in self.particle_indices.items():
