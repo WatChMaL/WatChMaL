@@ -32,6 +32,7 @@ class CNNDataset(H5Dataset):
                             np.count_nonzero(self.pmt_positions[:,0] == row) == self.data_size[1]]
         self.collapse_arrays = collapse_arrays
         self.transforms = None #du.get_transformations(transformations, transforms)
+        self.one_indexed = one_indexed
 
         n_channels = 0
         if use_times:
@@ -55,7 +56,7 @@ class CNNDataset(H5Dataset):
         Returns:
             data                    ... array of hits in cnn format
         """
-        if one_indexed:
+        if self.one_indexed:
             hit_pmts = hit_pmts-1 #SK cable numbers start at 1
 
         hit_rows = self.pmt_positions[hit_pmts, 0]
