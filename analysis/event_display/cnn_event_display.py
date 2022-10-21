@@ -3,44 +3,22 @@ Tools for event displays from CNN mPMT dataset
 """
 import numpy as np
 from analysis.event_display.event_display import plot_event_2d, plot_event_3d
-from watchmal.dataset.cnn_mpmt.cnn_mpmt_dataset import CNNmPMTDataset
+from watchmal.dataset.cnn.cnn_dataset import CNNDataset
 from matplotlib.pyplot import cm
 import torch
-
-
-def channel_position_offset(channel):
-    """
-    Calculate offset in plotting coordinates for channel of PMT within mPMT.
-
-    Parameters
-    ----------
-    channel: array_like of float
-        array of channel IDs or PMT IDs
-
-    Returns
-    -------
-    np.ndarray:
-        Array of (y, x) coordinate offsets
-    """
-    channel = channel % 19
-    theta = (channel < 12)*2*np.pi*channel/12 + ((channel >= 12) & (channel < 18))*2*np.pi*(channel-12)/6
-    radius = 0.2*(channel < 18) + 0.2*(channel < 12)
-    position = np.column_stack((radius*np.sin(theta), radius*np.cos(theta)))
-    return position
 
 
 def coordinates_from_data(data):
     """
     Calculate plotting coordinates for each element of CNN data, where each element of `data` contains a PMT's data.
     The actual values in `data` don't matter, it just takes the data tensor that has dimensions of
-    (channel, image row, image column) and returns plotting coordinates for each element of the flattened data array.
-    Plotting coordinates returned correspond to [x, y] coordinates for each PMT, including offsets for the PMT's
-    position in the mPMT.
+    (image row, image column) and returns plotting coordinates for each element of the flattened data array.
+    Plotting coordinates returned correspond to [x, y] coordinates for each PMT.
 
     Parameters
     ----------
     data: array_like
-        Array of PMT data formatted for use in CNN, i.e. with dimensions of (channel, row, column)
+        Array of PMT data formatted for use in CNN, i.e. with dimensions of (row, column)
 
     Returns
     -------
@@ -48,24 +26,22 @@ def coordinates_from_data(data):
         Coordinates for plotting the data
     """
     indices = np.indices(data.shape)
-    channels = indices[0].flatten()
     coordinates = indices[[2, 1]].reshape(2, -1).astype(np.float64).T
-    coordinates += channel_position_offset(channels)
     return coordinates
 
 
-class CNNmPMTEventDisplay(CNNmPMTDataset):
+class CNNEventDisplay(CNNDataset):
     """
-    This class extends the CNNmPMTDataset class to provide event display functionality.
+    This class extends the CNNDataset class to provide event display functionality.
     """
     def plot_data_2d(self, data, transformations=None, **kwargs):
         """
-        Plots CNN mPMT data as a 2D event-display-like image.
+        Plots CNN data as a 2D event-display-like image.
 
         Parameters
         ----------
         data : array_like
-            Array of PMT data formatted for use in CNN, i.e. with dimensions of (channels, x, y)
+            Array of PMT data formatted for use in CNN, i.e. with dimensions of (x, y)
         transformations : function or str or sequence of function or str, optional
             Transformation function, or the name of a method of the dataset, or a sequence of functions or method names
             to apply to the data, such as those used for augmentation.
@@ -92,19 +68,19 @@ class CNNmPMTEventDisplay(CNNmPMTDataset):
         fig: matplotlib.figure.Figure
         ax: matplotlib.axes.Axes
         """
-        rows = self.mpmt_positions[:, 0]
-        columns = self.mpmt_positions[:, 1]
+        rows = self.pmt_positions[:, 0]
+        columns = self.pmt_positions[:, 1]
         data = torch.Tensor(data)
-        mpmt_locations = torch.zeros_like(data, dtype=bool)  # fill a data-like array with False
-        mpmt_locations[18, rows, columns] = True  # replace channel 18 with True where there is an actual mPMT
+        pmt_locations = torch.zeros_like(data, dtype=bool)  # fill a data-like array with False
+        pmt_locations[0, rows, columns] = True  # replace with True where there is an actual mPMT
         if transformations is not None:
             data = self.apply_transformation(transformations, data)
-            mpmt_locations = self.apply_transformation(transformations, mpmt_locations)
+            pmt_locations = self.apply_transformation(transformations, pmt_locations)
         coordinates = coordinates_from_data(data)  # coordinates corresponding to each element of the data array
         data_nan = np.full_like(data, np.nan)  # fill an array with nan for positions where there's no actual PMTs
-        data_nan[:, mpmt_locations[18]] = data[:, mpmt_locations[18]]  # replace the nans with the data where there is a PMT
-        mpmt_coordinates = coordinates[mpmt_locations.flatten()]  # the coordinates of where the actual mPMTs are
-        return plot_event_2d(data_nan.flatten(), coordinates, mpmt_coordinates, **kwargs)
+        data_nan[:, pmt_locations[0]] = data[:, pmt_locations[0]]  # replace the nans with the data where there is a PMT
+        pmt_coordinates = coordinates[pmt_locations.flatten()]  # the coordinates of where the actual mPMTs are
+        return plot_event_2d(data_nan.flatten(), coordinates, pmt_coordinates, **kwargs)
 
     def plot_event_2d(self, event, transformations=None, **kwargs):
         """
@@ -240,12 +216,8 @@ class CNNmPMTEventDisplay(CNNmPMTDataset):
             'dx'   The x-coordinate of the unit vector of the PMT's normal direction
             'dy'   The y-coordinate of the unit vector of the PMT's normal direction
             'dz'   The z-coordinate of the unit vector of the PMT's normal direction
-            'mx'   The x-coordinate of the PMT's 3D position relative to the centre PMT of its mPMT module
-            'my'   The y-coordinate of the PMT's 3D position relative to the centre PMT of its mPMT module
-            'mz'   The z-coordinate of the PMT's 3D position relative to the centre PMT of its mPMT module
             'ir'   The row of the PMT's 2D position in the CNN image
             'ic'   The column of the PMT's 2D position in the CNN image
-            'ch'   The channel of the PMT within the mPMT
             ====== =======================================================================================
             By default, plots are produced for 'x', 'y' and 'z'.
         view : {'2d', '3d'}
@@ -265,10 +237,6 @@ class CNNmPMTEventDisplay(CNNmPMTDataset):
         pmt_coordinates = geo_file['position']
         pmt_directions = geo_file['orientation']
         pmt_ids = np.arange(pmt_coordinates.shape[0])
-        mpmts = pmt_ids//19
-        center_pmt_ids = mpmts*19+18  # the index of the centre PMT in the same module
-        pmt_offset_positions = pmt_coordinates[pmt_ids]-pmt_coordinates[center_pmt_ids]
-        pmt_mpmts = pmt_ids % 19
         data_map = {
             '1': np.ones(pmt_ids.shape),
             'i': pmt_ids,
@@ -278,12 +246,8 @@ class CNNmPMTEventDisplay(CNNmPMTDataset):
             'dx': pmt_directions[:, 0],
             'dy': pmt_directions[:, 1],
             'dz': pmt_directions[:, 2],
-            'mx': pmt_offset_positions[:, 0],
-            'my': pmt_offset_positions[:, 1],
-            'mz': pmt_offset_positions[:, 2],
-            'ir': self.mpmt_positions[mpmts, 0],
-            'ic': self.mpmt_positions[mpmts, 1],
-            'ch': pmt_mpmts,
+            'ir': self.pmt_positions[pmt_ids, 0],
+            'ic': self.pmt_positions[pmt_ids, 1],
         }
         title_map = {
             '1': None,
@@ -294,16 +258,12 @@ class CNNmPMTEventDisplay(CNNmPMTDataset):
             'dx': "x-coordinate of PMT direction",
             'dy': "y-coordinate of PMT direction",
             'dz': "z-coordinate of PMT direction",
-            'mx': "PMT x-coordinate relative to mPMT module",
-            'my': "PMT y-coordinate relative to mPMT module",
-            'mz': "PMT z-coordinate relative to mPMT module",
             'ir': "PMT row in CNN image",
             'ic': "PMT column in CNN image",
-            'ch': "PMT channel in mPMT",
         }
         figs, axes = [], []
         for p in plot:
-            if p in ['i', 'ir', 'ic', 'ch']:
+            if p in ['i', 'ir', 'ic']:
                 color_map = cm.turbo
             elif p == '1':
                 color_map = cm.Greys
@@ -320,7 +280,7 @@ class CNNmPMTEventDisplay(CNNmPMTDataset):
                 data = data_map[p]
                 fig, ax = plot_event_3d(data, pmt_coordinates, **args)
             else:
-                data = self.process_data(pmt_ids, data_map[p])
+                data = self.process_data(pmt_ids, data_map[p], data_map[p])
                 fig, ax = self.plot_data_2d(data, **args)
             figs.append(fig)
             axes.append(ax)
