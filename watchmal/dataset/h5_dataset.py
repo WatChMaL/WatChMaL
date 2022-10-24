@@ -28,40 +28,33 @@ class H5CommonDataset(Dataset, ABC):
     hit_pmt 	(n_hits,) 	int32 	PMT ID of the digitized hit
     hit_time 	(n_hits,) 	float32 	Time of the digitized hit
     """
-    def __init__(self, h5_path, is_distributed, label_set=None):
+    def __init__(self, h5_path, is_distributed):
         """
         Args:
             h5_path             ... path to h5 dataset file
             is_distributed      ... whether running in multiprocessing mode
             transforms          ... transforms to apply
-            label_set           ... set of possible label values in the dataset
         """
         self.h5_path = h5_path
         with h5py.File(self.h5_path, 'r') as h5_file:
             self.dataset_length = h5_file["labels"].shape[0]
-
-        if label_set is None:
-            self.label_set = None
-        else:
-            self.label_set = set(label_set)
 
         self.initialized = False
         if not is_distributed:
             self.initialize()
 
     def initialize(self):
+        # Set attribute so that method won't be invoked again
+        self.initialized = True
+
         self.h5_file = h5py.File(self.h5_path, "r")
 
 #        self.event_ids  = np.array(self.h5_file["event_ids"])
 #        self.root_files = np.array(self.h5_file["root_files"])
-        labels = np.array(self.h5_file["labels"])
-        if self.label_set is None:
-            self.labels = labels
-        else:
-            self.labels = np.ndarray(labels.shape, dtype=int)
-            for i, l in enumerate(self.label_set):
-                self.labels[labels==l] = i
-                
+        self.labels = np.array(self.h5_file["labels"])
+        if self.label_set is not None:
+            self.map_labels(self.label_set)
+
 #        self.positions  = np.array(self.h5_file["positions"])
 #        self.angles     = np.array(self.h5_file["angles"])
 #        self.energies   = np.array(self.h5_file["energies"])
@@ -82,9 +75,14 @@ class H5CommonDataset(Dataset, ABC):
                               dtype=self.hdf5_hit_time.dtype)
         self.load_hits()
 
-        # Set attribute so that method won't be invoked again
-        self.initialized = True
-        
+    def map_labels(self, label_set):
+        self.label_set = set(label_set)
+        if self.initialized:
+            labels = np.ndarray(self.labels.shape, dtype=int)
+            for i, l in enumerate(self.label_set):
+                labels[self.labels == l] = i
+            self.labels = labels
+
     @abstractmethod
     def load_hits(self):
         pass
@@ -113,8 +111,8 @@ class H5Dataset(H5CommonDataset, ABC):
     Initialize digihits dataset.  Adds access to digitized hits data.  These are:
     hit_charge 	(n_hits,) 	float32 	Charge of the digitized hit
     """
-    def __init__(self, h5_path, is_distributed, label_set=None):
-        H5CommonDataset.__init__(self, h5_path, is_distributed, label_set=label_set)
+    def __init__(self, h5_path, is_distributed):
+        H5CommonDataset.__init__(self, h5_path, is_distributed)
         
     def load_hits(self):
         self.hdf5_hit_charge = self.h5_file["hit_charge"]
@@ -139,8 +137,8 @@ class H5TrueDataset(H5CommonDataset, ABC):
     Initializes truehits dataset. Adds access to true photon hits data. These are:
     hit_parent 	(n_hits,) 	float32 	Parent track ID of the true hit, as defined by WCSim's true hit parent. -1 is used for dark noise.
     """
-    def __init__(self, h5_path, transforms=None, digitize_hits=True, label_set=None):
-        H5CommonDataset.__init__(self, h5_path, transforms, label_set=label_set)
+    def __init__(self, h5_path, transforms=None, digitize_hits=True):
+        H5CommonDataset.__init__(self, h5_path, transforms)
         self.digitize_hits = digitize_hits
 
     def load_hits(self):

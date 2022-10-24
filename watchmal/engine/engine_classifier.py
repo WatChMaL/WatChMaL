@@ -27,7 +27,7 @@ from watchmal.dataset.data_utils import get_data_loader
 from watchmal.utils.logging_utils import CSVData
 
 class ClassifierEngine:
-    def __init__(self, model, rank, gpu, dump_path):
+    def __init__(self, model, rank, gpu, dump_path, label_set):
         """
         Args:
             model       ... model object that engine will use in training or evaluation
@@ -54,6 +54,7 @@ class ClassifierEngine:
             self.model_accs = self.model
 
         self.data_loaders = {}
+        self.label_set = label_set
 
         # define the placeholder attributes
         self.data = None
@@ -108,6 +109,8 @@ class ClassifierEngine:
         """
         for name, loader_config in loaders_config.items():
             self.data_loaders[name] = get_data_loader(**data_config, **loader_config, is_distributed=is_distributed, seed=seed)
+            if self.label_set is not None:
+                self.data_loaders[name].map_labels(self.label_set)
     
     def get_synchronized_metrics(self, metric_dict):
         """
