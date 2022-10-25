@@ -81,6 +81,7 @@ class H5CommonDataset(Dataset, ABC):
             labels = np.ndarray(self.labels.shape, dtype=int)
             for i, l in enumerate(self.label_set):
                 labels[self.labels == l] = i
+            self.original_labels = self.labels
             self.labels = labels
 
     @abstractmethod
