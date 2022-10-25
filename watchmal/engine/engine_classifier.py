@@ -27,13 +27,14 @@ from watchmal.dataset.data_utils import get_data_loader
 from watchmal.utils.logging_utils import CSVData
 
 class ClassifierEngine:
-    def __init__(self, model, rank, gpu, dump_path, label_set):
+    def __init__(self, model, rank, gpu, dump_path, label_set=None):
         """
         Args:
             model       ... model object that engine will use in training or evaluation
             rank        ... rank of process among all spawned processes (in multiprocessing mode)
             gpu         ... gpu that this process is running on
             dump_path   ... path to store outputs in
+            label_set   ... set of labels to classify (if None, default, then class labels in the data must be 0 to N)
         """
         # create the directory for saving the log and dump files
         self.epoch = 0.
