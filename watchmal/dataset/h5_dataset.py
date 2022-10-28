@@ -46,16 +46,12 @@ class H5CommonDataset(Dataset, ABC):
             self.initialize()
 
     def initialize(self):
-        # Set attribute so that method won't be invoked again
-        self.initialized = True
 
         self.h5_file = h5py.File(self.h5_path, "r")
 
 #        self.event_ids  = np.array(self.h5_file["event_ids"])
 #        self.root_files = np.array(self.h5_file["root_files"])
         self.labels = np.array(self.h5_file["labels"])
-        if self.label_set is not None:
-            self.map_labels(self.label_set)
 
 #        self.positions  = np.array(self.h5_file["positions"])
 #        self.angles     = np.array(self.h5_file["angles"])
@@ -76,6 +72,13 @@ class H5CommonDataset(Dataset, ABC):
                               offset=self.hdf5_hit_time.id.get_offset(),
                               dtype=self.hdf5_hit_time.dtype)
         self.load_hits()
+
+        # Set attribute so that method won't be invoked again
+        self.initialized = True
+
+        # perform label mapping now that labels have been initialised
+        if self.label_set is not None:
+            self.map_labels(self.label_set)
 
     def map_labels(self, label_set):
         self.label_set = set(label_set)
