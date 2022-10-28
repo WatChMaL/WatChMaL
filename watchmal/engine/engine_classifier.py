@@ -111,7 +111,7 @@ class ClassifierEngine:
         for name, loader_config in loaders_config.items():
             self.data_loaders[name] = get_data_loader(**data_config, **loader_config, is_distributed=is_distributed, seed=seed)
             if self.label_set is not None:
-                self.data_loaders[name].map_labels(self.label_set)
+                self.data_loaders[name].dataset.map_labels(self.label_set)
     
     def get_synchronized_metrics(self, metric_dict):
         """

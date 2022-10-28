@@ -39,6 +39,8 @@ class H5CommonDataset(Dataset, ABC):
         with h5py.File(self.h5_path, 'r') as h5_file:
             self.dataset_length = h5_file["labels"].shape[0]
 
+        self.label_set = None
+
         self.initialized = False
         if not is_distributed:
             self.initialize()
