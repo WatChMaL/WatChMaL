@@ -4,3 +4,4 @@ pmt_positions_file: /home/ayankelevich/WatChMaL/SK_PMT_image_positions.npz
 collapse_arrays: False
 use_times: True
 use_charges: True
+one_indexed: True
