@@ -19,6 +19,8 @@ import debugpy
 import os
 import numpy as np
 
+from watchmal.utils.logging_utils import get_git_version
+
 logger = logging.getLogger('train')
 
 @hydra.main(config_path='config/', config_name='resnet_train')
@@ -29,6 +31,7 @@ def main(config):
     Args:
         config  ... hydra config specified in the @hydra.main annotation
     """
+    logger.info(f"Using the following git version of WatChMaL repository: {get_git_version(os.path.dirname(__file__))}")
     logger.info(f"Running with the following config:\n{OmegaConf.to_yaml(config)}")
 
     ngpus = len(config.gpu_list)
