@@ -70,13 +70,6 @@ class CNNDataset(H5Dataset):
         else:
             data[0, hit_rows, hit_cols] = hit_charges
 
-
-
-
-        # fix barrel array indexing to match endcaps in xyz ordering
-        #barrel_data = data[:, self.barrel_rows, :]
-        #data[:, self.barrel_rows, :] = barrel_data[barrel_map_array_idxs, :, :]
-
         return data
 
     def  __getitem__(self, item):
