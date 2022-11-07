@@ -14,7 +14,7 @@ from watchmal.dataset.h5_dataset import H5Dataset
 import watchmal.dataset.data_utils as du
 
 class CNNDataset(H5Dataset):
-    def __init__(self, h5file, pmt_positions_file, is_distributed, use_times=True, use_charges=True, transforms=None, collapse_arrays=False, one_indexed=False):
+    def __init__(self, h5file, pmt_positions_file, is_distributed, use_times=True, use_charges=True, transforms=None, one_indexed=False):
         """
         Args:
             h5_path             ... path to h5 dataset file
@@ -30,7 +30,6 @@ class CNNDataset(H5Dataset):
         self.data_size = np.max(self.pmt_positions, axis=0) + 1
         self.barrel_rows = [row for row in range(self.data_size[0]) if
                             np.count_nonzero(self.pmt_positions[:,0] == row) == self.data_size[1]]
-        self.collapse_arrays = collapse_arrays
         self.transforms = None #du.get_transformations(transformations, transforms)
         self.one_indexed = one_indexed
 
@@ -79,10 +78,6 @@ class CNNDataset(H5Dataset):
         #barrel_data = data[:, self.barrel_rows, :]
         #data[:, self.barrel_rows, :] = barrel_data[barrel_map_array_idxs, :, :]
 
-        # collapse arrays if desired
-        if self.collapse_arrays:
-            data = np.expand_dims(np.sum(data, 0), 0)
-        
         return data
 
     def  __getitem__(self, item):
