@@ -19,7 +19,7 @@ barrel_map_array_idxs = [6, 7, 8, 9, 10, 11, 0, 1, 2, 3, 4, 5, 15, 16, 17, 12, 1
 pmts_per_mpmt = 19
 
 class CNNmPMTDataset(H5Dataset):
-    def __init__(self, h5file, mpmt_positions_file, is_distributed, padding_type=None, transforms=None, collapse_arrays=False):
+    def __init__(self, h5file, mpmt_positions_file, padding_type=None, transforms=None, collapse_arrays=False):
         """
         Args:
             h5_path             ... path to h5 dataset file
@@ -27,7 +27,7 @@ class CNNmPMTDataset(H5Dataset):
             transforms          ... transforms to apply
             collapse_arrays     ... whether to collapse arrays in return
         """
-        super().__init__(h5file, is_distributed)
+        super().__init__(h5file)
         
         
         self.mpmt_positions = np.load(mpmt_positions_file)['mpmt_image_positions']

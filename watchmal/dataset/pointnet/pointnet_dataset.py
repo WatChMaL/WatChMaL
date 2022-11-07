@@ -13,8 +13,8 @@ import watchmal.dataset.data_utils as du
 
 class PointNetDataset(H5Dataset):
 
-    def __init__(self, h5file, geometry_file, is_distributed, use_times=True, use_orientations=False, n_points=4000, transforms=None):
-        super().__init__(h5file, is_distributed)
+    def __init__(self, h5file, geometry_file, use_times=True, use_orientations=False, n_points=4000, transforms=None):
+        super().__init__(h5file)
         geo_file = np.load(geometry_file, 'r')
         self.geo_positions = geo_file["position"].astype(np.float32)
         self.geo_orientations = geo_file["orientation"].astype(np.float32)

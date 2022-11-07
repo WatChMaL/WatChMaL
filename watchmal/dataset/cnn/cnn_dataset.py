@@ -14,15 +14,14 @@ from watchmal.dataset.h5_dataset import H5Dataset
 import watchmal.dataset.data_utils as du
 
 class CNNDataset(H5Dataset):
-    def __init__(self, h5file, pmt_positions_file, is_distributed, use_times=True, use_charges=True, transforms=None, one_indexed=False):
+    def __init__(self, h5file, pmt_positions_file, use_times=True, use_charges=True, transforms=None, one_indexed=False):
         """
         Args:
             h5_path             ... path to h5 dataset file
-            is_distributed      ... whether running in multiprocessing mode
             transforms          ... transforms to apply
             collapse_arrays     ... whether to collapse arrays in return
         """
-        super().__init__(h5file, is_distributed)
+        super().__init__(h5file)
         
         self.pmt_positions = np.load(pmt_positions_file)['pmt_image_positions']
         self.use_times = use_times

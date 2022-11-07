@@ -28,11 +28,10 @@ class H5CommonDataset(Dataset, ABC):
     hit_pmt 	(n_hits,) 	int32 	PMT ID of the digitized hit
     hit_time 	(n_hits,) 	float32 	Time of the digitized hit
     """
-    def __init__(self, h5_path, is_distributed):
+    def __init__(self, h5_path):
         """
         Args:
             h5_path             ... path to h5 dataset file
-            is_distributed      ... whether running in multiprocessing mode
             transforms          ... transforms to apply
         """
         self.h5_path = h5_path
@@ -42,8 +41,6 @@ class H5CommonDataset(Dataset, ABC):
         self.label_set = None
 
         self.initialized = False
-        if not is_distributed:
-            self.initialize()
 
     def initialize(self):
 
@@ -117,8 +114,8 @@ class H5Dataset(H5CommonDataset, ABC):
     Initialize digihits dataset.  Adds access to digitized hits data.  These are:
     hit_charge 	(n_hits,) 	float32 	Charge of the digitized hit
     """
-    def __init__(self, h5_path, is_distributed):
-        H5CommonDataset.__init__(self, h5_path, is_distributed)
+    def __init__(self, h5_path):
+        H5CommonDataset.__init__(self, h5_path)
         
     def load_hits(self):
         self.hdf5_hit_charge = self.h5_file["hit_charge"]

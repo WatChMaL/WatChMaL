@@ -11,8 +11,8 @@ pmts_per_mpmt = 19
 
 class PointNetMultiPMTDataset(H5Dataset):
 
-    def __init__(self, h5file, geometry_file, is_distributed, use_orientations=False, transforms=None, max_points=None):
-        super().__init__(h5file, is_distributed)
+    def __init__(self, h5file, geometry_file, use_orientations=False, transforms=None, max_points=None):
+        super().__init__(h5file)
         geo_file = np.load(geometry_file, 'r')
         geo_positions = torch.from_numpy(geo_file["position"]).float()
         geo_orientations = torch.from_numpy(geo_file["orientation"]).float()
