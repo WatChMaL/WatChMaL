@@ -227,25 +227,3 @@ class CNNmPMTDataset(H5Dataset):
         padded_data = torch.cat(concat_order, dim=1)
 
         return padded_data
-
-
-    def retrieve_event_data(self, item):
-        """
-        Returns event data from dataset associated with a specific index
-        Args:
-            item                    ... index of event
-        Returns:
-            hit_pmts                ... array of ids of hit pmts
-            pmt_charge_data         ... array of charge of hits
-            pmt_time_data           ... array of times of hits
-        """
-        data_dict = super().__getitem__(item)
-
-        # construct charge data with barrel array indexing to match endcaps in xyz ordering
-        pmt_charge_data = self.process_data(self.event_hit_pmts, self.event_hit_charges).flatten()
-
-        # construct time data with barrel array indexing to match endcaps in xyz ordering
-        pmt_time_data = self.process_data(self.event_hit_pmts, self.event_hit_times).flatten()
-
-        return self.event_hit_pmts, pmt_charge_data, pmt_time_data
-        
