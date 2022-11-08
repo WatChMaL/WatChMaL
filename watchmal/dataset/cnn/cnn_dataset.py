@@ -13,13 +13,30 @@ import numpy as np
 from watchmal.dataset.h5_dataset import H5Dataset
 import watchmal.dataset.data_utils as du
 
+
 class CNNDataset(H5Dataset):
     def __init__(self, h5file, pmt_positions_file, use_times=True, use_charges=True, transforms=None, one_indexed=False):
         """
-        Args:
-            h5_path             ... path to h5 dataset file
-            transforms          ... transforms to apply
-            collapse_arrays     ... whether to collapse arrays in return
+        Constructs a dataset for CNN data. Event hit data is read in from the HDF5 file and the PMT charge and/or time
+        data is formatted into an event-display-like image for input to a CNN. Each pixel of the image corresponds to
+        one PMT and the channels correspond to charge and/or time at each PMT.
+
+        Parameters
+        ----------
+        h5file: string
+            Location of the HDF5 file containing the event data
+        pmt_positions_file: string
+            Location of an npz file containing the mapping from PMT IDs to CNN image pixel locations
+        use_times: bool
+            Whether to use PMT hit times as one of the initial CNN image channels. True by default.
+        use_charges: bool
+            Whether to use PMT hit charges as one of the initial CNN image channels. True by default.
+        transforms
+            List of random transforms to apply to data before passing to CNN for data augmentation. Currently unused for
+            this dataset.
+        one_indexed: bool
+            Whether the PMT IDs in the H5 file are indexed starting at 1 (like SK tube numbers) or 0 (like WCSim PMT
+            indexes). By default, zero-indexing is assumed.
         """
         super().__init__(h5file)
         
@@ -28,7 +45,7 @@ class CNNDataset(H5Dataset):
         self.use_charges = use_charges
         self.data_size = np.max(self.pmt_positions, axis=0) + 1
         self.barrel_rows = [row for row in range(self.data_size[0]) if
-                            np.count_nonzero(self.pmt_positions[:,0] == row) == self.data_size[1]]
+                            np.count_nonzero(self.pmt_positions[:, 0] == row) == self.data_size[1]]
         self.transforms = None #du.get_transformations(transformations, transforms)
         self.one_indexed = one_indexed
 
@@ -37,7 +54,7 @@ class CNNDataset(H5Dataset):
             n_channels += 1
         if use_charges:
             n_channels += 1
-        if n_channels==0:
+        if n_channels == 0:
             raise Exception("Please set 'use_times' and/or 'use_charges' to 'True' in your data config.")
        
         self.data_size = np.insert(self.data_size, 0, n_channels)
@@ -46,16 +63,22 @@ class CNNDataset(H5Dataset):
         """
         Returns event data from dataset associated with a specific index
 
-        Args:
-            hit_pmts                ... array of ids of hit pmts
-            hit_times               ... array of time data associated with hits
-            hit_charges             ... array of charge data associated with hits
+        Parameters
+        ----------
+        hit_pmts: array_like of int
+            Array of hit PMT IDs
+        hit_times: array_like of float
+            Array of PMT hit times
+        hit_charges: array_like of float
+            Array of PMT hit charges
         
-        Returns:
-            data                    ... array of hits in cnn format
+        Returns
+        -------
+        data: ndarray
+            Array in image-like format (channels, rows, columns) for input to CNN network.
         """
         if self.one_indexed:
-            hit_pmts = hit_pmts-1 #SK cable numbers start at 1
+            hit_pmts = hit_pmts-1  # SK cable numbers start at 1
 
         hit_rows = self.pmt_positions[hit_pmts, 0]
         hit_cols = self.pmt_positions[hit_pmts, 1]
@@ -72,7 +95,7 @@ class CNNDataset(H5Dataset):
 
         return data
 
-    def  __getitem__(self, item):
+    def __getitem__(self, item):
 
         data_dict = super().__getitem__(item)
 
