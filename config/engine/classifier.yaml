@@ -1,4 +1,2 @@
 _target_: watchmal.engine.engine_classifier.ClassifierEngine
-label_set:
-  - 0
-  - 1
+label_set: None
