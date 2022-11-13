@@ -22,7 +22,8 @@ class GCN(torch.nn.Module):
         self.conv4 = torch_geometric.nn.GCNConv(h_feat*4, h_feat*8)
         self.lin = torch.nn.Linear(h_feat*8, num_classes)
 
-    def forward(self, x, edge_index, batch):
+    def forward(self, graph):
+        x, edge_index, batch = graph.x, graph.edge_index, graph.batch
         # 1. Obtain node embeddings
         x = self.conv1(x, edge_index)
         x = x.tanh()
@@ -70,7 +71,8 @@ class ResGCN(torch.nn.Module):
 
         self.classifier = torch.nn.Linear(h_feat, num_classes)
 
-    def forward(self, x, edge_index, batch):
+    def forward(self, graph):
+        x, edge_index, batch = graph.x, graph.edge_index, graph.batch
         x = self.node_encoder(x)
         for layer in self.layers:
             x = layer(x, edge_index)
@@ -93,7 +95,8 @@ class GINModel(torch.nn.Module):
         self.classifier = torch_geometric.nn.MLP(
             [h_feat, h_feat*2, num_classes], norm="batch_norm", dropout=dropout)
 
-    def forward(self, x, edge_index, batch):
+    def forward(self, graph):
+        x, edge_index, batch = graph.x, graph.edge_index, graph.batch
         x = self.gnn(x, edge_index)
         x = torch_geometric.nn.global_add_pool(x, batch)
         x = self.classifier(x)
@@ -119,7 +122,8 @@ class DyEdCNN(torch.nn.Module):
         self.mlp = torch_geometric.nn.MLP(
             [256, 128, 64, num_classes], dropout=dropout_rate, norm="batch_norm")
 
-    def forward(self, x, edge_index, batch):
+    def forward(self, graph):
+        x, edge_index, batch = graph.x, graph.edge_index, graph.batch
         x1 = self.conv1(x, batch)
         x2 = self.conv2(x1, batch)
         out = self.lin1(torch.cat([x1, x2], dim=1))

@@ -15,15 +15,16 @@ from torch_cluster import knn_graph
 
 
 class GnnDataset(H5Dataset):
-    def __init__(self, h5_path, geometry_file, k_neighbors, is_distributed=True):
+    def __init__(self, h5file, geometry_file, k_neighbors, transforms=None, is_distributed=True):
         """
         Args:
-            h5_path             ... path to h5 dataset file
+            h5file              ... path to h5 dataset file
             geometry_file       ... path to the geometry file
             k_neighbors         ... number of nearst neighbors used to connect the graph
             is_distributed      ... whether running in multiprocessing mode
+            transforms          ... transforms to apply
         """
-        super().__init__(h5_path, is_distributed)
+        super().__init__(h5file, is_distributed)
 
         geo_file = np.load(geometry_file, 'r')
         self.geo_positions = geo_file['position'].astype(np.float32)
