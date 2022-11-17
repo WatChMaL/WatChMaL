@@ -15,9 +15,10 @@ class PointNetDataset(H5Dataset):
 
     def __init__(self, h5file, geometry_file, use_times=True, use_orientations=False, n_points=4000, transforms=None):
         """
-        Constructs a dataset for CNN data. Event hit data is read in from the HDF5 file and the PMT charge and/or time
-        data is formatted into an event-display-like image for input to a CNN. Each pixel of the image corresponds to
-        one PMT and the channels correspond to charge and/or time at each PMT.
+        Constructs a dataset for PointNet data. Event hit data is read in from the HDF5 file and the PMT charge and/or
+        time data is formatted into an array of points, with x, y and z position and other channels for orientation,
+        charge and/or time. Charge is always included but time and orientation channels are optional. The PMT positions
+        and orientations are taken from a separate compressed numpy file of the detector geometry.
 
         Parameters
         ----------
