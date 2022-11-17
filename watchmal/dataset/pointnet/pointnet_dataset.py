@@ -1,5 +1,5 @@
 """
-Class implementing a mPMT dataset for pointnet in h5 format
+Class implementing a dataset for pointnet in h5 format
 """
 
 # generic imports
@@ -14,6 +14,30 @@ import watchmal.dataset.data_utils as du
 class PointNetDataset(H5Dataset):
 
     def __init__(self, h5file, geometry_file, use_times=True, use_orientations=False, n_points=4000, transforms=None):
+        """
+        Constructs a dataset for CNN data. Event hit data is read in from the HDF5 file and the PMT charge and/or time
+        data is formatted into an event-display-like image for input to a CNN. Each pixel of the image corresponds to
+        one PMT and the channels correspond to charge and/or time at each PMT.
+
+        Parameters
+        ----------
+        h5file: string
+            Location of the HDF5 file containing the event data
+        geometry_file: string
+            Location of an npz file containing the position and orientation of PMTs
+        use_times: bool
+            Whether to use PMT hit times as one of the initial PointNet channels. True by default.
+        use_orientations: bool
+            Whether to use PMT orientation as some of the initial PointNet channels. False by default.
+        n_points: int
+            Number of points to pass to the PointNet network. If there are fewer hits in an event than `n_points`, then
+            additional points are added filled with zeros. If there are more hits in an event than `n_points`, then the
+            hit data is truncated and only the first `n_points` hits are passed to the network.
+        transforms
+            List of random transforms to apply to data before passing to CNN for data augmentation. Each element of the
+            list should be the name of a function in watchmal.dataset.pointnet.transformations that performs the
+            transformation.
+        """
         super().__init__(h5file)
         geo_file = np.load(geometry_file, 'r')
         self.geo_positions = geo_file["position"].astype(np.float32)
