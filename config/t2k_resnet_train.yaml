@@ -1,18 +1,17 @@
 data:
-  split_path: /fast_scratch/WatChMaL/data/IWCD_mPMT_Short/index_lists/4class_e_mu_gamma_pi0/IWCD_mPMT_Short_4_class_3M_emgp0_idxs.npz
+  split_path: /home/fcormier/t2k/ml/t2k_ml_training/data/train0.7_val0.15_test0.15000000000000005.npz
   dataset:
-    h5file: /fast_scratch/WatChMaL/data/IWCD_mPMT_Short/IWCD_mPMT_Short_emgp0_E0to1000MeV_digihits.h5
-    _target_: watchmal.dataset.cnn_mpmt.cnn_mpmt_dataset.CNNmPMTDataset
-    mpmt_positions_file: /data/WatChMaL/data/IWCDshort_mPMT_image_positions.npz
+    h5file: '/fast_scratch/fcormier/t2k/ml/wcsim/sep12_emu_fullCylinder_250k_1/combine_combine.hy'
+    _target_: watchmal.dataset.cnn.cnn_dataset.CNNDataset
+    pmt_positions_file: /home/fcormier/t2k/ml/t2k_ml_training/data/sk_wcsim_imagefile.npz
     collapse_arrays: false
-    padding_type: double_cover
 model:
   _recursive_: false
   _target_: watchmal.model.classifier.Classifier
-  num_classes: 4
+  num_classes: 2
   feature_extractor:
     _target_: watchmal.model.resnet.resnet18
-    num_input_channels: 19
+    num_input_channels: 2
     num_output_channels: 4
   classification_network:
     _target_: watchmal.model.classifier.PassThrough
@@ -28,7 +27,7 @@ tasks:
     data_loaders:
       train:
         split_key: train_idxs
-        batch_size: 1024
+        batch_size: 64
         num_workers: 4
         transforms:
         - horizontal_flip
@@ -38,7 +37,7 @@ tasks:
           _target_: torch.utils.data.sampler.SubsetRandomSampler
       validation:
         split_key: val_idxs
-        batch_size: 1024
+        batch_size: 128
         num_workers: 4
         sampler:
           _target_: torch.utils.data.sampler.SubsetRandomSampler
@@ -52,11 +51,11 @@ tasks:
     data_loaders:
       test:
         split_key: test_idxs
-        batch_size: 1024
+        batch_size: 128
         num_workers: 4
         sampler:
           _target_: watchmal.dataset.samplers.SubsetSequentialSampler
-gpu_list:
-- 5
+gpu_list: 
+- 6
 seed: null
 dump_path: ./outputs/
