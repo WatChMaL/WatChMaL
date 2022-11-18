@@ -14,7 +14,7 @@ from watchmal.dataset.h5_dataset import H5Dataset
 import watchmal.dataset.data_utils as du
 
 class CNNDataset(H5Dataset):
-    def __init__(self, h5file, pmt_positions_file, is_distributed, use_times=True, use_charges=True, transforms=None, collapse_arrays=False):
+    def __init__(self, h5file, pmt_positions_file, is_distributed, use_times=True, use_charges=True, transforms=None, collapse_arrays=False, one_indexed=False):
         """
         Args:
             h5_path             ... path to h5 dataset file
@@ -32,6 +32,7 @@ class CNNDataset(H5Dataset):
                             np.count_nonzero(self.pmt_positions[:,0] == row) == self.data_size[1]]
         self.collapse_arrays = collapse_arrays
         self.transforms = None #du.get_transformations(transformations, transforms)
+        self.one_indexed = one_indexed
 
         n_channels = 0
         if use_times:
@@ -55,7 +56,8 @@ class CNNDataset(H5Dataset):
         Returns:
             data                    ... array of hits in cnn format
         """
-        hit_pmts = hit_pmts-1 #SK cable numbers start at 1
+        if self.one_indexed:
+            hit_pmts = hit_pmts-1 #SK cable numbers start at 1
 
         hit_rows = self.pmt_positions[hit_pmts, 0]
         hit_cols = self.pmt_positions[hit_pmts, 1]
