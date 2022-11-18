@@ -9,7 +9,6 @@ from torch import flip
 # generic imports
 import numpy as np
 import torch
-import random
 
 # WatChMaL imports
 from watchmal.dataset.h5_dataset import H5Dataset
@@ -20,11 +19,19 @@ pmts_per_mpmt = 19
 
 
 class CNNmPMTDataset(H5Dataset):
+    """
+    This class loads PMT hit data from an HDF5 file and provides events formatted for CNNs, where the 3D data tensor's
+    first dimension is over the channels, corresponding to hit charge of the 19 PMTs within each mPMT, and the second
+    and third dimensions are the height and width of the CNN image. Each pixel of the image corresponds to one mPMT,
+    with mPMTs arrange in an event-display-like format.
+    """
+
     def __init__(self, h5file, mpmt_positions_file, padding_type=None, transforms=None, collapse_arrays=False):
         """
         Constructs a dataset for CNN data. Event hit data is read in from the HDF5 file and the PMT charge data is
         formatted into an event-display-like image for input to a CNN. Each pixel of the image corresponds to one mPMT
-        module, with channels corresponding to each PMT within the mPMT.
+        module, with channels corresponding to each PMT within the mPMT. The mPMTs are placed in the image according to
+        a mapping provided by the numpy array in the `mpmt_positions_file`.
 
         Parameters
         ----------
@@ -216,7 +223,8 @@ class CNNmPMTDataset(H5Dataset):
         and rearranged to provide a double-cover of the image, providing two 'views' of the detector from a single image
         with less blank space and physically meaningful cyclic boundary conditions at the edges of the image.
 
-        The transformation looks something like the following:
+        The transformation looks something like the following, where PMTs on the end caps are numbered and PMTs on the
+        barrel are letters:
         ```
                              CBALKJIHGFED
              01                01    32

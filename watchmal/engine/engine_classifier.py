@@ -27,14 +27,22 @@ from watchmal.dataset.data_utils import get_data_loader
 from watchmal.utils.logging_utils import CSVData
 
 class ClassifierEngine:
+    """Engine for performing training or evaluation  for a classification network."""
     def __init__(self, model, rank, gpu, dump_path, label_set=None):
         """
-        Args:
-            model       ... model object that engine will use in training or evaluation
-            rank        ... rank of process among all spawned processes (in multiprocessing mode)
-            gpu         ... gpu that this process is running on
-            dump_path   ... path to store outputs in
-            label_set   ... set of labels to classify (if None, default, then class labels in the data must be 0 to N)
+        Parameters
+        ==========
+        model
+            nn.module object that contains the full network that the engine will use in training or evaluation.
+        rank : int
+            The rank of process among all spawned processes (in multiprocessing mode).
+        gpu : int
+            The gpu that this process is running on.
+        dump_path : string
+            The path to store outputs in.
+        label_set : sequence
+            The set of possible labels to classify (if None, which is the default, then class labels in the data must be
+            0 to N).
         """
         # create the directory for saving the log and dump files
         self.epoch = 0.
@@ -75,38 +83,29 @@ class ClassifierEngine:
         self.scheduler = None
     
     def configure_optimizers(self, optimizer_config):
-        """
-        Set up optimizers from optimizer config
-
-        Args:
-            optimizer_config    ... hydra config specifying optimizer object
-        """
+        """Instantiate an optimizer from a hydra config."""
         self.optimizer = instantiate(optimizer_config, params=self.model_accs.parameters())
 
-  
     def configure_scheduler(self, scheduler_config):
-        """
-        Set up scheduler from scheduler config
-
-        Args:
-            scheduler_config    ... hydra config specifying scheduler object
-        """
+        """Instantiate a scheduler from a hydra config."""
         self.scheduler = instantiate(scheduler_config, optimizer=self.optimizer)
         print('Successfully set up Scheduler')
 
 
     def configure_data_loaders(self, data_config, loaders_config, is_distributed, seed):
         """
-        Set up data loaders from loaders config
+        Set up data loaders from loaders hydra configs for the data config, and a list of data loader configs.
 
-        Args:
-            data_config     ... hydra config specifying dataset
-            loaders_config  ... hydra config specifying dataloaders
-            is_distributed  ... boolean indicating if running in multiprocessing mode
-            seed            ... seed to use to initialize dataloaders
-        
-        Parameters:
-            self should have dict attribute data_loaders
+        Parameters
+        ==========
+        data_config
+            Hydra config specifying dataset.
+        loaders_config
+            Hydra config specifying a list of dataloaders.
+        is_distributed : bool
+            Whether running in multiprocessing mode.
+        seed : int
+            Random seed to use to initialize dataloaders.
         """
         for name, loader_config in loaders_config.items():
             self.data_loaders[name] = get_data_loader(**data_config, **loader_config, is_distributed=is_distributed, seed=seed)
@@ -115,13 +114,17 @@ class ClassifierEngine:
     
     def get_synchronized_metrics(self, metric_dict):
         """
-        Gathers metrics from multiple processes using pytorch distributed operations
+        Gathers metrics from multiple processes using pytorch distributed operations for DistributedDataParallel
 
-        Args:
-            metric_dict         ... dict containing values that are tensor outputs of a single process
+        Parameters
+        ==========
+        metric_dict : dict of torch.Tensor
+            Dictionary containing values that are tensor outputs of a single process.
         
-        Returns:
-            global_metric_dict  ... dict containing concatenated list of tensor values gathered from all processes
+        Returns
+        =======
+        global_metric_dict : dict of torch.Tensor
+            Dictionary containing concatenated list of tensor values gathered from all processes
         """
         global_metric_dict = {}
         for name, array in zip(metric_dict.keys(), metric_dict.values()):
@@ -134,16 +137,17 @@ class ClassifierEngine:
 
     def forward(self, train=True):
         """
-        Compute predictions and metrics for a batch of data
+        Compute predictions and metrics for a batch of data.
 
-        Args:
-            train   ... whether to compute gradients for backpropagation
+        Parameters
+        ==========
+        train : bool
+            Whether in training mode, requiring computing gradients for backpropagation
 
-        Parameters:
-            self should have attributes data, labels, model, criterion, softmax
-        
-        Returns:
-            dict containing loss, predicted labels, softmax, accuracy, and raw model outputs
+        Returns
+        =======
+        dict
+            Dictionary containing loss, predicted labels, softmax, accuracy, and raw model outputs
         """
         with torch.set_grad_enabled(train):
             # Move the data and the labels to the GPU (if using CPU this has no effect)
@@ -168,34 +172,19 @@ class ClassifierEngine:
         return result
     
     def backward(self):
-        """
-        Backward pass using the loss computed for a mini-batch
-
-        Parameters:
-            self should have attributes loss, optimizer
-        """
+        """Backward pass using the loss computed for a mini-batch"""
         self.optimizer.zero_grad()  # reset accumulated gradient
         self.loss.backward()        # compute new gradient
         self.optimizer.step()       # step params
-    
-    # ========================================================================
-    # Training and evaluation loops
-    
+
     def train(self, train_config):
         """
-        Train the model on the training set
+        Train the model on the training set.
 
-        Args:
-            train_config    ... config specigying training parameters
-        
-        Parameters:
-            self should have attributes model, data_loaders
-        
-        Outputs:
-            val_log      ... csv log containing iteration, epoch, loss, accuracy for each iteration on validation set
-            train_logs   ... csv logs containing iteration, epoch, loss, accuracy for each iteration on training set
-            
-        Returns: None
+        Parameters
+        ==========
+        train_config
+            Hydra config specifying training parameters
         """
         # initialize training params
         epochs              = train_config.epochs
@@ -286,10 +275,19 @@ class ClassifierEngine:
         if self.rank == 0:
             self.val_log.close()
 
-
-
-
     def validate(self, val_iter, num_val_batches, checkpointing):
+        """
+        Perform validation with the current state, on a number of batches of the validation set.
+
+        Parameters
+        ----------
+        val_iter : iter
+            Iterator of the validation dataset.
+        num_val_batches : int
+            Number of validation batches to iterate over.
+        checkpointing : bool
+            Whether to save the current state to disk.
+        """
         # set model to eval mode
         self.model.eval()
         val_metrics = {"iteration": self.iteration, "loss": 0., "accuracy": 0., "saved_best": 0}
@@ -348,23 +346,7 @@ class ClassifierEngine:
             self.val_log.flush()
 
     def evaluate(self, test_config):
-        """
-        Evaluate the performance of the trained model on the test set
-
-        Args:
-            test_config ... hydra config specifying evaluation parameters
-        
-        Parameters:
-            self should have attributes model, data_loaders, dirpath
-        
-        Outputs:
-            indices     ... index in dataset of each event
-            labels      ... actual label of each event
-            predictions ... predicted label of each event
-            softmax     ... softmax output over classes for each event
-            
-        Returns: None
-        """
+        """Evaluate the performance of the trained model on the test set."""
         print("evaluating in directory: ", self.dirpath)
 
         
@@ -461,15 +443,17 @@ class ClassifierEngine:
 
     def save_state(self, name=""):
         """
-        Save model weights to a file.
+        Save model weights and other training state information to a file.
         
-        Args:
-            name    ... suffix for the filename. Should be "BEST" for saving the best validation state.
+        Parameters
+        ==========
+        name
+            Suffix for the filename. Should be "BEST" for saving the best validation state.
         
-        Outputs:
-            dict containing iteration, optimizer state dict, and model state dict
-            
-        Returns: filename
+        Returns
+        =======
+        filename : string
+            Filename where the saved state is saved.
         """
         filename = "{}{}{}{}".format(self.dirpath,
                                      str(self.model._get_name()),
@@ -491,14 +475,7 @@ class ClassifierEngine:
         return filename
 
     def restore_best_state(self, placeholder):
-        """
-        Restore model using best model found in current directory
-
-        Args:
-            placeholder     ... extraneous; hydra configs are not allowed to be empty
-
-        Outputs: model params are now those loaded from best model file
-        """
+        """Restore model using best model found in current directory."""
         best_validation_path = "{}{}{}{}".format(self.dirpath,
                                      str(self.model._get_name()),
                                      "BEST",
@@ -507,17 +484,11 @@ class ClassifierEngine:
         self.restore_state_from_file(best_validation_path)
     
     def restore_state(self, restore_config):
+        """Restore model and training state from a file given in the `weight_file` entry of the config."""
         self.restore_state_from_file(restore_config.weight_file)
 
     def restore_state_from_file(self, weight_file):
-        """
-        Restore model using weights stored from a previous run
-        
-        Args: 
-            weight_file     ... path to weights to load
-        
-        Outputs: model params are now those loaded from file
-        """
+        """Restore model and training state from a given filename."""
         # Open a file in read-binary mode
         with open(weight_file, 'rb') as f:
             print('Restoring state from', weight_file)

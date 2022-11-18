@@ -8,10 +8,6 @@ from hydra.utils import instantiate
 # torch imports
 import torch
 from torch.utils.data import DataLoader
-from torch.utils.data import SubsetRandomSampler
-from torch.utils.data.distributed import DistributedSampler
-from torch.utils.data import DataLoader
-from torch.utils.data import SubsetRandomSampler
 
 # generic imports
 import numpy as np
@@ -20,22 +16,39 @@ import random
 # WatChMaL imports
 from watchmal.dataset.samplers import DistributedSamplerWrapper
 
+
 def get_data_loader(dataset, batch_size, sampler, num_workers, is_distributed, seed, split_path=None, split_key=None, transforms=None):
     """
-    Returns data loaders given dataset and sampler configs
+    Creates a dataloader given the dataset and sampler configs. The dataset and sampler are instantiated using their
+    corresponding configs. If using DistributedDataParallel, the sampler is wrapped using DistributedSamplerWrapper.
+    A dataloader is returned after being instantiated using this dataset and sampler.
 
-    Args:
-        dataset         ... hydra config specifying dataset object
-        batch_size      ... batch size
-        sampler         ... hydra config specifying sampler object
-        num_workers     ... number of workers to use in dataloading
-        is_distributed  ... whether running in multiprocessing mode, used to wrap sampler using DistributedSamplerWrapper
-        seed            ... seed used to coordinate samplers in distributed mode
-        split_path      ... path to indices specifying splitting of dataset among train/val/test
-        split_key       ... string key to select indices
-        transforms      ... list of transforms to apply
+
+    Parameters
+    ----------
+    dataset
+        Hydra config specifying dataset object.
+    batch_size : int
+        Size of the batches that the data loader should return.
+    sampler
+        Hydra config specifying sampler object.
+    num_workers : int
+        Number of data loader worker processes to use.
+    is_distributed : bool
+        Whether running in multiprocessing mode (i.e. DistributedDataParallel)
+    seed : int
+        Random seed used to coordinate samplers in distributed mode.
+    split_path
+        Path to an npz file containing an array of indices to use as a subset of the full dataset.
+    split_key : string
+        Name of the array to use in the file specified by split_path.
+    transforms : list of string
+        List of transforms to apply to the dataset.
     
-    Returns: dataloader created with instantiated dataset and (possibly wrapped) sampler
+    Returns
+    -------
+    torch.utils.data.DataLoader
+        dataloader created with instantiated dataset and (possibly wrapped) sampler
     """
     dataset = instantiate(dataset, transforms=transforms)
     
@@ -57,6 +70,19 @@ def get_data_loader(dataset, batch_size, sampler, num_workers, is_distributed, s
 
 
 def get_transformations(transformations, transform_names):
+    """
+    Returns a list of transformation functions from an object and a list of names of the desired transformations, where
+    the object has functions with the given names.
+
+    Parameters
+    ----------
+    transformations : object containing the transformation functions
+    transform_names : list of strings
+
+    Returns
+    -------
+
+    """
     if transform_names is not None:
         for transform_name in transform_names:
             assert hasattr(transformations, transform_name), f"Error: There is no defined transform named {transform_name}"
@@ -66,7 +92,25 @@ def get_transformations(transformations, transform_names):
         return None
 
 
-def apply_random_transformations(transforms, data, segmented_labels = None):
+def apply_random_transformations(transforms, data, segmented_labels=None):
+    """
+    Randomly chooses a set of transformations to apply, from a given list of transformations, then applies those that
+    were randomly chosen to the data and returns the transformed data.
+
+    Parameters
+    ----------
+    transforms : list of callable
+        List of transformation functions to apply to the data.
+    data : array_like
+        Data to transform
+    segmented_labels
+        Truth data in the same format as data, to also apply the same transformation.
+
+    Returns
+    -------
+    data
+        The transformed data.
+    """
     if transforms is not None:
         for transformation in transforms:
             if random.getrandbits(1):

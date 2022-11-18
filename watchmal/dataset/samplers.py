@@ -10,7 +10,7 @@ from torch.utils.data.distributed import DistributedSampler
 # generic imports
 from operator import itemgetter
 from typing import Optional
-import time
+
 
 def SubsetSequentialSampler(indices):
     return indices
@@ -36,11 +36,18 @@ class DistributedSamplerWrapper(DistributedSampler):
         shuffle: bool = False,
     ):
         """
-        Args:
-            sampler                         ... Sampler used for subsampling
-            num_replicas (int, optional)    ... Number of processes participating in distributed training
-            rank (int, optional)            ... Rank of the current process within ``num_replicas``
-            shuffle (bool, optional)        ... If true sampler will shuffle the indices
+        Initialises a sampler that wraps some other sampler for use with DistributedDataParallel
+
+        Parameters
+        ==========
+        sampler
+            The sampler used for subsampling.
+        num_replicas : int, optional
+            Number of processes participating in distributed training.
+        rank : int, optional
+            Rank of the current process within ``num_replicas``.
+        shuffle : bool, optional
+            If true sampler will shuffle the indices, false by default.
         """
         super(DistributedSamplerWrapper, self).__init__(
             list(sampler),
@@ -53,6 +60,7 @@ class DistributedSamplerWrapper(DistributedSampler):
         self.epoch = 0
     
     def set_epoch(self, epoch):
+        """Set the epoch number, used for setting the random seed so that each epoch has a different random seed."""
         self.epoch = epoch
     
     def __iter__(self):

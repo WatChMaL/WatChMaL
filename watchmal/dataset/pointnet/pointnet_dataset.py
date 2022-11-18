@@ -1,5 +1,5 @@
 """
-Class implementing a dataset for pointnet in h5 format
+Class implementing a dataset for PointNet in h5 format
 """
 
 # generic imports
@@ -12,6 +12,12 @@ import watchmal.dataset.data_utils as du
 
 
 class PointNetDataset(H5Dataset):
+    """
+    This class loads PMT hit data from an HDF5 file and provides events formatted for point-cloud networks, where the 2D
+    data tensor's first dimension is over the channels, using the detector geometry to provide the PMT 3D positions as
+    the first three channels, then optionally the PMT orientations, charge and time of the hits as additional channels.
+    The second dimension of the data tensor is over the hit PMTs of the event.
+    """
 
     def __init__(self, h5file, geometry_file, use_times=True, use_orientations=False, n_points=4000, transforms=None):
         """
@@ -53,7 +59,7 @@ class PointNetDataset(H5Dataset):
         if use_times:
             self.channels += 1
 
-    def  __getitem__(self, item):
+    def __getitem__(self, item):
 
         data_dict = super().__getitem__(item)
 

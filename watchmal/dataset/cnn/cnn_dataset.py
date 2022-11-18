@@ -15,11 +15,19 @@ import watchmal.dataset.data_utils as du
 
 
 class CNNDataset(H5Dataset):
+    """
+    This class loads PMT hit data from an HDF5 file and provides events formatted for CNNs, where the 3D data tensor's
+    first dimension is over the channels, corresponding to hit time and/or charge, and the second and third dimensions
+    are the height and width of the CNN image. Each pixel of the image corresponds to one PMT, with PMTs arrange in an
+    event-display-like format.
+    """
+
     def __init__(self, h5file, pmt_positions_file, use_times=True, use_charges=True, transforms=None, one_indexed=False):
         """
         Constructs a dataset for CNN data. Event hit data is read in from the HDF5 file and the PMT charge and/or time
         data is formatted into an event-display-like image for input to a CNN. Each pixel of the image corresponds to
-        one PMT and the channels correspond to charge and/or time at each PMT.
+        one PMT and the channels correspond to charge and/or time at each PMT. The PMTs are placed in the image
+        according to a mapping provided by the numpy array in the `pmt_positions_file`.
 
         Parameters
         ----------
