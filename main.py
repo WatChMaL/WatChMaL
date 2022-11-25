@@ -21,8 +21,7 @@ import numpy as np
 
 logger = logging.getLogger('train')
 
-
-@hydra.main(config_path='config/', config_name='gnn_train')
+@hydra.main(config_path='config/', config_name='resnet_train')
 def main(config):
     """
     Run model using given config, spawn worker subprocesses as necessary
@@ -113,7 +112,7 @@ def main_worker_function(rank, ngpus_per_node, is_distributed, config):
     # Configure data loaders
     for task, task_config in config.tasks.items():
         if 'data_loaders' in task_config:
-            engine.configure_data_loaders(config.data, task_config.data_loaders, is_distributed, config.seed, config.is_graph)
+            engine.configure_data_loaders(config.data, task_config.data_loaders, is_distributed, config.seed)
     
     # Configure optimizers
     for task, task_config in config.tasks.items():

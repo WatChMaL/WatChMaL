@@ -94,7 +94,8 @@ class ClassifierEngine:
         self.scheduler = instantiate(scheduler_config, optimizer=self.optimizer)
         print('Successfully set up Scheduler')
 
-    def configure_data_loaders(self, data_config, loaders_config, is_distributed, seed, is_graph):
+
+    def configure_data_loaders(self, data_config, loaders_config, is_distributed, seed):
         """
         Set up data loaders from loaders config
 
@@ -109,7 +110,7 @@ class ClassifierEngine:
             self should have dict attribute data_loaders
         """
         for name, loader_config in loaders_config.items():
-            self.data_loaders[name] = get_data_loader(**data_config, **loader_config, is_distributed=is_distributed, seed=seed, is_graph=is_graph)
+            self.data_loaders[name] = get_data_loader(**data_config, **loader_config, is_distributed=is_distributed, seed=seed)
             if self.label_set is not None:
                 self.data_loaders[name].dataset.map_labels(self.label_set)
     

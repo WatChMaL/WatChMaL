@@ -24,7 +24,7 @@ from watchmal.dataset.samplers import DistributedSamplerWrapper
 from torch_geometric.loader import DataLoader as PyGDataLoader
 
 
-def get_data_loader(dataset, batch_size, sampler, num_workers, is_distributed, seed, is_graph, split_path=None, split_key=None, transforms=None):
+def get_data_loader(dataset, batch_size, sampler, num_workers, is_distributed, seed, is_graph=False, split_path=None, split_key=None, transforms=None):
     """
     Returns data loaders given dataset and sampler configs
 
