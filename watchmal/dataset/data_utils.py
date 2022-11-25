@@ -39,23 +39,22 @@ def get_data_loader(dataset, batch_size, sampler, num_workers, is_distributed, s
         split_path      ... path to indices specifying splitting of dataset among train/val/test
         split_key       ... string key to select indices
         transforms      ... list of transforms to apply
-
+    
     Returns: dataloader created with instantiated dataset and (possibly wrapped) sampler
     """
-    dataset = instantiate(dataset, transforms=transforms,
-                          is_distributed=is_distributed)
-
+    dataset = instantiate(dataset, transforms=transforms, is_distributed=is_distributed)
+    
     if split_path is not None and split_key is not None:
         split_indices = np.load(split_path, allow_pickle=True)[split_key]
         sampler = instantiate(sampler, split_indices)
     else:
         sampler = instantiate(sampler)
-
+    
     if is_distributed:
         ngpus = torch.distributed.get_world_size()
 
         batch_size = int(batch_size/ngpus)
-
+        
         sampler = DistributedSamplerWrapper(sampler=sampler, seed=seed)
 
     if is_graph:
@@ -68,16 +67,14 @@ def get_data_loader(dataset, batch_size, sampler, num_workers, is_distributed, s
 def get_transformations(transformations, transform_names):
     if transform_names is not None:
         for transform_name in transform_names:
-            assert hasattr(
-                transformations, transform_name), f"Error: There is no defined transform named {transform_name}"
-        transform_funcs = [getattr(transformations, transform_name)
-                           for transform_name in transform_names]
+            assert hasattr(transformations, transform_name), f"Error: There is no defined transform named {transform_name}"
+        transform_funcs = [getattr(transformations, transform_name) for transform_name in transform_names]
         return transform_funcs
     else:
         return None
 
 
-def apply_random_transformations(transforms, data, segmented_labels=None):
+def apply_random_transformations(transforms, data, segmented_labels = None):
     if transforms is not None:
         for transformation in transforms:
             if random.getrandbits(1):
