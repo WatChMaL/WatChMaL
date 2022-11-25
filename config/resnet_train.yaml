@@ -1,7 +1,6 @@
 gpu_list:
     - 5
 seed: null
-is_graph: False
 dump_path: './outputs/'
 defaults:
     - data: iwcd_short
