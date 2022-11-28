@@ -16,8 +16,11 @@ import random
 # WatChMaL imports
 from watchmal.dataset.samplers import DistributedSamplerWrapper
 
+# pyg imports
+from torch_geometric.loader import DataLoader as PyGDataLoader
 
-def get_data_loader(dataset, batch_size, sampler, num_workers, is_distributed, seed, split_path=None, split_key=None, transforms=None):
+
+def get_data_loader(dataset, batch_size, sampler, num_workers, is_distributed, seed, is_graph=False, split_path=None, split_key=None, transforms=None):
     """
     Creates a dataloader given the dataset and sampler configs. The dataset and sampler are instantiated using their
     corresponding configs. If using DistributedDataParallel, the sampler is wrapped using DistributedSamplerWrapper.
@@ -38,6 +41,8 @@ def get_data_loader(dataset, batch_size, sampler, num_workers, is_distributed, s
         Whether running in multiprocessing mode (i.e. DistributedDataParallel)
     seed : int
         Random seed used to coordinate samplers in distributed mode.
+    is_graph : bool
+        A boolean indicating whether the dataset is graph or not, to use PyTorch Geometric data loader if it is graph. False by default.
     split_path
         Path to an npz file containing an array of indices to use as a subset of the full dataset.
     split_key : string
@@ -64,9 +69,12 @@ def get_data_loader(dataset, batch_size, sampler, num_workers, is_distributed, s
         batch_size = int(batch_size/ngpus)
         
         sampler = DistributedSamplerWrapper(sampler=sampler, seed=seed)
-    
-    # TODO: added drop_last, should decide if we want to keep this
-    return DataLoader(dataset, sampler=sampler, batch_size=batch_size, num_workers=num_workers, drop_last=False, persistent_workers=True, pin_memory=True)
+
+    if is_graph:
+        return PyGDataLoader(dataset, sampler=sampler, batch_size=batch_size, num_workers=num_workers)
+    else:
+        # TODO: added drop_last, should decide if we want to keep this
+        return DataLoader(dataset, sampler=sampler, batch_size=batch_size, num_workers=num_workers, drop_last=False, persistent_workers=True, pin_memory=True)
 
 
 def get_transformations(transformations, transform_names):
