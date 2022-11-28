@@ -104,6 +104,7 @@ class ClassifierEngine:
             loaders_config  ... hydra config specifying dataloaders
             is_distributed  ... boolean indicating if running in multiprocessing mode
             seed            ... seed to use to initialize dataloaders
+            is_graph        ... a boolean indicating whether the dataset is graph or not
         
         Parameters:
             self should have dict attribute data_loaders
