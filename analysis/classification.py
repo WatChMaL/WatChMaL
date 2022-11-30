@@ -3,13 +3,15 @@ import matplotlib.pyplot as plt
 from scipy.optimize import minimize_scalar
 from abc import ABC, abstractmethod
 from sklearn import metrics
+from omegaconf import OmegaConf
+from omegaconf.errors import OmegaConfBaseException
 
 from analysis.utils.binning import apply_binning, binned_quantiles, binned_efficiencies
 import analysis.utils.plotting as plot
 from analysis.read import WatChMaLOutput
 
 
-def combine_softmax(softmaxes, labels):
+def combine_softmax(softmaxes, labels, label_map=None):
     """
     Sum the softmax values for the given labels.
 
@@ -21,6 +23,8 @@ def combine_softmax(softmaxes, labels):
     labels: int or sequence of ints
         Set of labels (corresponding to classes) to combine. Can be just a single label, in which case the corresponding
         column of `softmaxes` is returned.
+    label_map: sequence
+        Mapping from labels to columns of the softmax array. By default, assume labels map directly to column indices.
 
     Returns
     -------
@@ -28,6 +32,8 @@ def combine_softmax(softmaxes, labels):
         One-dimensional array of summed softmax values, with length equal to the first dimension of `softmaxes`.
     """
     labels = np.atleast_1d(labels)
+    if label_map is not None:
+        labels = [label_map[l] for l in labels]
     return np.sum(softmaxes[:, labels], axis=1)
 
 
@@ -392,6 +398,11 @@ class WatChMaLClassification(ClassificationRun, WatChMaLOutput):
         self._softmaxes = None
         self._train_log_accuracy = None
         self._val_log_accuracy = None
+        try:
+            conf = OmegaConf.load(self.directory + '/.hydra/config.yaml')
+            self.label_map = {l: i for i, l in enumerate(set(conf.engine.label_set))}
+        except OmegaConfBaseException:
+            self.label_map = None
 
     def read_training_log_from_csv(self, directory):
         """
@@ -481,8 +492,8 @@ class WatChMaLClassification(ClassificationRun, WatChMaLOutput):
         np.ndarray
             One-dimensional array of discriminator values, with length equal to the number of events in this run.
         """
-        signal_softmax = combine_softmax(self.softmaxes, signal_labels)
-        background_softmax = combine_softmax(self.softmaxes, background_labels)
+        signal_softmax = combine_softmax(self.softmaxes, signal_labels, self.label_map)
+        background_softmax = combine_softmax(self.softmaxes, background_labels, self.label_map)
         return signal_softmax / (signal_softmax + background_softmax)
 
     @property
