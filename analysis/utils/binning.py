@@ -120,7 +120,10 @@ def binned_resolutions(binned_residuals, return_errors=True):
     errors: np.ndarray
         array of standard errors on the means of the residuals
     """
-    resolutions = np.array([np.quantile(np.abs(x), 0.68) for x in binned_residuals])
+    try:
+        resolutions = np.array([np.quantile(np.abs(x), 0.68) for x in binned_residuals])
+    except IndexError as ex:
+        raise ValueError("Attempted to calculate resolution in a bin with no entries.") from ex
     if return_errors:
         errors = binned_std_errors(binned_residuals)
         return resolutions, errors
@@ -144,7 +147,10 @@ def binned_quantiles(binned_values, quantile):
     np.ndarray
         array of quantiles of the bins' values
     """
-    return np.array([np.quantile(x, quantile) for x in binned_values])
+    try:
+        return np.array([np.quantile(x, quantile) for x in binned_values])
+    except IndexError as ex:
+        raise ValueError("Attempted to calculate quantile in a bin with no entries.") from ex
 
 
 def binned_mean(binned_values, return_errors=True):

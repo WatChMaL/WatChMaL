@@ -312,7 +312,10 @@ class ClassificationRun(ABC):
         """
         selection = self.select_labels(select_labels, selection)
         discriminator_values = self.discriminator(signal_labels, background_labels)
-        threshold = np.quantile(discriminator_values[selection], 1 - efficiency)
+        try:
+            threshold = np.quantile(discriminator_values[selection], 1 - efficiency)
+        except IndexError as ex:
+            raise ValueError("There are zero selected events so cannot calculate a cut with any efficiency.") from ex
         self.cut = np.array(discriminator_values) > threshold
         if return_threshold:
             return self.cut, threshold
@@ -348,6 +351,10 @@ class ClassificationRun(ABC):
             Additional arguments to pass to the plotting function. Note that these may be overridden by arguments
             provided in `runs`.
         """
+        if self.cut is None:
+            raise TypeError("Cannot plot an efficiency profile for the run that has not had any cut applied. A "
+                            "classification cut needs to be defined before the efficiency of that cut can be plotted.")
+        
         selection = self.select_labels(select_labels, selection)
 
         def func(binned_cut, return_errors):
@@ -723,13 +730,19 @@ class FiTQunClassification(ClassificationRun):
         if pi0_efficiency is not None:  # Optimize cut to minimise electron mis-ID for given pi0 efficiency
             def e_misid(cut_gradient):
                 discriminator = nll_diff[selection] + cut_gradient*pi0mass[selection]
-                cut_threshold = np.quantile(discriminator[pi0s], 1-pi0_efficiency)
+                try:
+                    cut_threshold = np.quantile(discriminator[pi0s], 1-pi0_efficiency)
+                except IndexError as ex:
+                    raise ValueError("There are zero selected pi0 events so cannot calculate a cut with any pi0 efficiency.") from ex
                 return np.mean(discriminator[electrons] <= cut_threshold)
             min_func = e_misid
         elif electron_efficiency is not None:  # Optimize cut to minimise pi0 mis-ID for given electron efficiency
             def pi_misid(cut_gradient):
                 discriminator = nll_diff[selection] + cut_gradient*pi0mass[selection]
-                cut_threshold = np.quantile(discriminator[electrons], 1-electron_efficiency)
+                try:
+                    cut_threshold = np.quantile(discriminator[electrons], 1-electron_efficiency)
+                except IndexError as ex:
+                    raise ValueError("There are zero selected electron events so cannot calculate a cut with any electron efficiency.") from ex
                 return np.mean(discriminator[pi0s] > cut_threshold)
             min_func = pi_misid
         else:  # Optimise cut to minimise sum of ranks for pi0s (equivalent to Mann–Whitney U test)
