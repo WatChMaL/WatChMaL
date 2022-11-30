@@ -23,7 +23,7 @@ def combine_softmax(softmaxes, labels, label_map=None):
     labels: int or sequence of ints
         Set of labels (corresponding to classes) to combine. Can be just a single label, in which case the corresponding
         column of `softmaxes` is returned.
-    label_map: sequence
+    label_map: dictionary
         Mapping from labels to columns of the softmax array. By default, assume labels map directly to column indices.
 
     Returns
