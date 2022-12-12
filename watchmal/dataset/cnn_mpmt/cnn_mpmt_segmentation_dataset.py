@@ -33,7 +33,7 @@ class CNNmPMTSegmentationDataset(Dataset):
             self.digi_dataset.transforms = None
         else:
             self.transforms = None
-        self.truth_dataset = H5TrueDataset(true_hits_h5file, transforms=None, digitize_hits=False)
+        self.truth_dataset = H5TrueDataset(true_hits_h5file, digitize_hits=False)
         with open(digi_truth_mapping_file, 'rb') as f:
             self.digi_truth_mapping = pickle.load(f)
         self.valid_parents = np.array(valid_parents)
