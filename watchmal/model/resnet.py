@@ -1,4 +1,5 @@
 import torch.nn as nn
+import torch
 
 
 def conv1x1(in_planes, out_planes, stride=1):
