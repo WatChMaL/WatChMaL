@@ -6,19 +6,9 @@ def conv1x1(in_planes, out_planes, stride=1):
     return nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False)
 
 
-def conv2x2(in_planes, out_planes, stride=1):
-    """2x2 convolution"""
-    return nn.Conv2d(in_planes, out_planes, kernel_size=2, stride=stride, bias=False)
-
-
 def conv3x3(in_planes, out_planes, stride=1):
     """3x3 convolution with padding"""
     return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride, padding=1, bias=False)
-
-
-def conv4x4(in_planes, out_planes, stride=1):
-    """4x4 convolution with padding"""
-    return nn.Conv2d(in_planes, out_planes, kernel_size=4, stride=stride, padding=1, bias=False)
 
 
 class BasicBlock(nn.Module):
@@ -62,17 +52,8 @@ class Bottleneck(nn.Module):
         
         self.conv1 = conv1x1(inplanes, planes)
         self.bn1 = nn.BatchNorm2d(planes)
-
-        if downsample is None:
-            self.conv2 = conv3x3(planes, planes, stride)
-        else:
-            if planes < 512:
-                self.conv2 = conv4x4(planes, planes, stride=2)
-            else:
-                self.conv2 = conv2x2(planes, planes)
-
+        self.conv2 = conv3x3(planes, planes, stride)
         self.bn2 = nn.BatchNorm2d(planes)
-
         self.conv3 = conv1x1(planes, planes * self.expansion)
         self.bn3 = nn.BatchNorm2d(planes * self.expansion)
         self.relu = nn.ReLU(inplace=True)
@@ -119,19 +100,7 @@ class ResNet(nn.Module):
         self.layer4 = self._make_layer(block, 512, layers[3], stride=2)
 
         self.avgpool = nn.AdaptiveAvgPool2d((1,1))
-        
-        self.unroll_size = 512 * block.expansion
-        self.bool_deep = False
-
-        for m in self.modules():
-            if isinstance(m, Bottleneck):
-                self.fc1 = nn.Linear(self.unroll_size, int(self.unroll_size / 2))
-                self.fc2 = nn.Linear(int(self.unroll_size / 2), num_output_channels)
-                self.bool_deep = True
-                break
-
-        if not self.bool_deep:
-            self.fc1 = nn.Linear(self.unroll_size, num_output_channels)
+        self.fc = nn.Linear(512 * block.expansion, num_classes)
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -177,8 +146,8 @@ class ResNet(nn.Module):
         x = self.layer4(x)
 
         x = self.avgpool(x)
-        x = x.view(x.size(0), -1)
-        x = self.fc1(x)
+        x = torch.flatten(x, 1)
+        x = self.fc(x)
 
         return x
 
