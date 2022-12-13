@@ -520,7 +520,10 @@ class BaseEngine(ABC):
             if self.is_distributed:
                 torch.distributed.barrier()
             # torch interprets the file, then we can access using string keys
-            checkpoint = torch.load(f, map_location=self.device)
+            if torch.cuda.is_available():
+                checkpoint = torch.load(f)
+            else:
+                checkpoint = torch.load(f, map_location=torch.device('cpu'))
             
             # load network weights
             self.model_accs.load_state_dict(checkpoint['state_dict'])

@@ -80,12 +80,15 @@ def main_worker_function(rank, ngpus_per_node, is_distributed, config):
         is_distributed  ... boolean indicating if running in multiprocessing mode
         config          ... hydra config specified in the @hydra.main annotation
     """
-    print("rank: ", rank)
-    # Infer rank from gpu and ngpus, rank is position in gpu list
-    gpu = config.gpu_list[rank]
+    if ngpus_per_node == 0:
+        gpu = torch.device("cpu")
+    else:
+        print("rank: ", rank)
+        # Infer rank from gpu and ngpus, rank is position in gpu list
+        gpu = config.gpu_list[rank]
 
-    print("Running main worker function on device: {}".format(gpu))
-    torch.cuda.set_device(gpu)
+        print("Running main worker function on device: {}".format(gpu))
+        torch.cuda.set_device(gpu)
 
     world_size = ngpus_per_node
     
