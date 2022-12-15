@@ -1,4 +1,4 @@
 _target_: watchmal.model.resnet.resnet18
 num_input_channels: 19
 num_output_channels: 4
-conv_pad_mode: 'circular'
+conv_pad_mode: circular
