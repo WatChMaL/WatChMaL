@@ -5,7 +5,7 @@ Main file used for running the code
 # hydra imports
 import hydra
 from omegaconf import OmegaConf
-from hydra.utils import instantiate
+from hydra.utils import instantiate, to_absolute_path
 
 # torch imports
 import torch
@@ -31,7 +31,7 @@ def main(config):
     Args:
         config  ... hydra config specified in the @hydra.main annotation
     """
-    logger.info(f"Using the following git version of WatChMaL repository: {get_git_version(os.path.dirname(__file__))}")
+    logger.info(f"Using the following git version of WatChMaL repository: {get_git_version(os.path.dirname(to_absolute_path(__file__)))}")
     logger.info(f"Running with the following config:\n{OmegaConf.to_yaml(config)}")
 
     ngpus = len(config.gpu_list)
