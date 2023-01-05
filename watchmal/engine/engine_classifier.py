@@ -27,13 +27,14 @@ from WatChMaL.watchmal.dataset.data_utils import get_data_loader
 from WatChMaL.watchmal.utils.logging_utils import CSVData
 
 class ClassifierEngine:
-    def __init__(self, model, rank, gpu, dump_path):
+    def __init__(self, model, rank, gpu, dump_path, label_set=None):
         """
         Args:
             model       ... model object that engine will use in training or evaluation
             rank        ... rank of process among all spawned processes (in multiprocessing mode)
             gpu         ... gpu that this process is running on
             dump_path   ... path to store outputs in
+            label_set   ... set of labels to classify (if None, default, then class labels in the data must be 0 to N)
         """
         # create the directory for saving the log and dump files
         self.epoch = 0.
@@ -54,6 +55,7 @@ class ClassifierEngine:
             self.model_accs = self.model
 
         self.data_loaders = {}
+        self.label_set = label_set
 
         # define the placeholder attributes
         self.data = None
@@ -107,10 +109,11 @@ class ClassifierEngine:
             self should have dict attribute data_loaders
         """
 
-        #for name, loader_config in loaders_config.items():
-        self.data_loaders['train'] = get_data_loader(settings, **data_config, **loaders_config, indices=train_indices, seed=seed)
-        self.data_loaders['validation'] = get_data_loader(settings, **data_config, **loaders_config, indices = test_indices, seed=seed)
-        self.data_loaders['test'] = get_data_loader(settings, **data_config, **loaders_config, indices = val_indices, seed=seed)
+        for name, loader_config in loaders_config.items():
+            self.data_loaders[name] = get_data_loader(**data_config, **loader_config, is_distributed=is_distributed, seed=seed)
+            if self.label_set is not None:
+                self.data_loaders[name].dataset.map_labels(self.label_set)
+
     
     def get_synchronized_metrics(self, metric_dict):
         """

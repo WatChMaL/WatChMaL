@@ -39,16 +39,20 @@ class H5CommonDataset(Dataset, ABC):
         with h5py.File(self.h5_path, 'r') as h5_file:
             self.dataset_length = h5_file["labels"].shape[0]
 
+        self.label_set = None
+
         self.initialized = False
         if not is_distributed:
             self.initialize()
 
     def initialize(self):
+
         self.h5_file = h5py.File(self.h5_path, "r")
 
 #        self.event_ids  = np.array(self.h5_file["event_ids"])
 #        self.root_files = np.array(self.h5_file["root_files"])
-        self.labels     = np.array(self.h5_file["labels"])
+        self.labels = np.array(self.h5_file["labels"])
+
 #        self.positions  = np.array(self.h5_file["positions"])
 #        self.angles     = np.array(self.h5_file["angles"])
 #        self.energies   = np.array(self.h5_file["energies"])
@@ -71,7 +75,20 @@ class H5CommonDataset(Dataset, ABC):
 
         # Set attribute so that method won't be invoked again
         self.initialized = True
-        
+
+        # perform label mapping now that labels have been initialised
+        if self.label_set is not None:
+            self.map_labels(self.label_set)
+
+    def map_labels(self, label_set):
+        self.label_set = set(label_set)
+        if self.initialized:
+            labels = np.ndarray(self.labels.shape, dtype=int)
+            for i, l in enumerate(self.label_set):
+                labels[self.labels == l] = i
+            self.original_labels = self.labels
+            self.labels = labels
+
     @abstractmethod
     def load_hits(self):
         pass
