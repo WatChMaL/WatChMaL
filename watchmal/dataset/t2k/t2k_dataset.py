@@ -13,8 +13,55 @@ import numpy as np
 from WatChMaL.watchmal.dataset.h5_dataset import H5Dataset
 import WatChMaL.watchmal.dataset.data_utils as du
 
-class CNNDataset(H5Dataset):
-    def __init__(self, h5file, pmt_positions_file, is_distributed, use_times=True, use_charges=True, transforms=None, collapse_arrays=False, one_indexed=False):
+class PointNetT2KDataset(H5Dataset):
+
+    def __init__(self, h5file, is_distributed=False, use_positions=True, use_times=True, use_orientations=False, n_points=2500, transforms=None):
+        super().__init__(h5file, is_distributed)
+        #geo_file = np.load(geometry_file, 'r')
+        #self.geo_positions = geo_file["position"].astype(np.float32)
+        #elf.geo_orientations = geo_file["orientation"].astype(np.float32)
+        self.use_orientations = use_orientations
+        self.use_times = use_times
+        self.n_points = n_points
+        #self.transforms = du.get_transformations(transformations, transforms)
+        self.channels = 1
+        self.use_positions = use_positions
+        if use_positions:
+            self.channels += 3
+        if use_orientations:
+            self.channels += 3
+        if use_times:
+            self.channels += 1
+
+    def  __getitem__(self, item):
+
+        data_dict = super().__getitem__(item)
+
+        n_hits = min(self.n_points, self.event_hit_pmts.shape[0])
+        data = np.zeros((self.channels, self.n_points), dtype=np.float32)
+        '''
+        hit_positions = self.geo_positions[self.event_hit_pmts[:n_hits], :]
+        data[:3, :n_hits] = hit_positions.T
+        if self.use_orientations:
+            hit_orientations = self.geo_orientations[self.event_hit_pmts[:n_hits], :]
+            data[3:6, :n_hits] = hit_orientations.T
+        '''
+
+        if self.use_positions:
+            data[0, :n_hits] = self.event_hit_x[:n_hits]
+            data[1, :n_hits] = self.event_hit_y[:n_hits]
+            data[2, :n_hits] = self.event_hit_z[:n_hits]
+        if self.use_times:
+            data[-2, :n_hits] = self.event_hit_times[:n_hits]
+        data[-1, :n_hits] = self.event_hit_charges[:n_hits]
+
+        #data = du.apply_random_transformations(self.transforms, data)
+
+        data_dict["data"] = data
+        return data_dict
+
+class T2KCNNDataset(H5Dataset):
+    def __init__(self, h5file, pmt_positions_file, is_distributed=False, use_times=True, use_charges=True, transforms=None, collapse_arrays=False):
         """
         Args:
             h5_path             ... path to h5 dataset file
@@ -24,7 +71,7 @@ class CNNDataset(H5Dataset):
         """
         super().__init__(h5file, is_distributed)
         
-        self.pmt_positions = np.load(pmt_positions_file)['pmt_image_positions']
+        self.pmt_positions = np.load(pmt_positions_file).astype(int)
         self.use_times = use_times
         self.use_charges = use_charges
         self.data_size = np.max(self.pmt_positions, axis=0) + 1
@@ -32,7 +79,6 @@ class CNNDataset(H5Dataset):
                             np.count_nonzero(self.pmt_positions[:,0] == row) == self.data_size[1]]
         self.collapse_arrays = collapse_arrays
         self.transforms = None #du.get_transformations(transformations, transforms)
-        self.one_indexed = one_indexed
 
         n_channels = 0
         if use_times:
@@ -56,8 +102,7 @@ class CNNDataset(H5Dataset):
         Returns:
             data                    ... array of hits in cnn format
         """
-        if self.one_indexed:
-            hit_pmts = hit_pmts-1 #SK cable numbers start at 1
+        hit_pmts = hit_pmts-1 #SK cable numbers start at 1
 
         hit_rows = self.pmt_positions[hit_pmts, 0]
         hit_cols = self.pmt_positions[hit_pmts, 1]
