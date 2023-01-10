@@ -1,5 +1,4 @@
 import torch.nn as nn
-from hydra.utils import instantiate
 
 
 class Classifier(nn.Module):
@@ -7,12 +6,12 @@ class Classifier(nn.Module):
         super().__init__()
 
         # Classifier fully connected layers
-        self.feature_extractor = instantiate(feature_extractor)
+        self.feature_extractor = feature_extractor
         classification_kwargs = {
             "num_classes": num_classes,
-            "num_inputs": feature_extractor.num_output_channels
+            "num_inputs": 5 #TODO: Hard-coded=bad!
         }
-        self.classification_network = instantiate(classification_network, **classification_kwargs)
+        self.classification_network = classification_network
 
     def forward(self, x):
         x = self.feature_extractor(x)
@@ -21,7 +20,7 @@ class Classifier(nn.Module):
 
 
 class PassThrough(nn.Module):
-    def __init__(self, num_inputs, num_classes):
+    def __init__(self):
         super().__init__()
     def forward(self, x):
         return x
