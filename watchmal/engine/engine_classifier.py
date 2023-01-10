@@ -201,12 +201,13 @@ class ClassifierEngine:
         Returns: None
         """
         # initialize training params
-        epochs              = settings.train_config.epochs
-        report_interval     = settings.train_config.report_interval
-        val_interval        = settings.train_config.val_interval
-        num_val_batches     = settings.train_config.num_val_batches
-        checkpointing       = settings.train_config.checkpointing
-        save_interval = settings.train_config.save_interval
+        epochs              = train_config.epochs
+        report_interval     = train_config.report_interval
+        val_interval        = train_config.val_interval
+        num_val_batches     = train_config.num_val_batches
+        checkpointing       = train_config.checkpointing
+        early_stopping_patience      = train_config.early_stopping_patience
+        save_interval = train_config.save_interval if 'save_interval' in train_config else None
 
         # set the iterations at which to dump the events and their metrics
         if self.rank == 0:
@@ -225,6 +226,8 @@ class ClassifierEngine:
         # initialize the iterator over the validation set
         val_iter = iter(self.data_loaders["validation"])
 
+        #Configure early stopping
+        early_stop = False 
         if settings.restoreBestState:
             self.restore_best_state("")
 
@@ -250,7 +253,7 @@ class ClassifierEngine:
                 
                 # run validation on given intervals
                 if self.iteration % val_interval == 0:
-                    self.validate(settings, val_iter, num_val_batches, checkpointing)
+                    early_stop = self.validate(val_iter, num_val_batches, checkpointing, len(train_loader), early_stopping_patience)
                 
                 # Train on batch
                 self.data = train_data['data']
@@ -282,12 +285,19 @@ class ClassifierEngine:
 
                     print("... Iteration %d ... Epoch %d ... Step %d/%d  ... Training Loss %1.3f ... Training Accuracy %1.3f ... Time Elapsed %1.3f ... Iteration Time %1.3f" %
                           (self.iteration, self.epoch+1, self.step, len(train_loader), res["loss"], res["accuracy"], iteration_time - start_time, iteration_time - previous_iteration_time))
+
+                if early_stop:
+                    break
             
             if self.scheduler is not None:
                 self.scheduler.step()
 
             if (save_interval is not None) and ((self.epoch+1)%save_interval == 0):
                 self.save_state(name=f'_epoch_{self.epoch+1}')   
+
+            if early_stop:
+                break
+
       
         self.train_log.close()
         if self.rank == 0:
@@ -297,7 +307,7 @@ class ClassifierEngine:
 
 
 
-    def validate(self, settings, val_iter, num_val_batches, checkpointing):
+    def validate(self, val_iter, num_val_batches, checkpointing, iterations_per_epoch, early_stopping_patience=-1):
         # set model to eval mode
         self.model.eval()
         val_metrics = {"iteration": self.iteration, "loss": 0., "accuracy": 0., "saved_best": 0}
@@ -346,20 +356,25 @@ class ClassifierEngine:
 
             if val_metrics["loss"] < self.best_validation_loss:
                 self.best_validation_loss = val_metrics["loss"]
+                self.best_iteration = self.iteration
                 best_validation_accuracy = val_metrics["accuracy"]
                 print('best validation loss so far!: {}'.format(self.best_validation_loss))
                 print('best validation accuracy so far!: {}'.format(best_validation_accuracy))
                 self.save_state("BEST")
                 val_metrics["saved_best"] = 1
+            elif self.iteration - self.best_iteration >= int(early_stopping_patience*iterations_per_epoch):
+                return True
+            print(f'EARLY STOPPING: Iteration: {self.iteration}, best iteration: {self.best_iteration}, val loss: {val_metrics["loss"]}, best val loss: {self.best_validation_loss}, patience: {early_stopping_patience*iterations_per_epoch}')
+
 
             # Save the latest model if checkpointing
             if checkpointing:
                 self.save_state()
 
+
             self.val_log.record(val_metrics)
             self.val_log.write()
             self.val_log.flush()
-
     def evaluate(self, settings, test_config):
         """
         Evaluate the performance of the trained model on the test set
