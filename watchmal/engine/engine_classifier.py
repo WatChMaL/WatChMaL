@@ -21,11 +21,10 @@ from time import strftime, localtime, time
 import sys
 from sys import stdout
 import copy
-import random
 
 # WatChMaL imports
-from WatChMaL.watchmal.dataset.data_utils import get_data_loader
-from WatChMaL.watchmal.utils.logging_utils import CSVData
+from watchmal.dataset.data_utils import get_data_loader
+from watchmal.utils.logging_utils import CSVData
 
 class ClassifierEngine:
     """Engine for performing training or evaluation  for a classification network."""
@@ -108,12 +107,10 @@ class ClassifierEngine:
         seed : int
             Random seed to use to initialize dataloaders.
         """
-
         for name, loader_config in loaders_config.items():
             self.data_loaders[name] = get_data_loader(**data_config, **loader_config, is_distributed=is_distributed, seed=seed)
             if self.label_set is not None:
                 self.data_loaders[name].dataset.map_labels(self.label_set)
-
     
     def get_synchronized_metrics(self, metric_dict):
         """
@@ -156,7 +153,6 @@ class ClassifierEngine:
             # Move the data and the labels to the GPU (if using CPU this has no effect)
             data = self.data.to(self.device)
             labels = self.labels.to(self.device)
-            labels = labels
 
             model_out = self.model(data)
             
@@ -196,7 +192,6 @@ class ClassifierEngine:
         val_interval        = train_config.val_interval
         num_val_batches     = train_config.num_val_batches
         checkpointing       = train_config.checkpointing
-        early_stopping_patience      = train_config.early_stopping_patience
         save_interval = train_config.save_interval if 'save_interval' in train_config else None
 
         # set the iterations at which to dump the events and their metrics
@@ -215,9 +210,6 @@ class ClassifierEngine:
 
         # initialize the iterator over the validation set
         val_iter = iter(self.data_loaders["validation"])
-
-        #Configure early stopping
-        early_stop = False 
 
         # global training loop for multiple epochs
         for self.epoch in range(epochs):
@@ -240,11 +232,11 @@ class ClassifierEngine:
                 
                 # run validation on given intervals
                 if self.iteration % val_interval == 0:
-                    early_stop = self.validate(val_iter, num_val_batches, checkpointing, len(train_loader), early_stopping_patience)
+                    self.validate(val_iter, num_val_batches, checkpointing)
                 
                 # Train on batch
                 self.data = train_data['data']
-                self.labels = (train_data['labels'])
+                self.labels = train_data['labels']
 
                 # Call forward: make a prediction & measure the average error using data = self.data
                 res = self.forward(True)
@@ -272,26 +264,18 @@ class ClassifierEngine:
 
                     print("... Iteration %d ... Epoch %d ... Step %d/%d  ... Training Loss %1.3f ... Training Accuracy %1.3f ... Time Elapsed %1.3f ... Iteration Time %1.3f" %
                           (self.iteration, self.epoch+1, self.step, len(train_loader), res["loss"], res["accuracy"], iteration_time - start_time, iteration_time - previous_iteration_time))
-
-                if early_stop:
-                    break
             
             if self.scheduler is not None:
                 self.scheduler.step()
 
             if (save_interval is not None) and ((self.epoch+1)%save_interval == 0):
                 self.save_state(name=f'_epoch_{self.epoch+1}')   
-
-            if early_stop:
-                break
-
       
         self.train_log.close()
         if self.rank == 0:
             self.val_log.close()
-        self.evaluate()
 
-    def validate(self, val_iter, num_val_batches, checkpointing, iterations_per_epoch, early_stopping_patience):
+    def validate(self, val_iter, num_val_batches, checkpointing):
         """
         Perform validation with the current state, on a number of batches of the validation set.
 
@@ -318,7 +302,7 @@ class ClassifierEngine:
 
             # extract the event data from the input data tuple
             self.data = val_data['data']
-            self.labels = (val_data['labels'])
+            self.labels = val_data['labels']
 
             val_res = self.forward(False)
 
@@ -347,35 +331,23 @@ class ClassifierEngine:
             val_metrics["accuracy"] = global_val_accuracy
             val_metrics["epoch"] = self.epoch
 
-            print("Evaluation  ... Loss %1.3f ... Accuracy %1.3f" %
-                    (val_metrics["loss"], val_metrics["accuracy"])) 
-
             if val_metrics["loss"] < self.best_validation_loss:
                 self.best_validation_loss = val_metrics["loss"]
-                self.best_iteration = self.iteration
-                best_validation_accuracy = val_metrics["accuracy"]
                 print('best validation loss so far!: {}'.format(self.best_validation_loss))
-                print('best validation accuracy so far!: {}'.format(best_validation_accuracy))
                 self.save_state("BEST")
                 val_metrics["saved_best"] = 1
-            elif self.iteration - self.best_iteration >= int(early_stopping_patience*iterations_per_epoch):
-                return True
-            print(f'EARLY STOPPING: Iteration: {self.iteration}, best iteration: {self.best_iteration}, val loss: {val_metrics["loss"]}, best val loss: {self.best_validation_loss}, patience: {early_stopping_patience*iterations_per_epoch}')
-
 
             # Save the latest model if checkpointing
             if checkpointing:
                 self.save_state()
 
-
             self.val_log.record(val_metrics)
             self.val_log.write()
             self.val_log.flush()
-    def evaluate(self):
+
+    def evaluate(self, test_config):
         """Evaluate the performance of the trained model on the test set."""
         print("evaluating in directory: ", self.dirpath)
-        print("Restoring Best State for Evaluation")
-        self.restore_best_state("")
 
         
         # Variables to output at the end
@@ -397,7 +369,7 @@ class ClassifierEngine:
                 
                 # load data
                 self.data = eval_data['data']
-                self.labels = (eval_data['labels'])
+                self.labels = eval_data['labels']
 
                 eval_indices = eval_data['indices']
                 
