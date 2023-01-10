@@ -3,6 +3,7 @@ Class for training a fully supervised classifier
 """
 
 # hydra imports
+from hydra.utils import instantiate
 
 # torch imports
 import torch
@@ -92,7 +93,7 @@ class ClassifierEngine:
         print('Successfully set up Scheduler')
 
 
-    def configure_data_loaders(self, data_config, loaders_config, is_distributed, seed, train_indices, test_indices, val_indices, settings):
+    def configure_data_loaders(self, data_config, loaders_config, is_distributed, seed):
         """
         Set up data loaders from loaders hydra configs for the data config, and a list of data loader configs.
 
@@ -137,7 +138,7 @@ class ClassifierEngine:
         
         return global_metric_dict
 
-    def forward(self, settings, train=True):
+    def forward(self, train=True):
         """
         Compute predictions and metrics for a batch of data.
 
@@ -217,8 +218,6 @@ class ClassifierEngine:
 
         #Configure early stopping
         early_stop = False 
-        if settings.restoreBestState:
-            self.restore_best_state("")
 
         # global training loop for multiple epochs
         for self.epoch in range(epochs):
@@ -234,8 +233,7 @@ class ClassifierEngine:
             self.step = 0
             # update seeding for distributed samplers
             if self.is_distributed:
-                pass
-                #train_loader.sampler.set_epoch(self.epoch)
+                train_loader.sampler.set_epoch(self.epoch)
 
             # local training loop for batches in a single epoch 
             for self.step, train_data in enumerate(train_loader):
@@ -246,10 +244,10 @@ class ClassifierEngine:
                 
                 # Train on batch
                 self.data = train_data['data']
-                self.labels = (train_data['labels']-settings.minLabel)
+                self.labels = (train_data['labels'])
 
                 # Call forward: make a prediction & measure the average error using data = self.data
-                res = self.forward(settings, True)
+                res = self.forward(True)
 
                 #Call backward: backpropagate error and update weights using loss = self.loss
                 self.backward()
@@ -291,9 +289,9 @@ class ClassifierEngine:
         self.train_log.close()
         if self.rank == 0:
             self.val_log.close()
-        self.evaluate(settings,"")
+        self.evaluate()
 
-    def validate(self, val_iter, num_val_batches, checkpointing):
+    def validate(self, val_iter, num_val_batches, checkpointing, iterations_per_epoch, early_stopping_patience):
         """
         Perform validation with the current state, on a number of batches of the validation set.
 
@@ -320,9 +318,9 @@ class ClassifierEngine:
 
             # extract the event data from the input data tuple
             self.data = val_data['data']
-            self.labels = (val_data['labels']-settings.minLabel)
+            self.labels = (val_data['labels'])
 
-            val_res = self.forward(settings, False)
+            val_res = self.forward(False)
 
             val_metrics["loss"] += val_res["loss"]
             val_metrics["accuracy"] += val_res["accuracy"]
@@ -373,7 +371,7 @@ class ClassifierEngine:
             self.val_log.record(val_metrics)
             self.val_log.write()
             self.val_log.flush()
-    def evaluate(self, test_config):
+    def evaluate(self):
         """Evaluate the performance of the trained model on the test set."""
         print("evaluating in directory: ", self.dirpath)
         print("Restoring Best State for Evaluation")
@@ -399,12 +397,12 @@ class ClassifierEngine:
                 
                 # load data
                 self.data = eval_data['data']
-                self.labels = (eval_data['labels']-settings.minLabel)
+                self.labels = (eval_data['labels'])
 
                 eval_indices = eval_data['indices']
                 
                 # Run the forward procedure and output the result
-                result = self.forward(settings, train=False)
+                result = self.forward(train=False)
 
                 eval_loss += result['loss']
                 eval_acc  += result['accuracy']

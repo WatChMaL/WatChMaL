@@ -4,7 +4,6 @@ data:
     h5file: '/fast_scratch/WatChMaL/data/T2K/nov18_emu_fullCylinder_500k_1/combine_combine.hy'
     _target_: watchmal.dataset.cnn.cnn_dataset.CNNDataset
     pmt_positions_file: /fast_scratch/WatChMaL/data/T2K/image_files/sk_wcsim_imagefile.npz
-    collapse_arrays: false
 model:
   _recursive_: false
   _target_: watchmal.model.classifier.Classifier
@@ -24,7 +23,6 @@ tasks:
     val_interval: 100
     num_val_batches: 32
     checkpointing: false
-    #How long to wait in epochs. -1 for no early stopping
     early_stopping_patience: 0.05
     data_loaders:
       train:
