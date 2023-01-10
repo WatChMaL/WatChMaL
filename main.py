@@ -5,7 +5,7 @@ Main file used for running the code
 # hydra imports
 import hydra
 from omegaconf import OmegaConf
-from hydra.utils import instantiate
+from hydra.utils import instantiate, to_absolute_path
 
 # torch imports
 import torch
@@ -19,6 +19,8 @@ import debugpy
 import os
 import numpy as np
 
+from watchmal.utils.logging_utils import get_git_version
+
 logger = logging.getLogger('train')
 
 @hydra.main(config_path='config/', config_name='resnet_train', version_base=None)
@@ -29,6 +31,7 @@ def main(config):
     Args:
         config  ... hydra config specified in the @hydra.main annotation
     """
+    logger.info(f"Using the following git version of WatChMaL repository: {get_git_version(os.path.dirname(to_absolute_path(__file__)))}")
     logger.info(f"Running with the following config:\n{OmegaConf.to_yaml(config)}")
 
     ngpus = len(config.gpu_list)
@@ -104,7 +107,7 @@ def main_worker_function(rank, ngpus_per_node, is_distributed, config):
     if is_distributed:
         # Convert model batch norms to synchbatchnorm
         model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
-        model = DDP(model, device_ids=[gpu], find_unused_parameters=True)
+        model = DDP(model, device_ids=[gpu])
 
     # Instantiate the engine
     engine = instantiate(config.engine, model=model, rank=rank, gpu=gpu, dump_path=config.dump_path)

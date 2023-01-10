@@ -31,7 +31,7 @@ class DigiTruthMapping:
         // do something.
     
     """
-    def __init__(self, dataset, mcset, picklefile_dft='', picklefile_tfd=''):
+    def __init__(self, dataset, mcset, base_path='', picklefile_dft='', picklefile_tfd=''):
 
         if type(dataset) is str and type(mcset) is str:
             self.loadpickles( dataset, mcset )
@@ -67,10 +67,14 @@ class DigiTruthMapping:
                     assert(dtfiles[i] == mcfiles[j])
                     break
         self.data_for_truth = dict( zip(dtkeys,dtvals) )
-        self.truth_for_data = dict( zip(mckeys,mcvals))        
+        self.truth_for_data = dict( zip(mckeys,mcvals))  
+
+        #self.save_mappings()      
+            
+    def save_mappings(slef):
         self.save_object( 'truth_for_data.pkl', self.truth_for_data )
-        self.save_object( 'data_for_truth.pkl', self.data_for_truth )       
-                                        
+        self.save_object( 'data_for_truth.pkl', self.data_for_truth )   
+
     def get_data_entry( self, truth_entry ):
         if truth_entry in self.data_for_truth:
             return self.data_for_truth[ truth_entry ]
@@ -89,8 +93,7 @@ class DigiTruthMapping:
             self.data_for_truth = pickle.load(f)
         with open(tfd, 'rb') as f:
             self.truth_for_data = pickle.load(f)
-            
-            
+        
     
     def save_object( self, file_name, obj):
         with open(file_name, 'wb') as f:

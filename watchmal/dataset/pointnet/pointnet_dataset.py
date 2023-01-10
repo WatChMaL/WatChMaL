@@ -1,5 +1,5 @@
 """
-Class implementing a mPMT dataset for pointnet in h5 format
+Class implementing a dataset for PointNet in h5 format
 """
 
 # generic imports
@@ -12,9 +12,40 @@ import watchmal.dataset.data_utils as du
 
 
 class PointNetDataset(H5Dataset):
+    """
+    This class loads PMT hit data from an HDF5 file and provides events formatted for point-cloud networks, where the 2D
+    data tensor's first dimension is over the channels, using the detector geometry to provide the PMT 3D positions as
+    the first three channels, then optionally the PMT orientations, charge and time of the hits as additional channels.
+    The second dimension of the data tensor is over the hit PMTs of the event.
+    """
 
-    def __init__(self, h5file, geometry_file, is_distributed, use_times=True, use_orientations=False, n_points=4000, transforms=None):
-        super().__init__(h5file, is_distributed)
+    def __init__(self, h5file, geometry_file, use_times=True, use_orientations=False, n_points=4000, transforms=None):
+        """
+        Constructs a dataset for PointNet data. Event hit data is read in from the HDF5 file and the PMT charge and/or
+        time data is formatted into an array of points, with x, y and z position and other channels for orientation,
+        charge and/or time. Charge is always included but time and orientation channels are optional. The PMT positions
+        and orientations are taken from a separate compressed numpy file of the detector geometry.
+
+        Parameters
+        ----------
+        h5file: string
+            Location of the HDF5 file containing the event data
+        geometry_file: string
+            Location of an npz file containing the position and orientation of PMTs
+        use_times: bool
+            Whether to use PMT hit times as one of the initial PointNet channels. True by default.
+        use_orientations: bool
+            Whether to use PMT orientation as some of the initial PointNet channels. False by default.
+        n_points: int
+            Number of points to pass to the PointNet network. If there are fewer hits in an event than `n_points`, then
+            additional points are added filled with zeros. If there are more hits in an event than `n_points`, then the
+            hit data is truncated and only the first `n_points` hits are passed to the network.
+        transforms
+            List of random transforms to apply to data before passing to CNN for data augmentation. Each element of the
+            list should be the name of a function in watchmal.dataset.pointnet.transformations that performs the
+            transformation.
+        """
+        super().__init__(h5file)
         geo_file = np.load(geometry_file, 'r')
         self.geo_positions = geo_file["position"].astype(np.float32)
         self.geo_orientations = geo_file["orientation"].astype(np.float32)
@@ -28,7 +59,7 @@ class PointNetDataset(H5Dataset):
         if use_times:
             self.channels += 1
 
-    def  __getitem__(self, item):
+    def __getitem__(self, item):
 
         data_dict = super().__getitem__(item)
 

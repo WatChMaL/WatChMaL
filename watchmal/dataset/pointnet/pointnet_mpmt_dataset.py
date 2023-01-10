@@ -5,14 +5,21 @@ from watchmal.dataset.h5_dataset import H5Dataset
 from watchmal.dataset.pointnet import transformations
 import watchmal.dataset.data_utils as du
 
-barrel_map_array_idxs = np.array([ 6,  7,  8,  9, 10, 11,  0,  1,  2,  3,  4,  5, 15, 16, 17, 12, 13, 14, 18], dtype=np.int16)
+barrel_map_array_idxs = np.array([6, 7, 8, 9, 10, 11, 0, 1, 2, 3, 4, 5, 15, 16, 17, 12, 13, 14, 18], dtype=np.int16)
 pmts_per_mpmt = 19
 
 
 class PointNetMultiPMTDataset(H5Dataset):
+    """
+    This class loads PMT hit data from an HDF5 file and provides events formatted for point-cloud networks, where the 2D
+    data tensor's first dimension is over the channels, using the detector geometry to provide the 3D positions of each
+    mPMT's centre PMT as the first three channels, then optionally the mPMT orientation as the next three, and then
+    charge and time of each of the 19 PMTs within the mPMTs as the last 19 (charge) + 19 (time) channels. The second
+    dimension of the data tensor is over the mPMTs with hits in the event.
+    """
 
-    def __init__(self, h5file, geometry_file, is_distributed, use_orientations=False, transforms=None, max_points=None):
-        super().__init__(h5file, is_distributed)
+    def __init__(self, h5file, geometry_file, use_orientations=False, transforms=None, max_points=None):
+        super().__init__(h5file)
         geo_file = np.load(geometry_file, 'r')
         geo_positions = torch.from_numpy(geo_file["position"]).float()
         geo_orientations = torch.from_numpy(geo_file["orientation"]).float()
@@ -24,8 +31,7 @@ class PointNetMultiPMTDataset(H5Dataset):
         self.max_points = max_points
         self.transforms = du.get_transformations(transformations, transforms)
 
-
-    def  __getitem__(self, item):
+    def __getitem__(self, item):
 
         data_dict = super().__getitem__(item)
 
@@ -50,7 +56,7 @@ class PointNetMultiPMTDataset(H5Dataset):
             time_channels = hit_pmt_in_modules+22
         else:
             data = np.zeros((44, n_points))
-            data[3:5,:] = self.mpmt_orientations[:, unique_mpmts]
+            data[3:5, :] = self.mpmt_orientations[:, unique_mpmts]
             charge_channels = hit_pmt_in_modules+6
             time_channels = hit_pmt_in_modules+25
         data[:3, :] = self.mpmt_positions[:, unique_mpmts]
