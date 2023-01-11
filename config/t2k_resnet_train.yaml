@@ -23,11 +23,12 @@ tasks:
     val_interval: 100
     num_val_batches: 32
     checkpointing: false
-    early_stopping_patience: 0.05
+    early_stopping_patience: 0.5
+    restore_best_state: true
     data_loaders:
       train:
         split_key: train_idxs
-        batch_size: 64
+        batch_size: 128
         num_workers: 4
         transforms:
         - horizontal_flip
@@ -37,7 +38,7 @@ tasks:
           _target_: torch.utils.data.sampler.SubsetRandomSampler
       validation:
         split_key: val_idxs
-        batch_size: 128
+        batch_size: 256
         num_workers: 4
         sampler:
           _target_: torch.utils.data.sampler.SubsetRandomSampler

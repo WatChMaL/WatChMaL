@@ -52,6 +52,7 @@ class ClassifierEngine:
         self.rank = rank
         self.model = model
         self.device = torch.device(gpu)
+        self.do_early_stop=False
 
         # Setup the parameters to save given the model type
         if isinstance(self.model, DDP):
@@ -192,7 +193,12 @@ class ClassifierEngine:
         val_interval        = train_config.val_interval
         num_val_batches     = train_config.num_val_batches
         checkpointing       = train_config.checkpointing
+        early_stopping_patience      = train_config.early_stopping_patience
         save_interval = train_config.save_interval if 'save_interval' in train_config else None
+        restore_best_state = train_config.restore_best_state
+
+        if restore_best_state:
+            self.restore_best_state("")
 
         # set the iterations at which to dump the events and their metrics
         if self.rank == 0:
@@ -211,71 +217,83 @@ class ClassifierEngine:
         # initialize the iterator over the validation set
         val_iter = iter(self.data_loaders["validation"])
 
+        early_stop = False 
+
         # global training loop for multiple epochs
-        for self.epoch in range(epochs):
-            if self.rank == 0:
-                print('Epoch', self.epoch+1, 'Starting @', strftime("%Y-%m-%d %H:%M:%S", localtime()))
-            
-            times = []
+        try:
+            with self.model.join(throw_on_early_termination=True):
+                for self.epoch in range(epochs):
+                    if self.rank == 0:
+                        print('Epoch', self.epoch+1, 'Starting @', strftime("%Y-%m-%d %H:%M:%S", localtime()))
+                    
+                    times = []
 
-            start_time = time()
-            iteration_time = start_time
+                    start_time = time()
+                    iteration_time = start_time
 
-            train_loader = self.data_loaders["train"]
-            self.step = 0
-            # update seeding for distributed samplers
-            if self.is_distributed:
-                train_loader.sampler.set_epoch(self.epoch)
+                    train_loader = self.data_loaders["train"]
+                    self.step = 0
+                    # update seeding for distributed samplers
+                    if self.is_distributed:
+                        train_loader.sampler.set_epoch(self.epoch)
 
-            # local training loop for batches in a single epoch 
-            for self.step, train_data in enumerate(train_loader):
-                
-                # run validation on given intervals
-                if self.iteration % val_interval == 0:
-                    self.validate(val_iter, num_val_batches, checkpointing)
-                
-                # Train on batch
-                self.data = train_data['data']
-                self.labels = train_data['labels']
+                    # local training loop for batches in a single epoch 
+                    for self.step, train_data in enumerate(train_loader):
+                        
+                        # run validation on given intervals
+                        if self.iteration % val_interval == 0:
+                            early_stop = self.validate(val_iter, num_val_batches, checkpointing, len(train_loader), early_stopping_patience)
+                        
+                        # Train on batch
+                        self.data = train_data['data']
+                        self.labels = train_data['labels']
 
-                # Call forward: make a prediction & measure the average error using data = self.data
-                res = self.forward(True)
+                        # Call forward: make a prediction & measure the average error using data = self.data
+                        res = self.forward(True)
 
-                #Call backward: backpropagate error and update weights using loss = self.loss
-                self.backward()
+                        #Call backward: backpropagate error and update weights using loss = self.loss
+                        self.backward()
 
-                # update the epoch and iteration
-                # self.epoch += 1. / len(self.data_loaders["train"])
-                self.step += 1
-                self.iteration += 1
-                
-                # get relevant attributes of result for logging
-                train_metrics = {"iteration": self.iteration, "epoch": self.epoch, "loss": res["loss"], "accuracy": res["accuracy"]}
-                
-                # record the metrics for the mini-batch in the log
-                self.train_log.record(train_metrics)
-                self.train_log.write()
-                self.train_log.flush()
-                
-                # print the metrics at given intervals
-                if self.rank == 0 and self.iteration % report_interval == 0:
-                    previous_iteration_time = iteration_time
-                    iteration_time = time()
+                        # update the epoch and iteration
+                        # self.epoch += 1. / len(self.data_loaders["train"])
+                        self.step += 1
+                        self.iteration += 1
+                        
+                        # get relevant attributes of result for logging
+                        train_metrics = {"iteration": self.iteration, "epoch": self.epoch, "loss": res["loss"], "accuracy": res["accuracy"]}
+                        
+                        # record the metrics for the mini-batch in the log
+                        self.train_log.record(train_metrics)
+                        self.train_log.write()
+                        self.train_log.flush()
+                        
+                        # print the metrics at given intervals
+                        if self.rank == 0 and self.iteration % report_interval == 0:
+                            previous_iteration_time = iteration_time
+                            iteration_time = time()
 
-                    print("... Iteration %d ... Epoch %d ... Step %d/%d  ... Training Loss %1.3f ... Training Accuracy %1.3f ... Time Elapsed %1.3f ... Iteration Time %1.3f" %
-                          (self.iteration, self.epoch+1, self.step, len(train_loader), res["loss"], res["accuracy"], iteration_time - start_time, iteration_time - previous_iteration_time))
-            
-            if self.scheduler is not None:
-                self.scheduler.step()
+                            print("... Iteration %d ... Epoch %d ... Step %d/%d  ... Training Loss %1.3f ... Training Accuracy %1.3f ... Time Elapsed %1.3f ... Iteration Time %1.3f" %
+                                (self.iteration, self.epoch+1, self.step, len(train_loader), res["loss"], res["accuracy"], iteration_time - start_time, iteration_time - previous_iteration_time))
 
-            if (save_interval is not None) and ((self.epoch+1)%save_interval == 0):
-                self.save_state(name=f'_epoch_{self.epoch+1}')   
-      
+                        if early_stop:
+                            break
+                                        
+                    if self.scheduler is not None:
+                        self.scheduler.step()
+
+                    if (save_interval is not None) and ((self.epoch+1)%save_interval == 0):
+                        self.save_state(name=f'_epoch_{self.epoch+1}')   
+
+                    if early_stop:
+                        break
+        except:
+            pass
+        
         self.train_log.close()
         if self.rank == 0:
             self.val_log.close()
 
-    def validate(self, val_iter, num_val_batches, checkpointing):
+    def validate(self, val_iter, num_val_batches, checkpointing, iterations_per_epoch, early_stopping_patience):
         """
         Perform validation with the current state, on a number of batches of the validation set.
 
@@ -333,9 +351,14 @@ class ClassifierEngine:
 
             if val_metrics["loss"] < self.best_validation_loss:
                 self.best_validation_loss = val_metrics["loss"]
+                self.best_iteration = self.iteration
                 print('best validation loss so far!: {}'.format(self.best_validation_loss))
                 self.save_state("BEST")
                 val_metrics["saved_best"] = 1
+            elif self.iteration - self.best_iteration >= int(early_stopping_patience*iterations_per_epoch):
+                print("DOING EARLY STOPPING")
+                self.do_early_stop=True
+            print(f'CHECK early stopping: Iteration: {self.iteration}, best iteration: {self.best_iteration}, val loss: {val_metrics["loss"]}, best val loss: {self.best_validation_loss}, patience: {early_stopping_patience*iterations_per_epoch}')
 
             # Save the latest model if checkpointing
             if checkpointing:
@@ -344,6 +367,8 @@ class ClassifierEngine:
             self.val_log.record(val_metrics)
             self.val_log.write()
             self.val_log.flush()
+        if self.do_early_stop:
+            return True
 
     def evaluate(self, test_config):
         """Evaluate the performance of the trained model on the test set."""
