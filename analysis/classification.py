@@ -478,7 +478,8 @@ class WatChMaLClassification(ClassificationRun, WatChMaLOutput):
         """
         Return a discriminator with appropriate scaling of softmax values from multi-class training, given the set of
         signal and background class labels. For each event, the discriminator is the sum the signal softmax values
-        normalised by the sum of signal and background softmax values.
+        normalised by the sum of signal and background softmax values. When the softmax for both signal and background
+        is equal to zero, the discriminator value is set to 0.5.
 
         Parameters
         ----------
@@ -494,7 +495,11 @@ class WatChMaLClassification(ClassificationRun, WatChMaLOutput):
         """
         signal_softmax = combine_softmax(self.softmaxes, signal_labels, self.label_map)
         background_softmax = combine_softmax(self.softmaxes, background_labels, self.label_map)
-        return signal_softmax / (signal_softmax + background_softmax)
+        total_softmax = signal_softmax + background_softmax
+        bad = total_softmax==0
+        signal_softmax[bad]=0.5
+        total_softmax[bad]=1.0
+        return signal_softmax / total_softmax
 
     @property
     def train_log_accuracy(self):
