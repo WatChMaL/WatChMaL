@@ -160,11 +160,20 @@ def resnet18(**kwargs):
     return ResNet(BasicBlock, [2, 2, 2, 2], **kwargs)
 
 
+def resnet26(**kwargs):
+    """Constructs a ResNet-34 model feature extractor.
+    """
+    return ResNet(BasicBlock, [2, 3, 4, 2], **kwargs)
+
 def resnet34(**kwargs):
     """Constructs a ResNet-34 model feature extractor.
     """
     return ResNet(BasicBlock, [3, 4, 6, 3], **kwargs)
 
+def resnet42(**kwargs):
+    """Constructs a ResNet-50 model feature extractor.
+    """
+    return ResNet(Bottleneck, [3, 6, 8, 3], **kwargs)
 
 def resnet50(**kwargs):
     """Constructs a ResNet-50 model feature extractor.

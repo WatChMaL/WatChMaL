@@ -12,6 +12,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.parallel import DistributedDataParallel as DDP
 
+from torchmetrics import AUROC, ROC
+
 # generic imports
 from math import floor, ceil
 import numpy as np
@@ -47,7 +49,7 @@ class ClassifierEngine:
         # create the directory for saving the log and dump files
         self.epoch = 0.
         self.step = 0
-        self.best_validation_loss = 1.0e10
+        self.best_validation_loss = 1.0e14
         self.dirpath = dump_path
         self.rank = rank
         self.model = model
@@ -198,6 +200,7 @@ class ClassifierEngine:
         restore_best_state = train_config.restore_best_state
 
         if restore_best_state:
+            print("PICKED RESTORE BEST STATE")
             self.restore_best_state("")
 
         # set the iterations at which to dump the events and their metrics
@@ -212,7 +215,7 @@ class ClassifierEngine:
         self.iteration = 0
         self.step = 0
         # keep track of the validation loss
-        self.best_validation_loss = 1.0e10
+        self.best_validation_loss = 1.0e14
 
         # initialize the iterator over the validation set
         val_iter = iter(self.data_loaders["validation"])
@@ -225,6 +228,7 @@ class ClassifierEngine:
                 for self.epoch in range(epochs):
                     if self.rank == 0:
                         print('Epoch', self.epoch+1, 'Starting @', strftime("%Y-%m-%d %H:%M:%S", localtime()))
+                        print(f'Learning Rate: {self.optimizer.param_groups[0]["lr"]}')
                     
                     times = []
 
@@ -287,6 +291,7 @@ class ClassifierEngine:
                     if early_stop:
                         break
         except:
+            print(f"ONE GPU FAILED: {self.rank}")
             pass
         
         self.train_log.close()
@@ -443,13 +448,14 @@ class ClassifierEngine:
                 labels      = np.array(global_eval_results_dict["labels"].cpu())
                 predictions = np.array(global_eval_results_dict["predictions"].cpu())
                 softmaxes   = np.array(global_eval_results_dict["softmaxes"].cpu())
+
         
         if self.rank == 0:
 #            print("Sorting Outputs...")
 #            sorted_indices = np.argsort(indices)
 
             # Save overall evaluation results
-            print("Saving Data...")
+            print(f"Saving Data to {self.dirpath}...")
             np.save(self.dirpath + "indices.npy", indices)#sorted_indices)
             np.save(self.dirpath + "labels.npy", labels)#[sorted_indices])
             np.save(self.dirpath + "predictions.npy", predictions)#[sorted_indices])

@@ -122,7 +122,7 @@ def plot_rocs(runs, signal_labels, background_labels, selection=None, ax=None, f
 
 
 def plot_efficiency_profile(runs, binning, selection=None, select_labels=None, ax=None, fig_size=None, x_label="",
-                            y_label="", legend='best', y_lim=None, **plot_args):
+                            y_label="", legend='upper left', y_lim=None, label=None, **plot_args):
     """
     Plot binned efficiencies for a cut applied to a number of classification runs.
     Each run should already have had a cut generated, then in each bin the proportion of events passing the cut is
@@ -171,6 +171,11 @@ def plot_efficiency_profile(runs, binning, selection=None, select_labels=None, a
         r.plot_binned_efficiency(ax, binning, run_selection, select_labels, **args)
     ax.set_xlabel(x_label)
     ax.set_ylabel(y_label)
+    if label is not None:
+        # place a text box in upper right in axes coords
+        props = dict(boxstyle='round', facecolor='none', edgecolor='none', alpha=0.5)
+        ax.text(0.7, 0.95, label, transform=ax.transAxes, fontsize=10,
+        verticalalignment='top', bbox=props)
     if legend:
         ax.legend(loc=legend)
     if y_lim is not None:
@@ -440,7 +445,7 @@ class WatChMaLClassification(ClassificationRun, WatChMaLOutput):
                 self._val_log_epoch, self._val_log_loss, self._val_log_accuracy, self._val_log_best)
 
     def plot_training_progression(self, plot_best=True, y_loss_lim=None, fig_size=None, title=None,
-                                  legend='center right'):
+                                  legend='center right', doAccuracy=True, label=None):
         """
         Plot the progression of training and validation loss and accuracy from the run's logs
 
@@ -463,16 +468,24 @@ class WatChMaLClassification(ClassificationRun, WatChMaLOutput):
         matplotlib.axes.Axes
         """
         fig, ax1 = super().plot_training_progression(plot_best, y_loss_lim, fig_size, title, legend=None)
-        ax2 = ax1.twinx()
-        ax2.plot(self.train_log_epoch, self.train_log_accuracy, lw=2, label='Train accuracy', color='r', alpha=0.3)
-        ax2.plot(self.val_log_epoch, self.val_log_accuracy, lw=2, label='Validation accuracy', color='r')
-        if plot_best:
-            ax2.plot(self.val_log_epoch[self.val_log_best], self.val_log_accuracy[self.val_log_best], lw=0, marker='o',
-                     label='Best validation accuracy', color='darkred')
-        ax2.set_ylabel("Accuracy", c='r')
-        if legend:
-            ax1.legend(*plot.combine_legends((ax1, ax2)), loc=legend)
-        return fig, ax1, ax2
+        # place a text box in upper right in axes coords
+        props = dict(boxstyle='round', facecolor='none', edgecolor='none', alpha=0.5)
+        ax1.text(0.7, 0.95, label, transform=ax1.transAxes, fontsize=10,
+        verticalalignment='top', bbox=props)
+        if doAccuracy:
+            ax2 = ax1.twinx()
+            ax2.plot(self.train_log_epoch, self.train_log_accuracy, lw=2, label='Train accuracy', color='r', alpha=0.3)
+            ax2.plot(self.val_log_epoch, self.val_log_accuracy, lw=2, label='Validation accuracy', color='r')
+            if plot_best:
+                ax2.plot(self.val_log_epoch[self.val_log_best], self.val_log_accuracy[self.val_log_best], lw=0, marker='o',
+                        label='Best validation accuracy', color='darkred')
+            ax2.set_ylabel("Accuracy", c='r')
+            if legend:
+                ax1.legend(*plot.combine_legends((ax1, ax2)), loc=legend)
+            return fig, ax1, ax2
+        elif legend:
+            ax1.legend( loc=legend)
+        return fig, ax1
 
     def discriminator(self, signal_labels, background_labels):
         """
