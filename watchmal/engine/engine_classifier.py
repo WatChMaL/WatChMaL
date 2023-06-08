@@ -113,6 +113,7 @@ class ClassifierEngine:
         for name, loader_config in loaders_config.items():
             self.data_loaders[name] = get_data_loader(**data_config, **loader_config, is_distributed=is_distributed, seed=seed)
             if self.label_set is not None:
+                print(self.data_loaders[name].dataset)
                 self.data_loaders[name].dataset.map_labels(self.label_set)
     
     def get_synchronized_metrics(self, metric_dict):
@@ -225,78 +226,80 @@ class ClassifierEngine:
         # global training loop for multiple epochs
         try:
             with self.model.join(throw_on_early_termination=True):
-                for self.epoch in range(epochs):
-                    if self.rank == 0:
-                        print('Epoch', self.epoch+1, 'Starting @', strftime("%Y-%m-%d %H:%M:%S", localtime()))
-                        print(f'Learning Rate: {self.optimizer.param_groups[0]["lr"]}')
-                    
-                    times = []
-
-                    start_time = time()
-                    iteration_time = start_time
-
-                    train_loader = self.data_loaders["train"]
-                    self.step = 0
-                    # update seeding for distributed samplers
-                    if self.is_distributed:
-                        train_loader.sampler.set_epoch(self.epoch)
-
-                    # local training loop for batches in a single epoch 
-                    for self.step, train_data in enumerate(train_loader):
-                        
-                        # run validation on given intervals
-                        if self.iteration % val_interval == 0:
-                            early_stop = self.validate(val_iter, num_val_batches, checkpointing, len(train_loader), early_stopping_patience)
-                        
-                        # Train on batch
-                        self.data = train_data['data']
-                        self.labels = train_data['labels']
-
-                        # Call forward: make a prediction & measure the average error using data = self.data
-                        res = self.forward(True)
-
-                        #Call backward: backpropagate error and update weights using loss = self.loss
-                        self.backward()
-
-                        # update the epoch and iteration
-                        # self.epoch += 1. / len(self.data_loaders["train"])
-                        self.step += 1
-                        self.iteration += 1
-                        
-                        # get relevant attributes of result for logging
-                        train_metrics = {"iteration": self.iteration, "epoch": self.epoch, "loss": res["loss"], "accuracy": res["accuracy"]}
-                        
-                        # record the metrics for the mini-batch in the log
-                        self.train_log.record(train_metrics)
-                        self.train_log.write()
-                        self.train_log.flush()
-                        
-                        # print the metrics at given intervals
-                        if self.rank == 0 and self.iteration % report_interval == 0:
-                            previous_iteration_time = iteration_time
-                            iteration_time = time()
-
-                            print("... Iteration %d ... Epoch %d ... Step %d/%d  ... Training Loss %1.3f ... Training Accuracy %1.3f ... Time Elapsed %1.3f ... Iteration Time %1.3f" %
-                                (self.iteration, self.epoch+1, self.step, len(train_loader), res["loss"], res["accuracy"], iteration_time - start_time, iteration_time - previous_iteration_time))
-
-                        if early_stop:
-                            break
-                                        
-                    if self.scheduler is not None:
-                        self.scheduler.step()
-
-                    if (save_interval is not None) and ((self.epoch+1)%save_interval == 0):
-                        self.save_state(name=f'_epoch_{self.epoch+1}')   
-
-                    if early_stop:
-                        break
+                self.run_epoch(epochs, report_interval, val_interval, num_val_batches, checkpointing, early_stopping_patience, save_interval, val_iter)
         except:
-            print(f"ONE GPU FAILED: {self.rank}")
-            pass
+            print(f"Not running multi-processing: {self.rank}")
+            self.run_epoch(epochs, report_interval, val_interval, num_val_batches, checkpointing, early_stopping_patience, save_interval, val_iter)
         
         self.train_log.close()
         if self.rank == 0:
             self.val_log.close()
+
+    def run_epoch(self, epochs, report_interval, val_interval, num_val_batches, checkpointing, early_stopping_patience, save_interval, val_iter):
+        for self.epoch in range(epochs):
+            if self.rank == 0:
+                print('Epoch', self.epoch+1, 'Starting @', strftime("%Y-%m-%d %H:%M:%S", localtime()))
+                print(f'Learning Rate: {self.optimizer.param_groups[0]["lr"]}')
+                    
+            times = []
+
+            start_time = time()
+            iteration_time = start_time
+
+            train_loader = self.data_loaders["train"]
+            self.step = 0
+                    # update seeding for distributed samplers
+            if self.is_distributed:
+                train_loader.sampler.set_epoch(self.epoch)
+
+                    # local training loop for batches in a single epoch 
+            for self.step, train_data in enumerate(train_loader):
+                        # run validation on given intervals
+                if self.iteration % val_interval == 0:
+                    early_stop = self.validate(val_iter, num_val_batches, checkpointing, len(train_loader), early_stopping_patience)
+                        
+                        # Train on batch
+                self.data = train_data['data']
+                self.labels = train_data['labels']
+
+                        # Call forward: make a prediction & measure the average error using data = self.data
+                res = self.forward(True)
+
+                        #Call backward: backpropagate error and update weights using loss = self.loss
+                self.backward()
+
+                        # update the epoch and iteration
+                        # self.epoch += 1. / len(self.data_loaders["train"])
+                self.step += 1
+                self.iteration += 1
+                        
+                        # get relevant attributes of result for logging
+                train_metrics = {"iteration": self.iteration, "epoch": self.epoch, "loss": res["loss"], "accuracy": res["accuracy"]}
+                        
+                        # record the metrics for the mini-batch in the log
+                self.train_log.record(train_metrics)
+                self.train_log.write()
+                self.train_log.flush()
+                        
+                        # print the metrics at given intervals
+                if self.rank == 0 and self.iteration % report_interval == 0:
+                    previous_iteration_time = iteration_time
+                    iteration_time = time()
+
+                    print("... Iteration %d ... Epoch %d ... Step %d/%d  ... Training Loss %1.3f ... Training Accuracy %1.3f ... Time Elapsed %1.3f ... Iteration Time %1.3f" %
+                                (self.iteration, self.epoch+1, self.step, len(train_loader), res["loss"], res["accuracy"], iteration_time - start_time, iteration_time - previous_iteration_time))
+
+                if early_stop:
+                    break
+                                        
+            if self.scheduler is not None:
+                self.scheduler.step()
+
+            if (save_interval is not None) and ((self.epoch+1)%save_interval == 0):
+                self.save_state(name=f'_epoch_{self.epoch+1}')   
+
+            if early_stop:
+                break
 
     def validate(self, val_iter, num_val_batches, checkpointing, iterations_per_epoch, early_stopping_patience):
         """
