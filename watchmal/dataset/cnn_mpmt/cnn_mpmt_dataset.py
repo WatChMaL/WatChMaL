@@ -19,7 +19,7 @@ barrel_map_array_idxs = [6, 7, 8, 9, 10, 11, 0, 1, 2, 3, 4, 5, 15, 16, 17, 12, 1
 pmts_per_mpmt = 19
 
 class CNNmPMTDataset(H5Dataset):
-    def __init__(self, h5file, mpmt_positions_file, is_distributed, padding_type=None, transforms=None, collapse_arrays=False, mode=['charge'], collapse_mode=[], scaling=False):
+    def __init__(self, h5file, mpmt_positions_file, is_distributed, padding_type=None, transforms=None, collapse_arrays=False, mode=['charge','time'], collapse_mode=[], scaling_charge=[], scaling_time=[]):
         """
         Args:
             h5_path             ... path to h5 dataset file
@@ -49,17 +49,17 @@ class CNNmPMTDataset(H5Dataset):
 
         self.mode = mode
         self.collapse_mode = collapse_mode
-        self.scaling = scaling
+        self.scaling_charge = scaling_charge
+        self.scaling_time = scaling_time
 
-        ################
-        
-        self.mu_q = 2.634658   #np.mean(train_events)
-        self.mu_t = 1115.6687   #np.mean(train_events)
-        self.std_q = 6.9462004  #np.std(train_events)
-        self.std_t = 263.4307  #np.std(train_events)
-        
-        ################
+        if (len(self.scaling_charge) == 2):
+            self.mu_q = self.scaling_charge[0]
+            self.std_q = self.scaling_charge[1]
 
+        if (len(self.scaling_time) == 2):
+            self.mu_t = self.scaling_time[0]
+            self.std_t = self.scaling_time[1] 
+            
 
     def process_data(self, hit_pmts, hit_data):
         """
@@ -103,7 +103,7 @@ class CNNmPMTDataset(H5Dataset):
         
         if 'charge' in self.mode:
             hit_data = self.event_hit_charges
-            if self.scaling:
+            if (len(self.scaling_charge) == 2):
                 hit_data = self.feature_scaling_std(hit_data, self.mu_q, self.std_q)
             
             charge_image = from_numpy(self.process_data(self.event_hit_pmts, hit_data))
@@ -117,7 +117,7 @@ class CNNmPMTDataset(H5Dataset):
         
         if 'time' in self.mode:
             hit_data = self.event_hit_times
-            if self.scaling:
+            if (len(self.scaling_time) == 2):
                 hit_data = self.feature_scaling_std(hit_data, self.mu_t, self.std_t)
 
             time_image = from_numpy(self.process_data(self.event_hit_pmts, hit_data))
