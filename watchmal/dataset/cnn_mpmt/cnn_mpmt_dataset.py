@@ -52,11 +52,11 @@ class CNNmPMTDataset(H5Dataset):
         self.scaling_charge = scaling_charge
         self.scaling_time = scaling_time
 
-        if (len(self.scaling_charge) == 2):
+        if self.scaling_charge is not None:
             self.mu_q = self.scaling_charge[0]
             self.std_q = self.scaling_charge[1]
 
-        if (len(self.scaling_time) == 2):
+        if self.scaling_time is not None:
             self.mu_t = self.scaling_time[0]
             self.std_t = self.scaling_time[1] 
             
