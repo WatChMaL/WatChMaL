@@ -100,7 +100,7 @@ class CNNmPMTDataset(H5Dataset):
         if 'charge' in self.mode:
             hit_data = self.event_hit_charges
             if self.scaling_charge is not None:
-                hit_data = self.feature_scaling_std(hit_data, self.mu_q, self.std_q)
+                hit_data = self.feature_scaling_std(hit_data, self.mu_charge, self.std_charge)
             
             charge_image = from_numpy(self.process_data(self.event_hit_pmts, hit_data))
             charge_image = du.apply_random_transformations_fixedchoices(self.transforms, charge_image, rand_choices)
