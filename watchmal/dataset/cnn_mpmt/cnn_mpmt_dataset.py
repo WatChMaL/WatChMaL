@@ -114,7 +114,7 @@ class CNNmPMTDataset(H5Dataset):
         if 'time' in self.mode:
             hit_data = self.event_hit_times
             if self.scaling_time is not None:
-                hit_data = self.feature_scaling_std(hit_data, self.mu_t, self.std_t)
+                hit_data = self.feature_scaling_std(hit_data, self.mu_time, self.std_time)
 
             time_image = from_numpy(self.process_data(self.event_hit_pmts, hit_data))
             time_image = du.apply_random_transformations_fixedchoices(self.transforms, time_image, rand_choices)
