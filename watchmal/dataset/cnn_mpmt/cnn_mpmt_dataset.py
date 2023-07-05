@@ -297,11 +297,11 @@ class CNNmPMTDataset(H5Dataset):
         return self.event_hit_pmts, pmt_charge_data, pmt_time_data
     
     
-    def feature_scaling_std(self, hit_array, mu, std):
+    def feature_scaling_std(self, hit_array, offset, scale):
         """
             Scale data using standarization.
         """
-        standarized_array = (hit_array - mu)/std
+        standarized_array = (hit_array - offset)/scale
         return standarized_array
 
 
