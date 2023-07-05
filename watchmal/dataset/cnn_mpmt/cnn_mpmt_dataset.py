@@ -99,7 +99,7 @@ class CNNmPMTDataset(H5Dataset):
         
         if 'charge' in self.mode:
             hit_data = self.event_hit_charges
-            if (len(self.scaling_charge) == 2):
+            if self.scaling_charge is not None:
                 hit_data = self.feature_scaling_std(hit_data, self.mu_q, self.std_q)
             
             charge_image = from_numpy(self.process_data(self.event_hit_pmts, hit_data))
@@ -113,7 +113,7 @@ class CNNmPMTDataset(H5Dataset):
         
         if 'time' in self.mode:
             hit_data = self.event_hit_times
-            if (len(self.scaling_time) == 2):
+            if self.scaling_time is not None:
                 hit_data = self.feature_scaling_std(hit_data, self.mu_t, self.std_t)
 
             time_image = from_numpy(self.process_data(self.event_hit_pmts, hit_data))
