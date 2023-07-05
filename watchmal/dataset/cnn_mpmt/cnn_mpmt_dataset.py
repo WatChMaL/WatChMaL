@@ -19,7 +19,7 @@ barrel_map_array_idxs = [6, 7, 8, 9, 10, 11, 0, 1, 2, 3, 4, 5, 15, 16, 17, 12, 1
 pmts_per_mpmt = 19
 
 class CNNmPMTDataset(H5Dataset):
-    def __init__(self, h5file, mpmt_positions_file, is_distributed, padding_type=None, transforms=None, collapse_arrays=False, mode=['charge','time'], collapse_mode=[], scaling_charge=[], scaling_time=[]):
+    def __init__(self, h5file, mpmt_positions_file, is_distributed, padding_type=None, transforms=None, collapse_arrays=False, mode=['charge','time'], collapse_mode=None, scaling_charge=None, scaling_time=None):
         """
         Args:
             h5_path             ... path to h5 dataset file
