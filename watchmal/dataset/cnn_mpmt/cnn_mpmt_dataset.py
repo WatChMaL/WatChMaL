@@ -53,12 +53,12 @@ class CNNmPMTDataset(H5Dataset):
         self.scaling_time = scaling_time
 
         if self.scaling_charge is not None:
-            self.mu_q = self.scaling_charge[0]
-            self.std_q = self.scaling_charge[1]
+            self.mu_charge = self.scaling_charge[0]
+            self.std_charge = self.scaling_charge[1]
 
         if self.scaling_time is not None:
-            self.mu_t = self.scaling_time[0]
-            self.std_t = self.scaling_time[1] 
+            self.mu_time = self.scaling_time[0]
+            self.std_time = self.scaling_time[1] 
             
 
     def process_data(self, hit_pmts, hit_data):
