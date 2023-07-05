@@ -53,12 +53,12 @@ class CNNmPMTDataset(H5Dataset):
         self.scaling_time = scaling_time
 
         if self.scaling_charge is not None:
-            self.mu_charge = self.scaling_charge[0]
-            self.std_charge = self.scaling_charge[1]
+            self.charge_offset = self.scaling_charge[0]
+            self.charge_scale = self.scaling_charge[1]
 
         if self.scaling_time is not None:
-            self.mu_time = self.scaling_time[0]
-            self.std_time = self.scaling_time[1] 
+            self.time_offset = self.scaling_time[0]
+            self.time_scale = self.scaling_time[1] 
             
 
     def process_data(self, hit_pmts, hit_data):
@@ -100,7 +100,7 @@ class CNNmPMTDataset(H5Dataset):
         if 'charge' in self.mode:
             hit_data = self.event_hit_charges
             if self.scaling_charge is not None:
-                hit_data = self.feature_scaling_std(hit_data, self.mu_charge, self.std_charge)
+                hit_data = self.feature_scaling_std(hit_data, self.charge_offset, self.charge_scale)
             
             charge_image = from_numpy(self.process_data(self.event_hit_pmts, hit_data))
             charge_image = du.apply_random_transformations_fixedchoices(self.transforms, charge_image, rand_choices)
@@ -114,7 +114,7 @@ class CNNmPMTDataset(H5Dataset):
         if 'time' in self.mode:
             hit_data = self.event_hit_times
             if self.scaling_time is not None:
-                hit_data = self.feature_scaling_std(hit_data, self.mu_time, self.std_time)
+                hit_data = self.feature_scaling_std(hit_data, self.time_offset, self.time_scale)
 
             time_image = from_numpy(self.process_data(self.event_hit_pmts, hit_data))
             time_image = du.apply_random_transformations_fixedchoices(self.transforms, time_image, rand_choices)
