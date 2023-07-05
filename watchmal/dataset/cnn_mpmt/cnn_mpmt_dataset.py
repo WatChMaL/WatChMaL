@@ -84,10 +84,6 @@ class CNNmPMTDataset(H5Dataset):
         # fix barrel array indexing to match endcaps in xyz ordering
         barrel_data = data[:, self.barrel_rows, :]
         data[:, self.barrel_rows, :] = barrel_data[barrel_map_array_idxs, :, :]
-
-        # collapse arrays if desired
-        # if self.collapse_arrays:
-        #     data = np.expand_dims(np.sum(data, 0), 0)
         
         return data
 
