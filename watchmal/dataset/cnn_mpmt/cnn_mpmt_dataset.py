@@ -107,12 +107,6 @@ class CNNmPMTDataset(H5Dataset):
             time_image = from_numpy(self.process_data(self.event_hit_pmts, hit_data))
             time_image = self.padding_type(time_image)
 
-            if 'time' in self.collapse_mode:
-                mean_channel = torch.mean(time_image, 0, keepdim=True)
-                std_channel = torch.std(time_image, 0, keepdim=True)
-                time_image = torch.cat((mean_channel, std_channel), 0)
-
-        
         # Merge all channels
         if ('time' in self.mode) and ('charge' in self.mode):
             processed_image = torch.cat((charge_image, time_image), 0)
