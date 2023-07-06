@@ -90,12 +90,6 @@ class CNNmPMTDataset(H5Dataset):
     def  __getitem__(self, item):
 
         data_dict = super().__getitem__(item)
-
-        # select random choices for transformations for charge and time
-        rand_choices = []
-        if self.transforms is not None:
-            rand_choices = [bool(random.getrandbits(1)) for i in range(len(self.transforms))]
-        
         
         if 'charge' in self.mode:
             hit_data = self.event_hit_charges
@@ -103,13 +97,7 @@ class CNNmPMTDataset(H5Dataset):
                 hit_data = self.feature_scaling_std(hit_data, self.charge_offset, self.charge_scale)
             
             charge_image = from_numpy(self.process_data(self.event_hit_pmts, hit_data))
-            charge_image = du.apply_random_transformations_fixedchoices(self.transforms, charge_image, rand_choices)
             charge_image = self.padding_type(charge_image)
-
-            if 'charge' in self.collapse_mode:
-                mean_channel = torch.mean(charge_image, 0, keepdim=True)
-                std_channel = torch.std(charge_image, 0, keepdim=True)
-                charge_image = torch.cat((mean_channel, std_channel), 0)
         
         if 'time' in self.mode:
             hit_data = self.event_hit_times
@@ -117,7 +105,6 @@ class CNNmPMTDataset(H5Dataset):
                 hit_data = self.feature_scaling_std(hit_data, self.time_offset, self.time_scale)
 
             time_image = from_numpy(self.process_data(self.event_hit_pmts, hit_data))
-            time_image = du.apply_random_transformations_fixedchoices(self.transforms, time_image, rand_choices)
             time_image = self.padding_type(time_image)
 
             if 'time' in self.collapse_mode:
