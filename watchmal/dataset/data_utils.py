@@ -74,15 +74,3 @@ def apply_random_transformations(transforms, data, segmented_labels = None):
                 if segmented_labels is not None:
                     segmented_labels = transformation(segmented_labels)
     return data
-
-
-def apply_random_transformations_fixedchoices(transforms, data, random_choices, segmented_labels = None):
-    if transforms is not None:
-        for transformation, choice in zip(transforms, random_choices):
-            if choice:
-                data = transformation(data)
-                if segmented_labels is not None:
-                    segmented_labels = transformation(segmented_labels)
-    return data
-
-
