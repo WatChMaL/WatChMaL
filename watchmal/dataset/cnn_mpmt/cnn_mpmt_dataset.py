@@ -141,11 +141,11 @@ class CNNmPMTDataset(H5Dataset):
         
 
     def horizontal_flip(self, data):
-	    flip_mpmt_map = np.tile(self.horizontal_flip_mpmt_map, data.shape[0]/19)
+	flip_mpmt_map = np.tile(self.horizontal_flip_mpmt_map, data.shape[0]/19)
         return flip(data[flip_mpmt_map, :, :], [2])
 
     def vertical_flip(self, data):
-	    flip_mpmt_map = np.tile(self.vertical_flip_mpmt_map, data.shape[0]/19)
+	flip_mpmt_map = np.tile(self.vertical_flip_mpmt_map, data.shape[0]/19)
         return flip(data[flip_mpmt_map, :, :], [1])
 
     def flip_180(self, data):
