@@ -110,6 +110,21 @@ class CNNmPMTDataset(H5Dataset):
         # Merge all channels
         if ('time' in self.mode) and ('charge' in self.mode):
             processed_image = torch.cat((charge_image, time_image), 0)
+	    processed_image = du.apply_random_transformations(self.transforms, processed_image)
+
+            charge_image = processed_image[:19, :, :]
+	    time_image = processed_image[19:, :, :]
+	    if 'charge' in self.collapse_mode:
+        	 mean_channel = torch.mean(charge_image, 0, keepdim=True)
+                 std_channel = torch.std(charge_image, 0, keepdim=True)
+                 charge_image = torch.cat((mean_channel, std_channel), 0)
+	    if 'time' in self.collapse_mode:
+		 mean_channel = torch.mean(time_image, 0, keepdim=True)
+                 std_channel = torch.std(time_image, 0, keepdim=True)
+                 time_image = torch.cat((mean_channel, std_channel), 0)
+
+	    processed_image = torch.cat((charge_image, time_image), 0)
+
         elif 'charge' in self.mode:
             processed_image = charge_image
         else:
