@@ -126,10 +126,17 @@ class CNNmPMTDataset(H5Dataset):
 	    processed_image = torch.cat((charge_image, time_image), 0)
 
         elif 'charge' in self.mode:
-            processed_image = charge_image
+            processed_image = du.apply_random_transformations(self.transforms, charge_image)
+	    if 'charge' in self.collapse_mode:
+	        mean_channel = torch.mean(processed_image, 0, keepdim=True)
+                std_channel = torch.std(processed_image, 0, keepdim=True)
+                processed_image = torch.cat((mean_channel, std_channel), 0)
         else:
-            processed_image = time_image
-
+            processed_image = du.apply_random_transformations(self.transforms, time_image)
+	    if 'time' in self.collapse_mode:
+                 mean_channel = torch.mean(processed_image, 0, keepdim=True)
+                 std_channel = torch.std(processed_image, 0, keepdim=True)
+                 processed_image = torch.cat((mean_channel, std_channel), 0)
         
         data_dict["data"] = processed_image
         
