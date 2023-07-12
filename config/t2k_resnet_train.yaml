@@ -1,7 +1,7 @@
 data:
-  split_path: /fast_scratch/WatChMaL/data/T2K/nov18_emu_fullCylinder_500k_1/train0.7_val0.15_test0.15000000000000005.npz
+  split_path: '/fast_scratch/fcormier/Public/egamma/train0.7_val0.15_test0.15000000000000005.npz' 
   dataset:
-    h5file: '/fast_scratch/fcormier/t2k/ml/wcsim/jan16_emu_fullCylinder_1M_1/combine_combine.hy'
+    h5file: '/fast_scratch/fcormier/Public/egamma/combine_combine.hy'
     _target_: watchmal.dataset.cnn.cnn_dataset.CNNDataset
     pmt_positions_file: /fast_scratch/WatChMaL/data/T2K/image_files/sk_wcsim_imagefile.npz
 model:
@@ -16,9 +16,12 @@ model:
     _target_: watchmal.model.classifier.PassThrough
 engine:
   _target_: watchmal.engine.engine_classifier.ClassifierEngine
+  label_set:
+    - 1
+    - 2
 tasks:
   train:
-    epochs: 20
+    epochs: 1
     report_interval: 100
     val_interval: 100
     num_val_batches: 32
@@ -58,7 +61,6 @@ tasks:
         sampler:
           _target_: watchmal.dataset.samplers.SubsetSequentialSampler
 gpu_list: 
-- 6
 - 7
 seed: null
 dump_path: ./outputs/

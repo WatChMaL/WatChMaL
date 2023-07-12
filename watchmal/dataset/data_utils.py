@@ -57,8 +57,10 @@ def get_data_loader(dataset, batch_size, sampler, num_workers, is_distributed, s
     """
     dataset = instantiate(dataset, transforms=transforms)
     
+    print(split_path)
     if split_path is not None and split_key is not None:
         split_indices = np.load(split_path, allow_pickle=True)[split_key]
+        print(split_indices)
         sampler = instantiate(sampler, split_indices)
     else:
         sampler = instantiate(sampler)
