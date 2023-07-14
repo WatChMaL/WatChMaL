@@ -34,14 +34,16 @@ class ResNetFullyConnected(nn.Module):
         self.cl_fc2 = nn.Linear(int(num_inputs // 2), int(num_inputs // 4))
         self.cl_fc3 = nn.Linear(int(num_inputs // 4), int(num_inputs // 8))
         self.cl_fc4 = nn.Linear(int(num_inputs // 8), num_classes)
+        self.cl_fc5 = nn.Linear(int(num_inputs // 8), num_classes)
         self.relu = nn.ReLU(inplace=True)
 
     def forward(self, x):
         x = self.relu(self.cl_fc1(x))
         x = self.relu(self.cl_fc2(x))
         x = self.relu(self.cl_fc3(x))
-        x = self.cl_fc4(x)
-        return x
+        x_c = self.cl_fc4(x)
+        x_r = self.cl_fc5(x)
+        return x_c, x_r
 
 
 class PointNetFullyConnected(nn.Module):
