@@ -175,14 +175,16 @@ class CNNmPMTDataset(H5Dataset):
         Takes image-like data and returns the data after applying a horizontal flip to the image.
         The channels of the PMTs within mPMTs also have the appropriate permutation applied.
         """
-        return flip(data[self.horizontal_flip_mpmt_map, :, :], [2])
+ 	flip_mpmt_map = np.tile(self.horizontal_flip_mpmt_map, data.shape[0]/19)
+        return flip(data[flip_mpmt_map, :, :], [2])
 
     def vertical_flip(self, data):
         """
         Takes image-like data and returns the data after applying a vertical flip to the image.
         The channels of the PMTs within mPMTs also have the appropriate permutation applied.
         """
-        return flip(data[self.vertical_flip_mpmt_map, :, :], [1])
+  	flip_mpmt_map = np.tile(self.vertical_flip_mpmt_map, data.shape[0]/19)
+        return flip(data[flip_mpmt_map, :, :], [1])
 
     def flip_180(self, data):
         """
