@@ -324,3 +324,10 @@ class CNNmPMTDataset(H5Dataset):
         padded_data = torch.cat(concat_order, dim=1)
 
         return padded_data
+
+    def feature_scaling_std(self, hit_array, offset, scale):
+        """
+            Scale data using standarization.
+        """
+        standarized_array = (hit_array - offset)/scale
+        return standarized_array
