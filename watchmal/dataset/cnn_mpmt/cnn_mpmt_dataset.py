@@ -26,7 +26,7 @@ class CNNmPMTDataset(H5Dataset):
     with mPMTs arrange in an event-display-like format.
     """
 
-    def __init__(self, h5file, mpmt_positions_file, padding_type=None, transforms=None, collapse_arrays=False):
+    def __init__(self, h5file, mpmt_positions_file, padding_type=None, transforms=None, collapse_arrays=False, mode=['charge','time'], collapse_mode=None, scaling_charge=None, scaling_time=None):
         """
         Constructs a dataset for CNN data. Event hit data is read in from the HDF5 file and the PMT charge data is
         formatted into an event-display-like image for input to a CNN. Each pixel of the image corresponds to one mPMT
@@ -64,6 +64,21 @@ class CNNmPMTDataset(H5Dataset):
 
         self.horizontal_flip_mpmt_map = [0, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 12, 17, 16, 15, 14, 13, 18]
         self.vertical_flip_mpmt_map = [6, 5, 4, 3, 2, 1, 0, 11, 10, 9, 8, 7, 15, 14, 13, 12, 17, 16, 18]
+
+        self.mode = mode
+        self.collapse_mode = collapse_mode
+        self.scaling_charge = scaling_charge
+        self.scaling_time = scaling_time
+
+        if self.scaling_charge is not None:
+            self.charge_offset = self.scaling_charge[0]
+            self.charge_scale = self.scaling_charge[1]
+
+        if self.scaling_time is not None:
+            self.time_offset = self.scaling_time[0]
+            self.time_scale = self.scaling_time[1] 
+            
+
 
     def process_data(self, hit_pmts, hit_data):
         """
