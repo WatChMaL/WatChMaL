@@ -119,12 +119,52 @@ class CNNmPMTDataset(H5Dataset):
 
         data_dict = super().__getitem__(item)
 
-        processed_data = from_numpy(self.process_data(self.event_hit_pmts, self.event_hit_charges))
+        if 'charge' in self.mode:
+            hit_data = self.event_hit_charges
+            if self.scaling_charge is not None:
+                hit_data = self.feature_scaling_std(hit_data, self.charge_offset, self.charge_scale)
+            
+            charge_image = from_numpy(self.process_data(self.event_hit_pmts, hit_data))
+            charge_image = self.padding_type(charge_image)
         
-        processed_data = du.apply_random_transformations(self.transforms, processed_data)
+        if 'time' in self.mode:
+            hit_data = self.event_hit_times
+            if self.scaling_time is not None:
+                hit_data = self.feature_scaling_std(hit_data, self.time_offset, self.time_scale)
 
-        if self.padding_type is not None:
-            processed_data = self.padding_type(processed_data)
+            time_image = from_numpy(self.process_data(self.event_hit_pmts, hit_data))
+            time_image = self.padding_type(time_image)
+
+        # Merge all channels
+        if ('time' in self.mode) and ('charge' in self.mode):
+            processed_image = torch.cat((charge_image, time_image), 0)
+	    processed_image = du.apply_random_transformations(self.transforms, processed_image)
+
+            charge_image = processed_image[:19, :, :]
+	    time_image = processed_image[19:, :, :]
+	    if 'charge' in self.collapse_mode:
+        	 mean_channel = torch.mean(charge_image, 0, keepdim=True)
+                 std_channel = torch.std(charge_image, 0, keepdim=True)
+                 charge_image = torch.cat((mean_channel, std_channel), 0)
+	    if 'time' in self.collapse_mode:
+		 mean_channel = torch.mean(time_image, 0, keepdim=True)
+                 std_channel = torch.std(time_image, 0, keepdim=True)
+                 time_image = torch.cat((mean_channel, std_channel), 0)
+
+	    processed_image = torch.cat((charge_image, time_image), 0)
+
+        elif 'charge' in self.mode:
+            processed_image = du.apply_random_transformations(self.transforms, charge_image)
+	    if 'charge' in self.collapse_mode:
+	        mean_channel = torch.mean(processed_image, 0, keepdim=True)
+                std_channel = torch.std(processed_image, 0, keepdim=True)
+                processed_image = torch.cat((mean_channel, std_channel), 0)
+        else:
+            processed_image = du.apply_random_transformations(self.transforms, time_image)
+	    if 'time' in self.collapse_mode:
+                 mean_channel = torch.mean(processed_image, 0, keepdim=True)
+                 std_channel = torch.std(processed_image, 0, keepdim=True)
+                 processed_image = torch.cat((mean_channel, std_channel), 0)
 
         data_dict["data"] = processed_data
         
