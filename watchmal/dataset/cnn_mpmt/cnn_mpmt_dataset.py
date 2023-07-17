@@ -166,7 +166,7 @@ class CNNmPMTDataset(H5Dataset):
                  std_channel = torch.std(processed_image, 0, keepdim=True)
                  processed_image = torch.cat((mean_channel, std_channel), 0)
 
-        data_dict["data"] = processed_data
+        data_dict["data"] = processed_image
         
         return data_dict
         
