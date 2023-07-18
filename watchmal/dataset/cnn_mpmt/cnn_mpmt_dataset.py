@@ -26,7 +26,7 @@ class CNNmPMTDataset(H5Dataset):
     with mPMTs arrange in an event-display-like format.
     """
 
-    def __init__(self, h5file, mpmt_positions_file, padding_type=None, transforms=None, collapse_arrays=False, mode=['charge','time'], collapse_mode=None, scaling_charge=None, scaling_time=None):
+    def __init__(self, h5file, mpmt_positions_file, padding_type=None, transforms=None, mode=['charge','time'], collapse_mode=None, scaling_charge=None, scaling_time=None):
         """
         Constructs a dataset for CNN data. Event hit data is read in from the HDF5 file and the PMT charge data is
         formatted into an event-display-like image for input to a CNN. Each pixel of the image corresponds to one mPMT
@@ -42,9 +42,6 @@ class CNNmPMTDataset(H5Dataset):
         transforms: sequence of string
             List of random transforms to apply to data before passing to CNN for data augmentation. Each element of the
             list should be the name of a method of this class that performs the transformation
-        collapse_arrays: bool
-            Whether to collapse the image-like CNN arrays to a single channels containing the sum of other channels.
-            i.e. provide the sum of PMT charges in each mPMT instead of providing all PMT charges.
         """
         super().__init__(h5file)
 
@@ -54,7 +51,6 @@ class CNNmPMTDataset(H5Dataset):
                             np.count_nonzero(self.mpmt_positions[:, 0] == row) == self.data_size[1]]
         n_channels = pmts_per_mpmt
         self.data_size = np.insert(self.data_size, 0, n_channels)
-        self.collapse_arrays = collapse_arrays
         self.transforms = du.get_transformations(self, transforms)
 
         if padding_type is not None:
@@ -109,10 +105,6 @@ class CNNmPMTDataset(H5Dataset):
         barrel_data = data[:, self.barrel_rows, :]
         data[:, self.barrel_rows, :] = barrel_data[barrel_map_array_idxs, :, :]
 
-        # collapse arrays if desired
-        #if self.collapse_arrays:
-        #    data = np.expand_dims(np.sum(data, 0), 0)
-        
         return data
 
     def __getitem__(self, item):
