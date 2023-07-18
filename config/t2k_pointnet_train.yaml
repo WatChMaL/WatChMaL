@@ -1,39 +1,36 @@
 data:
-  split_path: '/fast_scratch/fcormier/t2k/ml/wcsim/jul12_egamma_rangeBall/train_val_test_nFolds4_fold1.npz' 
+  split_path: /fast_scratch/fcormier/t2k/ml/wcsim/jan16_emu_fullCylinder_1M_1/train_val_test_nFolds3_fold0.npz
   dataset:
-    h5file: '/fast_scratch/fcormier/t2k/ml/wcsim/jul12_egamma_rangeBall/combine_combine.hy'
-    _target_: watchmal.dataset.cnn.cnn_dataset.CNNDataset
-    pmt_positions_file: /fast_scratch/WatChMaL/data/T2K/image_files/sk_wcsim_imagefile.npz
+    h5file: '/fast_scratch/fcormier/t2k/ml/wcsim/jan16_emu_fullCylinder_1M_1/combine_combine.hy'
+    _target_: watchmal.dataset.pointnet.pointnet_dataset.PointNetDataset
+    geometry_file: /fast_scratch/WatChMaL/data/T2K/geo_files/geofile.npz
 model:
   _recursive_: false
   _target_: watchmal.model.classifier.Classifier
   num_classes: 2
   feature_extractor:
-    _target_: watchmal.model.resnet.resnet34
-    num_input_channels: 2
-    num_output_channels: 2
+    _target_: watchmal.model.pointnet.PointNetFeat
+    k: 5
+    num_output_channels: 256
   classification_network:
-    _target_: watchmal.model.classifier.PassThrough
+    _target_: watchmal.model.classifier.PointNetFullyConnected
 engine:
   _target_: watchmal.engine.engine_classifier.ClassifierEngine
 tasks:
   train:
-    epochs: 10
+    epochs: 200
     report_interval: 100
     val_interval: 100
     num_val_batches: 32
     checkpointing: false
-    early_stopping_patience: 3
+    early_stopping_patience: 30
     restore_best_state: false
     data_loaders:
       train:
         split_key: train_idxs
-        batch_size: 624
+        batch_size: 512
         num_workers: 4
         transforms:
-        - horizontal_flip
-        - vertical_flip
-        - front_back_reflection
         sampler:
           _target_: torch.utils.data.sampler.SubsetRandomSampler
       validation:
@@ -44,7 +41,7 @@ tasks:
           _target_: torch.utils.data.sampler.SubsetRandomSampler
     optimizers:
       _target_: torch.optim.Adam
-      lr: 0.1
+      lr: 0.001
       weight_decay: 0
     scheduler:
       _target_: torch.optim.lr_scheduler.ExponentialLR
@@ -56,9 +53,9 @@ tasks:
         batch_size: 1024
         num_workers: 4
         sampler:
-          _target_: torch.utils.data.sampler.SubsetRandomSampler
+          _target_: watchmal.dataset.samplers.SubsetSequentialSampler
 gpu_list: 
-- 4
-- 5
+- 6
+- 7
 seed: null
-dump_path: ./outputs/
+dump_path: /fast_scratch/fcormier/t2k/ml/training/pointnet_jan20_test_epoch20_2/

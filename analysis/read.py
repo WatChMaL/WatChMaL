@@ -79,7 +79,7 @@ class WatChMaLOutput(ABC, metaclass=ABCMeta):
         tuple
             Tuple of arrays of training progression log values, see `read_training_log_from_csv` for details.
         """
-        train_files = glob.glob(self.directory + "/outputs/log_train*.csv")
+        train_files = glob.glob(self.directory + "/log_train*.csv")
         if train_files:
             return self.read_training_log_from_csv(self.directory)
         else:  # search for a previous training run with a saved state that was loaded
@@ -103,8 +103,8 @@ class WatChMaLOutput(ABC, metaclass=ABCMeta):
             Two dimensional array of predicted softmax values, where each row corresponds to an event and each column
             contains the softmax values of a class.
         """
-        outputs = np.load(self.directory + "/outputs/" + name + ".npy")
-        output_indices = np.load(self.directory + "/outputs/indices.npy")
+        outputs = np.load(self.directory + "/" + name + ".npy")
+        output_indices = np.load(self.directory + "/indices.npy")
         if self.indices is None:
             return outputs[output_indices.argsort()].squeeze()
         intersection = np.intersect1d(self.indices, output_indices, return_indices=True)
@@ -127,9 +127,9 @@ class WatChMaLOutput(ABC, metaclass=ABCMeta):
         tuple
             Tuple of arrays of training progression log values, see `read_training_log_from_csv` for details.
         """
-        train_files = glob.glob(directory + "/outputs/log_train*.csv")
+        train_files = glob.glob(directory + "/log_train*.csv")
         self._log_train = np.array([np.genfromtxt(f, delimiter=',', skip_header=1) for f in train_files])
-        self._log_val = np.genfromtxt(directory + "/outputs/log_val.csv", delimiter=',', skip_header=1)
+        self._log_val = np.genfromtxt(directory + "/log_val.csv", delimiter=',', skip_header=1)
         train_iteration = self._log_train[0, :, 0]
         train_epoch = self._log_train[0, :, 1]
         it_per_epoch = np.min(train_iteration[train_epoch == 1]) - 1

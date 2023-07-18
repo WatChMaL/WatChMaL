@@ -8,7 +8,7 @@ import numpy as np
 DEFAULT_TANK_AXIS = 1
 
 
-def towall(position, angle, tank_half_height=300, tank_radius=400, tank_axis=None):
+def towall(position, angle, tank_half_height=1810, tank_radius=1690, tank_axis=None):
     """
     Calculate towall: distance from position to detector wall, in particle direction
 
@@ -43,7 +43,7 @@ def towall(position, angle, tank_half_height=300, tank_radius=400, tank_axis=Non
     return np.minimum(towall_barrel, towall_endcap)
 
 
-def dwall(position, tank_half_height=300, tank_radius=400, tank_axis=None):
+def dwall(position, tank_half_height=1810, tank_radius=1690, tank_axis=None):
     """
     Calculate dwall: distance from position to the nearest detector wall
 

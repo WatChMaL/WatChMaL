@@ -5,7 +5,7 @@ Main file used for running the code
 # hydra imports
 import hydra
 from omegaconf import OmegaConf
-from hydra.utils import instantiate, to_absolute_path
+from hydra.utils import instantiate, to_absolute_path, get_original_cwd
 
 # torch imports
 import torch
