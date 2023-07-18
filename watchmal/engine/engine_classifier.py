@@ -181,9 +181,9 @@ class ClassifierEngine:
             self.loss = self.loss_c + (self.loss_r/100.)
             accuracy = (predicted_labels == labels).sum().item() / float(predicted_labels.nelement())
 
-            result['loss'] = self.loss.item()
-            result['loss_c'] = self.loss_c.item()
-            result['loss_r'] = self.loss_r.item()
+            result['loss'] = float(self.loss.item())
+            result['loss_c'] = float(self.loss_c.item())
+            result['loss_r'] = float(self.loss_r.item())
             result['accuracy'] = accuracy
         
         return result
@@ -234,21 +234,24 @@ class ClassifierEngine:
         # initialize the iterator over the validation set
         val_iter = iter(self.data_loaders["validation"])
 
-        early_stop = False 
 
         # global training loop for multiple epochs
+
         try:
             with self.model.join(throw_on_early_termination=True):
                 self.run_epoch(epochs, report_interval, val_interval, num_val_batches, checkpointing, early_stopping_patience, save_interval, val_iter)
         except:
-            print(f"Not running multi-processing: {self.rank}")
-            self.run_epoch(epochs, report_interval, val_interval, num_val_batches, checkpointing, early_stopping_patience, save_interval, val_iter)
+            if not self.is_distributed:
+                print(f"Not running multi-processing: {self.rank}")
+                self.run_epoch(epochs, report_interval, val_interval, num_val_batches, checkpointing, early_stopping_patience, save_interval, val_iter)
         
         self.train_log.close()
         if self.rank == 0:
             self.val_log.close()
 
     def run_epoch(self, epochs, report_interval, val_interval, num_val_batches, checkpointing, early_stopping_patience, save_interval, val_iter):
+
+        early_stop = False 
         for self.epoch in range(epochs):
             if self.rank == 0:
                 print('Epoch', self.epoch+1, 'Starting @', strftime("%Y-%m-%d %H:%M:%S", localtime()))

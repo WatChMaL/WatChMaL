@@ -18,7 +18,7 @@ engine:
   _target_: watchmal.engine.engine_classifier.ClassifierEngine
 tasks:
   train:
-    epochs: 2
+    epochs: 10
     report_interval: 100
     val_interval: 100
     num_val_batches: 32
@@ -28,7 +28,7 @@ tasks:
     data_loaders:
       train:
         split_key: train_idxs
-        batch_size: 64
+        batch_size: 624
         num_workers: 4
         transforms:
         - horizontal_flip
@@ -38,13 +38,13 @@ tasks:
           _target_: torch.utils.data.sampler.SubsetRandomSampler
       validation:
         split_key: val_idxs
-        batch_size: 128
+        batch_size: 1024
         num_workers: 4
         sampler:
           _target_: torch.utils.data.sampler.SubsetRandomSampler
     optimizers:
       _target_: torch.optim.Adam
-      lr: 0.001
+      lr: 0.1
       weight_decay: 0
     scheduler:
       _target_: torch.optim.lr_scheduler.ExponentialLR
@@ -53,7 +53,7 @@ tasks:
     data_loaders:
       test:
         split_key: test_idxs
-        batch_size: 128
+        batch_size: 1024
         num_workers: 4
         sampler:
           _target_: torch.utils.data.sampler.SubsetRandomSampler
