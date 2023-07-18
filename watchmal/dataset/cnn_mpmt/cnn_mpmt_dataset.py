@@ -75,7 +75,6 @@ class CNNmPMTDataset(H5Dataset):
             self.time_scale = self.scaling_time[1] 
             
 
-
     def process_data(self, hit_pmts, hit_data):
         """
         Returns event data from dataset associated with a specific index
