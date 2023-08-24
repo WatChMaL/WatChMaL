@@ -55,7 +55,7 @@ def get_data_loader(dataset, batch_size, sampler, num_workers, is_distributed, s
     torch.utils.data.DataLoader
         dataloader created with instantiated dataset and (possibly wrapped) sampler
     """
-    dataset = instantiate(dataset, transforms=transforms)
+    dataset = instantiate(dataset)
     
     print(split_path)
     if split_path is not None and split_key is not None:
