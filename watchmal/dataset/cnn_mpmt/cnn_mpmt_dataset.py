@@ -46,7 +46,7 @@ class CNNmPMTDataset(H5Dataset):
 	    List defines the PMT data included in the image-like CNN arrays. It can be either 'charge', 'time' or both (default)
         collapse_mode: sequence of string
 	    List of the data to be collapsed to two channels, containing, respectively, the mean and the std of other channels. 
-	    i.e. provides the the mean and the std of PMT charges and/or time in each mPMT instead of providing all PMT data.	
+	    i.e. provides the mean and the std of PMT charges and/or time in each mPMT instead of providing all PMT data.	
 	    It can be [], ['charge'], ['time'] or ['charge', 'time']. By default no collapsing is performed.
         scaling_charge:[offset, scale]
 	    Offset and scale to standardise the PMT charge data
