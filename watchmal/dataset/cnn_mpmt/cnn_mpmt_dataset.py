@@ -42,6 +42,8 @@ class CNNmPMTDataset(H5Dataset):
         transforms: sequence of string
             List of random transforms to apply to data before passing to CNN for data augmentation. Each element of the
             list should be the name of a method of this class that performs the transformation
+	mode: sequence of string
+	List defines the PMT data included in the image-like CNN arrays. It can be either 'charge', 'time' or both (default)
         """
         super().__init__(h5file)
 
