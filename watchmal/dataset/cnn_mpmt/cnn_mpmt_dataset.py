@@ -43,7 +43,15 @@ class CNNmPMTDataset(H5Dataset):
             List of random transforms to apply to data before passing to CNN for data augmentation. Each element of the
             list should be the name of a method of this class that performs the transformation
 	mode: sequence of string
-	List defines the PMT data included in the image-like CNN arrays. It can be either 'charge', 'time' or both (default)
+	    list defines the PMT data included in the image-like CNN arrays. It can be either 'charge', 'time' or both (default)
+        collapse_mode: sequence of string
+	    list of the data to be collapsed to two channels, containing, respectively, the mean and the std of other channels. 
+	i.e. provides the the mean and the std of PMT charges and/or time in each mPMT instead of providing all PMT data.	
+	It can be [], ['charge'], ['time'] or ['charge', 'time']. By default no collapsing is performed.
+        scaling_charge:
+            
+        scaling_time: 
+	
         """
         super().__init__(h5file)
 
