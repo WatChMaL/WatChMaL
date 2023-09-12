@@ -53,6 +53,7 @@ class CNNmPMTDataset(H5Dataset):
         scaling_time: [offset, scale]
 	    Offset and scale to standardise the PMT time data
         ----------
+	"""
 	
         super().__init__(h5file)
 
