@@ -80,6 +80,7 @@ def plot_binned_values(ax, func, values, binning, selection=None, errors=False, 
         provided in `runs`.
     """
     plot_args.setdefault('lw', 2)
+    print(f'values: {values}')
     binned_values = bins.apply_binning(values, binning, selection)
     x = bins.bin_centres(binning[0])
     if errors:

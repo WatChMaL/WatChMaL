@@ -4,7 +4,8 @@ Modified from mPMT dataset for use with single PMTs
 """
 
 # torch imports
-from torch import from_numpy
+from torch import from_numpy, Tensor, roll
+import torchvision
 
 # generic imports
 import numpy as np
@@ -12,6 +13,12 @@ import numpy as np
 # WatChMaL imports
 from WatChMaL.watchmal.dataset.h5_dataset import H5Dataset
 import WatChMaL.watchmal.dataset.data_utils as du
+
+# Implementation of matplotlib function
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.colors import LogNorm
+from matplotlib.patches import Ellipse
 
 
 class CNNDataset(H5Dataset):
@@ -54,8 +61,10 @@ class CNNDataset(H5Dataset):
         self.data_size = np.max(self.pmt_positions, axis=0) + 1
         self.barrel_rows = [row for row in range(self.data_size[0]) if
                             np.count_nonzero(self.pmt_positions[:, 0] == row) == self.data_size[1]]
-        self.transforms = None #du.get_transformations(transformations, transforms)
+        self.transforms = None 
+        #self.transforms = du.get_transformations(transformations, transforms)
         self.one_indexed = one_indexed
+        self.counter=0
 
         n_channels = 0
         if use_times:
@@ -66,6 +75,33 @@ class CNNDataset(H5Dataset):
             raise Exception("Please set 'use_times' and/or 'use_charges' to 'True' in your data config.")
        
         self.data_size = np.insert(self.data_size, 0, n_channels)
+
+    def rotate_cylinder(self, data):
+
+
+        hit_pmts = self.event_hit_pmts
+        if self.one_indexed:
+            hit_pmts = hit_pmts-1  # SK cable numbers start at 1
+
+        num_cols = data.shape[1]
+
+        min_barrel_row = np.amin(self.barrel_rows)
+        max_barrel_row = np.amax(self.barrel_rows)
+
+        top_endcap = data[:,0:min_barrel_row,:]
+        bottom_endcap = data[:,max_barrel_row+1:,:]
+        barrel = data[:,min_barrel_row:max_barrel_row+1,:]
+
+        rng = np.random.default_rng()
+        displacement = rng.integers(0,high=num_cols)
+        angle = 360*(displacement/num_cols)
+
+        new_barrel = Tensor.numpy(roll(from_numpy(barrel),displacement,2))
+        new_top_endcap = Tensor.numpy(torchvision.transforms.functional.rotate(from_numpy(top_endcap), angle))
+        new_bottom_endcap = Tensor.numpy(torchvision.transforms.functional.rotate(from_numpy(bottom_endcap), 360-angle))
+
+        return from_numpy(np.concatenate((new_top_endcap, new_barrel, new_bottom_endcap), axis=1)), displacement
+
 
     def process_data(self, hit_pmts, hit_times, hit_charges):
         """
@@ -90,6 +126,11 @@ class CNNDataset(H5Dataset):
 
         hit_rows = self.pmt_positions[hit_pmts, 0]
         hit_cols = self.pmt_positions[hit_pmts, 1]
+        #print(f'pmt positions: {self.pmt_positions}')
+        #print(f'hit pmts: {hit_pmts}')
+        #print(f'hit rows: {hit_rows}')
+        #print(f'hit columns: {hit_cols}')
+        #print(f'barrel rows: {self.barrel_rows}')
 
         data = np.zeros(self.data_size, dtype=np.float32)
 
@@ -108,8 +149,25 @@ class CNNDataset(H5Dataset):
         data_dict = super().__getitem__(item)
 
         processed_data = from_numpy(self.process_data(self.event_hit_pmts, self.event_hit_times, self.event_hit_charges))
+        #self.save_fig(processed_data[0],False)
+        processed_data, displacement = self.rotate_cylinder(Tensor.numpy(processed_data))
+        #self.save_fig(processed_data[0],True, displacement = displacement)
+        self.counter+=1
         processed_data = du.apply_random_transformations(self.transforms, processed_data)
 
         data_dict["data"] = processed_data
 
         return data_dict
+
+    def save_fig(self,data,isPost, displacement=0):
+        plt.imshow(data)
+        cbar = plt.colorbar()
+        cbar.ax.get_yaxis().labelpad = 15
+        cbar.ax.set_ylabel("PMT Charge", rotation=270)
+        plt.xlabel('X pixels')
+        plt.ylabel('Y pixels')
+        if isPost:
+            plt.savefig('/home/fcormier/t2k/ml/t2k_ml_training/plots/'+str(self.counter)+'_post_rot_img_dis'+str(displacement)+'.png')
+        else:
+            plt.savefig('/home/fcormier/t2k/ml/t2k_ml_training/plots/'+str(self.counter)+'_pre_rot_img'+'.png')
+        plt.clf()

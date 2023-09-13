@@ -1,9 +1,13 @@
 data:
-  split_path: '/fast_scratch/fcormier/t2k/ml/wcsim/jul12_egamma_rangeBall/train_val_test_nFolds4_fold1.npz' 
+  split_path: '/fast_scratch/fcormier/t2k/ml/skdetsim/aug30_emu_skdetsim_smallFile_2/train_val_test_nFolds5_fold0.npz' 
   dataset:
-    h5file: '/fast_scratch/fcormier/t2k/ml/wcsim/jul12_egamma_rangeBall/combine_combine.hy'
+    h5file: '/fast_scratch/fcormier/t2k/ml/skdetsim/aug30_emu_skdetsim_smallFile_2/combine_combine.hy'
     _target_: watchmal.dataset.cnn.cnn_dataset.CNNDataset
-    pmt_positions_file: /fast_scratch/WatChMaL/data/T2K/image_files/sk_wcsim_imagefile.npz
+    pmt_positions_file: /fast_scratch/WatChMaL/data/T2K/image_files/skdetsim_imagefile.npy
+    transforms:
+    - horizontal_flip
+    - vertical_flip
+    - front_back_reflection
 model:
   _recursive_: false
   _target_: watchmal.model.classifier.Classifier
@@ -16,9 +20,10 @@ model:
     _target_: watchmal.model.classifier.PassThrough
 engine:
   _target_: watchmal.engine.engine_classifier.ClassifierEngine
+  restore_path: 0
 tasks:
   train:
-    epochs: 10
+    epochs: 15
     report_interval: 100
     val_interval: 100
     num_val_batches: 32
@@ -29,7 +34,7 @@ tasks:
       train:
         split_key: train_idxs
         batch_size: 624
-        num_workers: 4
+        num_workers: 3
         transforms:
         - horizontal_flip
         - vertical_flip
@@ -44,7 +49,7 @@ tasks:
           _target_: torch.utils.data.sampler.SubsetRandomSampler
     optimizers:
       _target_: torch.optim.Adam
-      lr: 0.1
+      lr: 0.001
       weight_decay: 0
     scheduler:
       _target_: torch.optim.lr_scheduler.ExponentialLR
@@ -53,12 +58,12 @@ tasks:
     data_loaders:
       test:
         split_key: test_idxs
-        batch_size: 1024
+        batch_size: 512
         num_workers: 4
         sampler:
           _target_: torch.utils.data.sampler.SubsetRandomSampler
 gpu_list: 
-- 4
-- 5
+- 2
+- 3
 seed: null
 dump_path: ./outputs/
