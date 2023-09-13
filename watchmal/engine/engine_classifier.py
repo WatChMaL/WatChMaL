@@ -30,7 +30,7 @@ from watchmal.utils.logging_utils import CSVData
 
 class ClassifierEngine:
     """Engine for performing training or evaluation  for a classification network."""
-    def __init__(self, model, rank, gpu, dump_path, label_set=None):
+    def __init__(self, model, rank, gpu, dump_path, restore_path = None, label_set=None):
         """
         Parameters
         ==========
@@ -51,6 +51,11 @@ class ClassifierEngine:
         self.step = 0
         self.best_validation_loss = 1.0e14
         self.dirpath = dump_path
+        if restore_path is None or not restore_path:
+            self.restore_path = dump_path
+        else:
+            self.restore_path = restore_path
+        print(f'RESTORE PATH: {self.restore_path}')
         self.rank = rank
         self.model = model
         self.device = torch.device(gpu)
@@ -178,7 +183,7 @@ class ClassifierEngine:
             #print(f"True range: {primary_range}")
             #print(f"Pred range: {model_out[1]}")
             self.loss_r = self.criterion_r(model_out[1], primary_range)
-            self.loss = self.loss_c + (self.loss_r/100.)
+            self.loss = self.loss_c + 0*(self.loss_r)
             accuracy = (predicted_labels == labels).sum().item() / float(predicted_labels.nelement())
 
             result['loss'] = float(self.loss.item())
@@ -216,6 +221,7 @@ class ClassifierEngine:
         if restore_best_state:
             print("PICKED RESTORE BEST STATE")
             self.restore_best_state("")
+            print(self.device)
 
         # set the iterations at which to dump the events and their metrics
         if self.rank == 0:
@@ -421,7 +427,7 @@ class ClassifierEngine:
             self.model.eval()
             
             # Variables for the confusion matrix
-            loss, accuracy, indices, labels, predictions, softmaxes, pred_range, true_range= [],[],[],[],[],[],[],[]
+            loss, accuracy, indices, labels, predictions, softmaxes, pred_range, true_range, rootfiles= [],[],[],[],[],[],[],[],[]
             
             # Extract the event data and label from the DataLoader iterator
             for it, eval_data in enumerate(self.data_loaders["test"]):
@@ -432,6 +438,7 @@ class ClassifierEngine:
                 self.range = eval_data['range']
 
                 eval_indices = eval_data['indices']
+                eval_rootfile = eval_data['root_files']
                 
                 # Run the forward procedure and output the result
                 result = self.forward(train=False)
@@ -441,6 +448,7 @@ class ClassifierEngine:
                 
                 # Add the local result to the final result
                 indices.extend(eval_indices.numpy())
+                rootfiles.extend(np.array(eval_rootfile))
                 labels.extend(self.labels.numpy())
                 true_range.extend(self.range.numpy())
                 predictions.extend(result['predicted_labels'].detach().cpu().numpy())
@@ -461,6 +469,7 @@ class ClassifierEngine:
         local_eval_metrics_dict = {"eval_iterations":iterations, "eval_loss":loss, "eval_acc":accuracy}
         
         indices     = np.array(indices)
+        rootfiles    = np.array(rootfiles)
         labels      = np.array(labels)
         true_range      = np.array(true_range)
         predictions = np.array(predictions)
@@ -493,6 +502,7 @@ class ClassifierEngine:
             # Save overall evaluation results
             print(f"Saving Data to {self.dirpath}...")
             np.save(self.dirpath + "indices.npy", indices)#sorted_indices)
+            np.save(self.dirpath + "rootfiles.npy", rootfiles)#sorted_indices)
             np.save(self.dirpath + "labels.npy", labels)#[sorted_indices])
             np.save(self.dirpath + "predictions.npy", predictions)#[sorted_indices])
             np.save(self.dirpath + "softmax.npy", softmaxes)#[sorted_indices])
@@ -545,7 +555,7 @@ class ClassifierEngine:
 
     def restore_best_state(self, placeholder):
         """Restore model using best model found in current directory."""
-        best_validation_path = "{}{}{}{}".format(self.dirpath,
+        best_validation_path = "{}{}{}{}".format(self.restore_path,
                                      str(self.model._get_name()),
                                      "BEST",
                                      ".pth")
@@ -563,14 +573,19 @@ class ClassifierEngine:
             print('Restoring state from', weight_file)
 
             # torch interprets the file, then we can access using string keys
-            checkpoint = torch.load(f)
+            checkpoint = torch.load(f, map_location=self.device)
+            print("1")
             
             # load network weights
             self.model_accs.load_state_dict(checkpoint['state_dict'])
+            print("2")
+            self.model_accs.to(self.device)
+            print("3")
             
             # if optim is provided, load the state of the optim
             if self.optimizer is not None:
                 self.optimizer.load_state_dict(checkpoint['optimizer'])
+            print("4")
             
             # load iteration count
             self.iteration = checkpoint['global_step']

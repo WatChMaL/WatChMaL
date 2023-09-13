@@ -16,6 +16,14 @@ import random
 # WatChMaL imports
 from watchmal.dataset.samplers import DistributedSamplerWrapper
 
+import torchvision
+
+# Implementation of matplotlib function
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.colors import LogNorm
+from matplotlib.patches import Ellipse
+
 # pyg imports
 #from torch_geometric.loader import DataLoader as PyGDataLoader
 
@@ -102,7 +110,7 @@ def get_transformations(transformations, transform_names):
         return None
 
 
-def apply_random_transformations(transforms, data, segmented_labels=None):
+def apply_random_transformations(transforms, data, segmented_labels=None, counter=0):
     """
     Randomly chooses a set of transformations to apply, from a given list of transformations, then applies those that
     were randomly chosen to the data and returns the transformed data.
@@ -123,8 +131,31 @@ def apply_random_transformations(transforms, data, segmented_labels=None):
     """
     if transforms is not None:
         for transformation in transforms:
+            if "rotate_cylinder" in transformation.__name__:
+                #save_fig(data[0],False, counter=counter)
+                data, displacement = transformation(torch.Tensor.numpy(data))
+                #save_fig((torch.Tensor.numpy(data))[0],True, counter=counter)
+            else:
+                continue
+        for transformation in transforms:
+            if "rotate_cylinder" in transformation.__name__:
+                continue
             if random.getrandbits(1):
                 data = transformation(data)
                 if segmented_labels is not None:
                     segmented_labels = transformation(segmented_labels)
     return data
+
+def save_fig(data,isPost, displacement=0, counter=0):
+    plt.imshow(data)
+    cbar = plt.colorbar()
+    cbar.ax.get_yaxis().labelpad = 15
+    cbar.ax.set_ylabel("PMT Charge", rotation=270)
+    plt.xlabel('X pixels')
+    plt.ylabel('Y pixels')
+    if isPost:
+        plt.savefig('/home/fcormier/t2k/ml/t2k_ml_training/plots/'+str(counter)+'_post_rot_img_dis'+str(displacement)+'.png')
+    else:
+        plt.savefig('/home/fcormier/t2k/ml/t2k_ml_training/plots/'+str(counter)+'_pre_rot_img'+'.png')
+    plt.clf()
+
