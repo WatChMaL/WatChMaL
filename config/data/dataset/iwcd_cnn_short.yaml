@@ -1,4 +1,7 @@
 _target_: watchmal.dataset.cnn_mpmt.cnn_mpmt_dataset.CNNmPMTDataset
 mpmt_positions_file: /data/WatChMaL/data/IWCDshort_mPMT_image_positions.npz
-collapse_arrays: False
+mode: ['charge', 'time'] # With this configuration: 38 channels (19 for charge + 19 for time)
+#collapse_mode: ['charge', 'time']
 padding_type: double_cover
+scaling_charge: [2.634658, 6.9462004]
+scaling_time: [1115.6687, 263.4307]
