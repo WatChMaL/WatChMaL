@@ -4,7 +4,8 @@ Modified from mPMT dataset for use with single PMTs
 """
 
 # torch imports
-from torch import from_numpy, Tensor, roll
+from torch import from_numpy, Tensor, roll, flip
+import torch
 import torchvision
 
 # generic imports
@@ -55,14 +56,14 @@ class CNNDataset(H5Dataset):
         """
         super().__init__(h5file)
         
-        self.pmt_positions = np.load(pmt_positions_file)['pmt_image_positions']
+        self.pmt_positions = np.load(pmt_positions_file)#['pmt_image_positions']
         self.use_times = use_times
         self.use_charges = use_charges
         self.data_size = np.max(self.pmt_positions, axis=0) + 1
         self.barrel_rows = [row for row in range(self.data_size[0]) if
                             np.count_nonzero(self.pmt_positions[:, 0] == row) == self.data_size[1]]
-        self.transforms = None 
-        #self.transforms = du.get_transformations(transformations, transforms)
+        #self.transforms = None 
+        self.transforms = du.get_transformations(self, transforms)
         self.one_indexed = one_indexed
         self.counter=0
 
@@ -76,34 +77,9 @@ class CNNDataset(H5Dataset):
        
         self.data_size = np.insert(self.data_size, 0, n_channels)
 
-    def rotate_cylinder(self, data):
 
 
-        hit_pmts = self.event_hit_pmts
-        if self.one_indexed:
-            hit_pmts = hit_pmts-1  # SK cable numbers start at 1
-
-        num_cols = data.shape[1]
-
-        min_barrel_row = np.amin(self.barrel_rows)
-        max_barrel_row = np.amax(self.barrel_rows)
-
-        top_endcap = data[:,0:min_barrel_row,:]
-        bottom_endcap = data[:,max_barrel_row+1:,:]
-        barrel = data[:,min_barrel_row:max_barrel_row+1,:]
-
-        rng = np.random.default_rng()
-        displacement = rng.integers(0,high=num_cols)
-        angle = 360*(displacement/num_cols)
-
-        new_barrel = Tensor.numpy(roll(from_numpy(barrel),displacement,2))
-        new_top_endcap = Tensor.numpy(torchvision.transforms.functional.rotate(from_numpy(top_endcap), angle))
-        new_bottom_endcap = Tensor.numpy(torchvision.transforms.functional.rotate(from_numpy(bottom_endcap), 360-angle))
-
-        return from_numpy(np.concatenate((new_top_endcap, new_barrel, new_bottom_endcap), axis=1)), displacement
-
-
-    def process_data(self, hit_pmts, hit_times, hit_charges):
+    def process_data(self, hit_pmts, hit_times, hit_charges, double_cover = None, transforms = None):
         """
         Returns event data from dataset associated with a specific index
 
@@ -150,24 +126,199 @@ class CNNDataset(H5Dataset):
 
         processed_data = from_numpy(self.process_data(self.event_hit_pmts, self.event_hit_times, self.event_hit_charges))
         #self.save_fig(processed_data[0],False)
-        processed_data, displacement = self.rotate_cylinder(Tensor.numpy(processed_data))
+        #processed_data, displacement = self.rotate_cylinder(Tensor.numpy(processed_data))
         #self.save_fig(processed_data[0],True, displacement = displacement)
         self.counter+=1
-        processed_data = du.apply_random_transformations(self.transforms, processed_data)
+        processed_data = du.apply_random_transformations(self.transforms, processed_data, counter = self.counter)
+        processed_data = self.double_cover(processed_data)
 
         data_dict["data"] = processed_data
 
         return data_dict
 
-    def save_fig(self,data,isPost, displacement=0):
-        plt.imshow(data)
-        cbar = plt.colorbar()
-        cbar.ax.get_yaxis().labelpad = 15
-        cbar.ax.set_ylabel("PMT Charge", rotation=270)
-        plt.xlabel('X pixels')
-        plt.ylabel('Y pixels')
-        if isPost:
-            plt.savefig('/home/fcormier/t2k/ml/t2k_ml_training/plots/'+str(self.counter)+'_post_rot_img_dis'+str(displacement)+'.png')
-        else:
-            plt.savefig('/home/fcormier/t2k/ml/t2k_ml_training/plots/'+str(self.counter)+'_pre_rot_img'+'.png')
-        plt.clf()
+    def rotate_cylinder(self, data):
+
+        hit_pmts = self.event_hit_pmts
+        if self.one_indexed:
+            hit_pmts = hit_pmts-1  # SK cable numbers start at 1
+
+        num_cols = data.shape[1]
+
+        min_barrel_row = np.amin(self.barrel_rows)
+        max_barrel_row = np.amax(self.barrel_rows)
+
+        top_endcap = data[:,0:min_barrel_row,:]
+        bottom_endcap = data[:,max_barrel_row+1:,:]
+        barrel = data[:,min_barrel_row:max_barrel_row+1,:]
+
+        rng = np.random.default_rng()
+        displacement = rng.integers(0,high=num_cols)
+        angle = 360*(displacement/num_cols)
+
+        new_barrel = torch.Tensor.numpy(torch.roll(torch.from_numpy(barrel),displacement,2))
+        new_top_endcap = torch.Tensor.numpy(torchvision.transforms.functional.rotate(torch.from_numpy(top_endcap), angle))
+        new_bottom_endcap = torch.Tensor.numpy(torchvision.transforms.functional.rotate(torch.from_numpy(bottom_endcap), 360-angle))
+
+        return torch.from_numpy(np.concatenate((new_top_endcap, new_barrel, new_bottom_endcap), axis=1)), displacement
+
+
+
+    def horizontal_flip(self, data):
+        """
+        Takes image-like data and returns the data after applying a horizontal flip to the image.
+        The channels of the PMTs within mPMTs also have the appropriate permutation applied.
+        """
+        #print('applying horizontal flip')
+        return flip(data[:, :], [2])
+
+    def vertical_flip(self, data):
+        """
+        Takes image-like data and returns the data after applying a vertical flip to the image.
+        The channels of the PMTs within mPMTs also have the appropriate permutation applied.
+        """
+        #print('applying vertical flip')
+        return flip(data[:, :], [1])
+
+    def flip_180(self, data):
+        """
+        Takes image-like data and returns the data after applying both a horizontal flip to the image. This is
+        equivalent to a 180-degree rotation of the image.
+        The channels of the PMTs within mPMTs also have the appropriate permutation applied.
+        """
+        #print('applying 180 flip')
+        return self.horizontal_flip(self.vertical_flip(data))
+ 
+    def front_back_reflection(self, data):
+        """
+        Takes CNN input data in event-display-like format and returns the data with horizontal flip of the left and
+        right halves of the barrels and vertical flip of the endcaps. This is equivalent to reflecting the detector
+        swapping the front and back of the event-display view. The channels of the PMTs within mPMTs also have the
+        appropriate permutation applied.
+        """
+        #print('front back reflected')
+        barrel_row_start, barrel_row_end = self.barrel_rows[0], self.barrel_rows[-1]
+        radius_endcap = barrel_row_start//2                     # 5
+        half_barrel_width = data.shape[2]//2                    # 20
+        l_endcap_index = half_barrel_width - radius_endcap      # 15
+        r_endcap_index = half_barrel_width + radius_endcap      # 25
+        
+        transform_data = data.clone()
+
+        # Take out the left and right halves of the barrel
+        left_barrel = data[:, self.barrel_rows, :half_barrel_width]
+        right_barrel = data[:, self.barrel_rows, half_barrel_width:]
+        # Horizontal flip of the left and right halves of barrel
+        transform_data[:, self.barrel_rows, :half_barrel_width] = self.horizontal_flip(left_barrel)
+        transform_data[:, self.barrel_rows, half_barrel_width:] = self.horizontal_flip(right_barrel)
+
+        # Take out the top and bottom endcaps
+        top_endcap = data[:, :barrel_row_start, l_endcap_index:r_endcap_index]
+        bottom_endcap = data[:, barrel_row_end+1:, l_endcap_index:r_endcap_index]
+        # Vertical flip of the top and bottom endcaps
+        transform_data[:, :barrel_row_start, l_endcap_index:r_endcap_index] = self.vertical_flip(top_endcap)
+        transform_data[:, barrel_row_end+1:, l_endcap_index:r_endcap_index] = self.vertical_flip(bottom_endcap)
+
+        return transform_data
+
+    def rotation180(self, data):
+        """
+        Takes CNN input data in event-display-like format and returns the data with horizontal and vertical flip of the
+        endcaps and shifting of the barrel rows by half the width. This is equivalent to a 180-degree rotation of the
+        detector about its axis. The channels of the PMTs within mPMTs also have the appropriate permutation applied.
+        """
+        #print('rotated 180')
+        barrel_row_start, barrel_row_end = self.barrel_rows[0], self.barrel_rows[-1]   # 10,18 respectively
+        radius_endcap = barrel_row_start//2                 # 5
+        l_endcap_index = data.shape[2]//2 - radius_endcap   # 15
+        r_endcap_index = data.shape[2]//2 + radius_endcap   # 25   
+
+        transform_data = data.clone()
+
+        # Take out the top and bottom endcaps
+        top_endcap = data[:, :barrel_row_start, l_endcap_index:r_endcap_index]
+        bottom_endcap = data[:, barrel_row_end+1:, l_endcap_index:r_endcap_index]
+        # Vertical and horizontal flips of the endcaps
+        transform_data[:, :barrel_row_start, l_endcap_index:r_endcap_index] = self.flip_180(top_endcap)
+        transform_data[:, barrel_row_end+1:, l_endcap_index:r_endcap_index] = self.flip_180(bottom_endcap)
+
+        # Swap the left and right halves of the barrel
+        transform_data[:, self.barrel_rows, :] = torch.roll(transform_data[:, self.barrel_rows, :], 20, 2)
+
+        return transform_data
+    
+    def mpmt_padding(self, data):
+        """
+        Takes CNN input data in event-display-like format and returns the data with part of the barrel duplicated to one
+        side, and copies of the end-caps duplicated, rotated 180 degrees and with PMT channels in the mPMTs permuted, to
+        provide two 'views' of the detect in one image.
+        """
+        #print('mpmt padding')
+        w = data.shape[2]
+        barrel_row_start, barrel_row_end = self.barrel_rows[0], self.barrel_rows[-1]
+        l_endcap_index = w//2 - 5
+        r_endcap_index = w//2 + 4
+
+        padded_data = torch.cat((data, torch.zeros_like(data[:, :w//2])), dim=2)
+        padded_data[:, self.barrel_rows, w:] = data[:, self.barrel_rows, :w//2]
+
+        # Take out the top and bottom endcaps
+        top_endcap = data[:, :barrel_row_start, l_endcap_index:r_endcap_index+1]
+        bottom_endcap = data[:, barrel_row_end+1:, l_endcap_index:r_endcap_index+1]
+
+        padded_data[barrel_row_start, l_endcap_index+w//2:r_endcap_index+w//2+1] = self.flip_180(top_endcap)
+        padded_data[barrel_row_end+1:, l_endcap_index+w//2:r_endcap_index+w//2+1] = self.flip_180(bottom_endcap)
+
+        return padded_data
+
+    def double_cover(self, data):
+        """
+        Takes CNN input data in event-display-like format and returns the data with all parts of the detector duplicated
+        and rearranged to provide a double-cover of the image, providing two 'views' of the detector from a single image
+        with less blank space and physically meaningful cyclic boundary conditions at the edges of the image.
+
+        The transformation looks something like the following, where PMTs on the end caps are numbered and PMTs on the
+        barrel are letters:
+        ```
+                             CBALKJIHGFED
+             01                01    32
+             23                23    10
+        ABCDEFGHIJKL   -->   DEFGHIJKLABC
+        MNOPQRSTUVWX         PQRSTUVWXMNO
+             45                45    76
+             67                67    54
+                             ONMXWVUSTRQP
+        ```
+        """
+        #print('double cover')
+        w = data.shape[2]                                                                            
+        barrel_row_start, barrel_row_end = self.barrel_rows[0], self.barrel_rows[-1]
+        radius_endcap = barrel_row_start//2
+        half_barrel_width, quarter_barrel_width = w//2, w//4
+
+        # Step - 1 : Roll the tensor so that the first quarter is the last quarter
+        padded_data = torch.roll(data, -quarter_barrel_width, 2)
+
+        # Step - 2 : Copy the endcaps and paste 3 quarters from the start, after flipping 180 
+        l1_endcap_index = half_barrel_width - radius_endcap - quarter_barrel_width
+        r1_endcap_index = l1_endcap_index + 2*radius_endcap
+        l2_endcap_index = l1_endcap_index+half_barrel_width
+        r2_endcap_index = r1_endcap_index+half_barrel_width
+
+        top_endcap = padded_data[:, :barrel_row_start, l1_endcap_index:r1_endcap_index]
+        bottom_endcap = padded_data[:, barrel_row_end+1:, l1_endcap_index:r1_endcap_index]
+        
+        padded_data[:, :barrel_row_start, l2_endcap_index:r2_endcap_index] = self.flip_180(top_endcap)
+        padded_data[:, barrel_row_end+1:, l2_endcap_index:r2_endcap_index] = self.flip_180(bottom_endcap)
+        
+        # Step - 3 : Rotate the top and bottom half of barrel and concat them to the top and bottom respectively
+        barrel_rows_top, barrel_rows_bottom = np.array_split(self.barrel_rows, 2)
+        barrel_top_half, barrel_bottom_half = padded_data[:, barrel_rows_top, :], padded_data[:, barrel_rows_bottom, :]
+        
+        concat_order = (self.flip_180(barrel_top_half), 
+                        padded_data,
+                        self.flip_180(barrel_bottom_half))
+
+        padded_data = torch.cat(concat_order, dim=1)
+
+        return padded_data
+

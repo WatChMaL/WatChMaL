@@ -168,7 +168,6 @@ def plot_efficiency_profile(runs, binning, selection=None, select_labels=None, a
     for r in runs:
         args = {**plot_args, **r.plot_args}
         run_selection = r.selection if selection is None else selection
-        print(f'binning: {binning}')
         r.plot_binned_efficiency(ax, binning, run_selection, select_labels, **args)
     ax.set_xlabel(x_label)
     ax.set_ylabel(y_label)
@@ -507,8 +506,6 @@ class WatChMaLClassification(ClassificationRun, WatChMaLOutput):
             One-dimensional array of discriminator values, with length equal to the number of events in this run.
         """
         signal_softmax = combine_softmax(self.softmaxes, signal_labels, self.label_map)
-        print(f'signal labels: {self.label_map}')
-        print(f'bkg labels: {background_labels}')
         background_softmax = combine_softmax(self.softmaxes, background_labels, self.label_map)
         return signal_softmax / (signal_softmax + background_softmax)
 
@@ -531,7 +528,6 @@ class WatChMaLClassification(ClassificationRun, WatChMaLOutput):
         """Array of softmax outputs"""
         if self._softmaxes is None:
             self._softmaxes = self.get_outputs("softmax")
-        print(f'SOFTMAXES: {self._softmaxes}')
         return self._softmaxes
 
 
