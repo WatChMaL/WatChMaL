@@ -79,7 +79,6 @@ class CNNmPMTDataset(H5Dataset):
         else:
             self.collapse_mode = collapse_mode
 
-        self.collapse_mode = collapse_mode
         self.scaling_charge = scaling_charge
         self.scaling_time = scaling_time
 
