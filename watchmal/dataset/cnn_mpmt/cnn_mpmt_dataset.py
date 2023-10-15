@@ -74,7 +74,7 @@ class CNNmPMTDataset(H5Dataset):
         self.vertical_flip_mpmt_map = [6, 5, 4, 3, 2, 1, 0, 11, 10, 9, 8, 7, 15, 14, 13, 12, 17, 16, 18]
 
         self.mode = mode
-        if collapse_mode == None:
+        if collapse_mode is None:
             self.collapse_mode = []
         else:
             self.collapse_mode = collapse_mode
