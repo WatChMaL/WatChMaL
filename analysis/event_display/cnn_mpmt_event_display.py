@@ -95,16 +95,15 @@ class CNNmPMTEventDisplay(CNNmPMTDataset):
         """
         rows = self.mpmt_positions[:, 0]
         columns = self.mpmt_positions[:, 1]
-        mpmt_locations = np.zeros_like(data[0], dtype=bool)  # fill a data-like array with False
-        mpmt_locations[rows, columns] = True  # replace channel 18 with True where there is an actual mPMT
         data_nan = np.full_like(data, np.nan)  # fill an array with nan for positions where there's no actual PMTs
-        data_nan[:, mpmt_locations] = data[:, mpmt_locations]  # replace the nans with the data where there is a PMT
+        data_nan[:, rows, columns] = data[:, rows, columns]  # replace the nans with the data where there is a PMT
         if transformations is not None:
-            data = self.apply_transformation(transformations, data)
+            data_nan = self.apply_transformation(transformations, data_nan)
         if channel is not None:
-            data = data[self.channel_ranges[channel]]
-        coordinates = coordinates_from_data(data)  # coordinates corresponding to each element of the data array
-        mpmt_coordinates = coordinates[~np.isnan(data[0])]  # the coordinates of where the actual mPMTs are
+            data_nan = data_nan[self.channel_ranges[channel]]
+        coordinates = coordinates_from_data(data_nan)  # coordinates corresponding to each element of the data array
+        # also get the coordinates of the centre PMT (channel 18) where the actual mPMTs are (not nan)
+        mpmt_coordinates = coordinates[((~np.isnan(data_nan)) & (np.indices(data_nan.shape)[0] == 18)).flatten()]
         return plot_event_2d(data_nan.flatten(), coordinates, mpmt_coordinates, **kwargs)
 
     def plot_event_2d(self, event, channel=None, transformations=None, **kwargs):

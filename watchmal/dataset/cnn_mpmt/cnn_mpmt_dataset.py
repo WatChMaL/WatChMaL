@@ -198,12 +198,13 @@ class CNNmPMTDataset(H5Dataset):
         barrel duplicated to one side, and copies of the end-caps duplicated, rotated 180 degrees and with PMT channels
         in the mPMTs permuted, to provide two 'views' of the detector in one image.
         """
-        # copy the left half of the barrel (padded with zeros above and below) to the right hand side
+        # pad the image with half the barrel width
+        padded_data = np.pad(data, ((0, 0), (0, 0), (0, self.image_width//2)), mode="edge")
+        # copy the left half of the barrel to the right hand side
         left_barrel = np.array_split(data[self.barrel], 2, axis=2)[0]
-        left_barrel_padded = np.pad(left_barrel, ((0, 0), (self.endcap_size, self.endcap_size), (0, 0)))
-        padded_data = np.concatenate((data, left_barrel_padded), dim=2)
+        padded_data[:, self.endcap_size:-self.endcap_size, -self.image_width//2] = left_barrel
         # copy 180-deg rotated end-caps to the appropriate place
-        endcap_copy_left = data.shape[2] - (self.endcap_size // 2)
+        endcap_copy_left = self.image_width - (self.endcap_size // 2)
         endcap_copy_right = endcap_copy_left + self.endcap_size
         padded_data[:, :self.endcap_size, endcap_copy_left:endcap_copy_right] = self.image_flip(data[self.top_endcap], 'b')
         padded_data[:, -self.endcap_size:, endcap_copy_left:endcap_copy_right] = self.image_flip(data[self.bottom_endcap], 'b')
