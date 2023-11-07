@@ -3,7 +3,7 @@ Tools for event displays from CNN mPMT dataset
 """
 import numpy as np
 from analysis.event_display.event_display import plot_event_2d, plot_event_3d
-from watchmal.dataset.cnn_mpmt.cnn_mpmt_dataset import CNNmPMTDataset
+from watchmal.dataset.cnn_mpmt.cnn_mpmt_dataset import CNNmPMTDataset, HORIZONTAL_FLIP_MPMT_MAP, VERTICAL_FLIP_MPMT_MAP
 from matplotlib.pyplot import cm
 
 
@@ -325,8 +325,14 @@ class CNNmPMTEventDisplay(CNNmPMTDataset):
                 data = data_map[p]
                 fig, ax = plot_event_3d(data, pmt_coordinates, **args)
             else:
+                # plotting geometry, we always want to permute PMT channels, so save and replace the flip_permutation
+                old_flip_permutation = self.flip_permutation
+                self.flip_permutation = {"h": HORIZONTAL_FLIP_MPMT_MAP,
+                                         "v": VERTICAL_FLIP_MPMT_MAP,
+                                         "b": HORIZONTAL_FLIP_MPMT_MAP[VERTICAL_FLIP_MPMT_MAP]}
                 data = self.process_data(pmt_ids, data_map[p])
                 fig, ax = self.plot_data_2d(data, **args)
+                self.flip_permutation = old_flip_permutation
             figs.append(fig)
             axes.append(ax)
         return figs, axes
