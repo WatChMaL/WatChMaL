@@ -4,6 +4,7 @@ Class implementing a mPMT dataset for CNNs in h5 format
 
 # generic imports
 import numpy as np
+import torch
 
 # WatChMaL imports
 from watchmal.dataset.h5_dataset import H5Dataset
@@ -124,7 +125,7 @@ class CNNmPMTDataset(H5Dataset):
         for c, (offset, scale) in self.scaling.items():
             hit_data[c] = (hit_data[c] - offset)/scale
         # Process the channels
-        data = np.zeros((self.image_depth, self.image_height, self.image_width))
+        data = np.zeros((self.image_depth, self.image_height, self.image_width), dtype=np.float32)
         for c, r in self.channel_ranges.items():
             channel_data = self.process_data(self.event_hit_pmts, hit_data[c])
             if c in self.collapse_channels:
@@ -135,7 +136,7 @@ class CNNmPMTDataset(H5Dataset):
         # Apply "padding" transformation e.g. for double cover
         if self.padding_type is not None:
             data = self.padding_type(data)
-        data_dict["data"] = data
+        data_dict["data"] = torch.from_numpy(data)
         return data_dict
 
     def image_flip(self, data, direction):
