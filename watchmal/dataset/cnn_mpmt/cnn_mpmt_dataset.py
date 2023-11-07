@@ -2,13 +2,8 @@
 Class implementing a mPMT dataset for CNNs in h5 format
 """
 
-# torch imports
-from torch import from_numpy
-from torch import flip
-
 # generic imports
 import numpy as np
-import torch
 
 # WatChMaL imports
 from watchmal.dataset.h5_dataset import H5Dataset
@@ -129,9 +124,9 @@ class CNNmPMTDataset(H5Dataset):
         for c, (offset, scale) in self.scaling.items():
             hit_data[c] = (hit_data[c] - offset)/scale
         # Process the channels
-        data = torch.zeros((self.image_depth, self.image_height, self.image_width))
+        data = np.zeros((self.image_depth, self.image_height, self.image_width))
         for c, r in self.channel_ranges.items():
-            channel_data = from_numpy(self.process_data(self.event_hit_pmts, hit_data[c]))
+            channel_data = self.process_data(self.event_hit_pmts, hit_data[c])
             if c in self.collapse_channels:
                 channel_data = collapse_channel(channel_data)
             data[r] = channel_data
@@ -157,7 +152,7 @@ class CNNmPMTDataset(H5Dataset):
         """
         dims = {'v': [1], 'h': [2], 'b': [1, 2]}
         channel_permutation = self.flip_permutation[direction] if data.shape[0] == PMTS_PER_MPMT else slice(None)
-        return flip(data[channel_permutation, :, :], dims[direction])
+        return np.flip(data[channel_permutation, :, :], dims[direction])
 
     def horizontal_flip(self, data):
         """Perform horizontal flip of detector to each channel, permuting mPMT channels where needed"""
@@ -175,7 +170,7 @@ class CNNmPMTDataset(H5Dataset):
         mPMTs also have the appropriate permutation applied.
         """
         # Horizontal flip of the left and right halves of barrel
-        left_barrel, right_barrel = torch.tensor_split(data[self.barrel], 2, dim=2)
+        left_barrel, right_barrel = np.array_split(data[self.barrel], 2, axis=2)
         left_barrel[:] = self.image_flip(left_barrel, 'h')
         right_barrel[:] = self.image_flip(right_barrel, 'h')
         # Vertical flip of the top and bottom endcaps
@@ -194,7 +189,7 @@ class CNNmPMTDataset(H5Dataset):
         data[self.top_endcap] = self.image_flip(self.top_endcap, 'b')
         data[self.bottom_endcap] = self.image_flip(self.bottom_endcap, 'b')
         # Roll the barrel around by half the columns
-        data[self.barrel] = torch.roll(data[self.barrel], self.image_width // 2, 2)
+        data[self.barrel] = np.roll(data[self.barrel], self.image_width // 2, 2)
         return data
 
     def mpmt_padding(self, data):
@@ -204,9 +199,9 @@ class CNNmPMTDataset(H5Dataset):
         in the mPMTs permuted, to provide two 'views' of the detector in one image.
         """
         # copy the left half of the barrel (padded with zeros above and below) to the right hand side
-        left_barrel = torch.tensor_split(data[self.barrel], 2, dim=2)[0]
-        left_barrel_padded = torch.nn.functional.pad(left_barrel, (self.endcap_size, self.endcap_size, 0, 0))
-        padded_data = torch.cat((data, left_barrel_padded), dim=2)
+        left_barrel = np.array_split(data[self.barrel], 2, axis=2)[0]
+        left_barrel_padded = np.pad(left_barrel, ((0, 0), (self.endcap_size, self.endcap_size), (0, 0)))
+        padded_data = np.concatenate((data, left_barrel_padded), dim=2)
         # copy 180-deg rotated end-caps to the appropriate place
         endcap_copy_left = data.shape[2] - (self.endcap_size // 2)
         endcap_copy_right = endcap_copy_left + self.endcap_size
@@ -239,22 +234,17 @@ class CNNmPMTDataset(H5Dataset):
         bottom_endcap_copy = self.image_flip(data[self.bottom_endcap], 'b')
         # Roll the tensor so that the first quarter is the last quarter
         quarter_barrel_width = self.image_width // 4
-        data = torch.roll(data, -quarter_barrel_width, 2)
+        data = np.roll(data, -quarter_barrel_width, 2)
         # Paste the copied flipped endcaps a quarter barrel-width from the end
         endcap_copy_left = -quarter_barrel_width - (self.endcap_size // 2)
         endcap_copy_right = endcap_copy_left + self.endcap_size
         data[..., :self.endcap_size, endcap_copy_left:endcap_copy_right] = top_endcap_copy
         data[..., -self.endcap_size:, endcap_copy_left:endcap_copy_right] = bottom_endcap_copy
         # Rotate the bottom and top halves of barrel and concatenate to the top and bottom of the image
-        barrel_bottom_flipped, barrel_top_flipped = torch.tensor_split(self.image_flip(data[self.barrel], 'b'), 2, dim=1)
-        return torch.cat((barrel_top_flipped, data, barrel_bottom_flipped), dim=1)
+        barrel_bottom_flipped, barrel_top_flipped = np.array_split(self.image_flip(data[self.barrel], 'b'), 2, axis=1)
+        return np.concatenate((barrel_top_flipped, data, barrel_bottom_flipped), axis=1)
 
 
 def collapse_channel(hit_data):
-    """
-    Replaces 19 channels for the 19 PMTs within mPMT with two channels corresponding to their mean and stdev.
-    """
-    mean_channel = torch.mean(hit_data, 0, keepdim=True)
-    std_channel = torch.std(hit_data, 0, keepdim=True)
-    hit_data = torch.cat((mean_channel, std_channel), 0)
-    return hit_data
+    """Replaces 19 channels for the 19 PMTs within mPMT with two channels corresponding to their mean and stdev."""
+    return np.stack((np.mean(hit_data, axis=0), np.std(hit_data, axis=0)))

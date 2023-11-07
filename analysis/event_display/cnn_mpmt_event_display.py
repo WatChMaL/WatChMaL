@@ -5,7 +5,6 @@ import numpy as np
 from analysis.event_display.event_display import plot_event_2d, plot_event_3d
 from watchmal.dataset.cnn_mpmt.cnn_mpmt_dataset import CNNmPMTDataset
 from matplotlib.pyplot import cm
-import torch
 
 
 def channel_position_offset(channel):
@@ -94,8 +93,7 @@ class CNNmPMTEventDisplay(CNNmPMTDataset):
         """
         rows = self.mpmt_positions[:, 0]
         columns = self.mpmt_positions[:, 1]
-        data = torch.Tensor(data)
-        mpmt_locations = torch.zeros_like(data, dtype=bool)  # fill a data-like array with False
+        mpmt_locations = np.zeros_like(data, dtype=bool)  # fill a data-like array with False
         mpmt_locations[18, rows, columns] = True  # replace channel 18 with True where there is an actual mPMT
         if transformations is not None:
             data = self.apply_transformation(transformations, data)
