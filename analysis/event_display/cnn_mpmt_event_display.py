@@ -220,7 +220,7 @@ class CNNmPMTEventDisplay(CNNmPMTDataset):
         data_coordinates = pmt_coordinates[self.event_hit_pmts, :]
         unhit_coordinates = np.delete(pmt_coordinates, self.event_hit_pmts, axis=0)
         hit_data = {"charge": self.event_hit_charges, "time": self.event_hit_times}
-        data = hit_data[channel]
+        data = np.array(hit_data[channel])
         return plot_event_3d(data, data_coordinates, unhit_coordinates, **kwargs)
 
     def plot_geometry(self, geometry_file_path, plot=('x', 'y', 'z'), view='2d', **kwargs):
