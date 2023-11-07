@@ -104,7 +104,7 @@ class CNNmPMTEventDisplay(CNNmPMTDataset):
         mpmt_coordinates = coordinates[mpmt_locations.flatten()]  # the coordinates of where the actual mPMTs are
         return plot_event_2d(data_nan.flatten(), coordinates, mpmt_coordinates, **kwargs)
 
-    def plot_event_2d(self, event, transformations=None, **kwargs):
+    def plot_event_2d(self, event, channel=None, transformations=None, **kwargs):
         """
         Plots an event as a 2D event-display-like image.
 
@@ -112,6 +112,8 @@ class CNNmPMTEventDisplay(CNNmPMTDataset):
         ----------
         event : int
             index of the event to plot
+        channel : str
+            Name of the channel to plot. By default, plots whatever is provided by the dataset.
         transformations : function or str or sequence of function or str, optional
             Transformation function, or the name of a method of this class, or a sequence of functions or method names
             to apply to the event data, such as those used for augmentation.
@@ -139,6 +141,8 @@ class CNNmPMTEventDisplay(CNNmPMTDataset):
         ax: matplotlib.axes.Axes
         """
         data = self[event]['data']
+        if channel is not None:
+            data = data[self.channel_ranges[channel]]
         return self.plot_data_2d(data, transformations=transformations, **kwargs)
 
     def apply_transformation(self, transformation, data):
@@ -167,7 +171,7 @@ class CNNmPMTEventDisplay(CNNmPMTDataset):
                 data = self.apply_transformation(t, data)
             return data
 
-    def plot_event_3d(self, event, geometry_file_path, **kwargs):
+    def plot_event_3d(self, event, geometry_file_path, channel="charge", **kwargs):
         """
         Plots an event as a 3D event-display-like image.
 
@@ -177,6 +181,8 @@ class CNNmPMTEventDisplay(CNNmPMTDataset):
             index of the event to plot
         geometry_file_path : str
             path to the file containing 3D geometry of detector
+        channel : str
+            Name of the channel to plot. By default, plot charge.
         kwargs : optional
             Additional arguments to pass to `analysis.event_display.plot_event_3d`
             Valid arguments are:
@@ -213,7 +219,8 @@ class CNNmPMTEventDisplay(CNNmPMTDataset):
         pmt_coordinates = geo_file['position']
         data_coordinates = pmt_coordinates[self.event_hit_pmts, :]
         unhit_coordinates = np.delete(pmt_coordinates, self.event_hit_pmts, axis=0)
-        data = np.array(self.event_hit_charges)
+        hit_data = {"charge": self.event_hit_charges, "time": self.event_hit_times}
+        data = hit_data[channel]
         return plot_event_3d(data, data_coordinates, unhit_coordinates, **kwargs)
 
     def plot_geometry(self, geometry_file_path, plot=('x', 'y', 'z'), view='2d', **kwargs):
