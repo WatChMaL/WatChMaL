@@ -151,7 +151,7 @@ class CNNmPMTDataset(H5Dataset):
             The direction to flip the data, 'h' for horizontal, 'v' for vertical, or 'b' for a 180-deg rotation
         """
         dims = {'v': [1], 'h': [2], 'b': [1, 2]}
-        channel_permutation = self.flip_permutation[direction] if data.shape[0] == PMTS_PER_MPMT else slice(None)
+        channel_permutation = self.flip_permutation[direction]
         return np.flip(data[channel_permutation, :, :], dims[direction])
 
     def horizontal_flip(self, data):
