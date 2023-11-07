@@ -234,21 +234,20 @@ class CNNmPMTDataset(H5Dataset):
                              ONMXWVUSTRQP
         ```
         """
-        # Step - 1 : Roll the tensor so that the first quarter is the last quarter
+        # Make copies of the endcaps, flipped, to use later
+        top_endcap_copy = self.image_flip(data[self.top_endcap], 'b')
+        bottom_endcap_copy = self.image_flip(data[self.bottom_endcap], 'b')
+        # Roll the tensor so that the first quarter is the last quarter
         quarter_barrel_width = self.image_width // 4
-        padded_data = torch.roll(data, -quarter_barrel_width, 2)
-        # Step - 2 : Copy the endcaps and paste 3 quarters from the start, after flipping 180
-        endcap_copy_left = quarter_barrel_width - (self.endcap_size // 2)
+        data = torch.roll(data, -quarter_barrel_width, 2)
+        # Paste the copied flipped endcaps a quarter barrel-width from the end
+        endcap_copy_left = -quarter_barrel_width - (self.endcap_size // 2)
         endcap_copy_right = endcap_copy_left + self.endcap_size
-        top_endcap_copy = np.s_[..., :self.endcap_size, endcap_copy_left:endcap_copy_right]
-        bottom_endcap_copy = np.s_[..., -self.endcap_size:, endcap_copy_left:endcap_copy_right]
-        padded_data[top_endcap_copy] = self.image_flip(data[self.top_endcap], 'b')
-        padded_data[bottom_endcap_copy] = self.image_flip(data[self.bottom_endcap], 'b')
-        # Step - 3 : Rotate the bottom and top halves of barrel and concatenate to the top and bottom of the image
-        barrel_flipped = self.image_flip(data[self.barrel], 'b')
-        barrel_bottom_flipped, barrel_top_flipped = torch.tensor_split(barrel_flipped, 2, dim=1)
-        padded_data = torch.cat((barrel_bottom_flipped, padded_data, barrel_top_flipped), dim=1)
-        return padded_data
+        data[..., :self.endcap_size, endcap_copy_left:endcap_copy_right] = top_endcap_copy
+        data[..., -self.endcap_size:, endcap_copy_left:endcap_copy_right] = bottom_endcap_copy
+        # Rotate the bottom and top halves of barrel and concatenate to the top and bottom of the image
+        barrel_bottom_flipped, barrel_top_flipped = torch.tensor_split(self.image_flip(data[self.barrel], 'b'), 2, dim=1)
+        return torch.cat((barrel_top_flipped, data, barrel_bottom_flipped), dim=1)
 
 
 def collapse_channel(hit_data):
