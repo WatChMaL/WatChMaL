@@ -76,7 +76,6 @@ class CNNmPMTDataset(H5Dataset):
         self.channel_ranges = {}
         self.h_flip_permutation = []
         self.v_flip_permutation = []
-        self.rotate_permutation = {'v': np.array([], dtype=int), 'h': np.array([], dtype=int)}
         for c in channels:
             channel_depth = 2 if c in collapse_mpmt_channels else 19 if c in ("charge", "time") else 1
             self.channel_ranges[c] = range(self.image_depth, self.image_depth+channel_depth)
@@ -176,8 +175,8 @@ class CNNmPMTDataset(H5Dataset):
         detector about its axis. The channels of the PMTs within mPMTs also have the appropriate permutation applied.
         """
         # Vertical and horizontal flips of the endcaps
-        data[self.top_endcap] = self.rotate_image(self.top_endcap)
-        data[self.bottom_endcap] = self.rotate_image(self.bottom_endcap)
+        data[self.top_endcap] = self.rotate_image(data[self.top_endcap])
+        data[self.bottom_endcap] = self.rotate_image(data[self.bottom_endcap])
         # Roll the barrel around by half the columns
         data[self.barrel] = np.roll(data[self.barrel], self.image_width // 2, 2)
         return data
