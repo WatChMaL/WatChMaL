@@ -135,11 +135,9 @@ class CNNmPMTDataset(H5Dataset):
             if c in self.collapse_channels:
                 channel_data = collapse_channel(channel_data)
             data[r] = channel_data
-        # Apply random transformations for augmentation
-        data = du.apply_random_transformations(self.transforms, data)
-        # Apply "padding" transformation e.g. for double cover
-        if self.padding_type is not None:
-            data = self.padding_type(data)
+        # Apply transformations
+        for t in self.transforms:
+            data = t(data)
         data_dict["data"] = torch.from_numpy(data)
         return data_dict
 
@@ -183,6 +181,10 @@ class CNNmPMTDataset(H5Dataset):
         # Roll the barrel around by half the columns
         data[self.barrel] = np.roll(data[self.barrel], self.image_width // 2, 2)
         return data
+
+    def random_reflections(self, data):
+        """Takes CNN input data in event-display-like format and randomly reflects the detector about each axis"""
+        return du.apply_random_transformations([self.horizontal_flip, self.vertical_flip, self.rotation180], data)
 
     def mpmt_padding(self, data):
         """
