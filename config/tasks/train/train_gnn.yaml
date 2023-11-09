@@ -1,4 +1,4 @@
-epochs: 20
+epochs: 10
 
 report_interval: 100
 val_interval: 100
@@ -9,11 +9,9 @@ checkpointing: False
 data_loaders:
   train:
     split_key: train_idxs
-    batch_size: 1024
-    num_workers: 4
-    pre_transforms:
-      - random_reflections
+    batch_size: 32
+    num_workers: 8
   validation:
     split_key: val_idxs
-    batch_size: 1024
-    num_workers: 4
+    batch_size: 32
+    num_workers: 8
