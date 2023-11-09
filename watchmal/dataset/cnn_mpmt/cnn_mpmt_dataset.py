@@ -25,8 +25,7 @@ class CNNmPMTDataset(H5Dataset):
     with mPMTs arrange in an event-display-like format.
     """
 
-    def __init__(self, h5file, mpmt_positions_file, padding_type=None, transforms=None, channels=None,
-                 collapse_mpmt_channels=None, channel_scaling=None):
+    def __init__(self, h5file, mpmt_positions_file, transforms=None, channels=None, collapse_mpmt_channels=None, channel_scaling=None):
         """
         Constructs a dataset for CNN data. Event hit data is read in from the HDF5 file and the PMT charge data is
         formatted into an event-display-like image for input to a CNN. Each pixel of the image corresponds to one mPMT
@@ -58,9 +57,6 @@ class CNNmPMTDataset(H5Dataset):
         super().__init__(h5file)
 
         self.mpmt_positions = np.load(mpmt_positions_file)['mpmt_image_positions']
-        self.padding_type = None
-        if padding_type is not None:
-            self.padding_type = getattr(self, padding_type)
         self.transforms = du.get_transformations(self, transforms)
         if channels is None:
             channels = ['charge', 'time']
