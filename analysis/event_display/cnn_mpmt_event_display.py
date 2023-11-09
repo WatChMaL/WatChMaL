@@ -326,13 +326,17 @@ class CNNmPMTEventDisplay(CNNmPMTDataset):
                 fig, ax = plot_event_3d(data, pmt_coordinates, **args)
             else:
                 # plotting geometry, we always want to permute PMT channels, so save and replace the flip_permutation
-                old_flip_permutation = self.flip_permutation
-                self.flip_permutation = {"h": HORIZONTAL_FLIP_MPMT_MAP,
-                                         "v": VERTICAL_FLIP_MPMT_MAP,
-                                         "b": HORIZONTAL_FLIP_MPMT_MAP[VERTICAL_FLIP_MPMT_MAP]}
+                old_h_flip_permutation = self.h_flip_permutation
+                old_v_flip_permutation = self.v_flip_permutation
+                old_rotate_permutation = self.rotate_permutation
+                self.h_flip_permutation = HORIZONTAL_FLIP_MPMT_MAP
+                self.v_flip_permutation = VERTICAL_FLIP_MPMT_MAP
+                self.rotate_permutation = HORIZONTAL_FLIP_MPMT_MAP[VERTICAL_FLIP_MPMT_MAP]
                 data = self.process_data(pmt_ids, data_map[p])
                 fig, ax = self.plot_data_2d(data, **args)
-                self.flip_permutation = old_flip_permutation
+                self.h_flip_permutation = old_h_flip_permutation
+                self.v_flip_permutation = old_v_flip_permutation
+                self.rotate_permutation = old_rotate_permutation
             figs.append(fig)
             axes.append(ax)
         return figs, axes
