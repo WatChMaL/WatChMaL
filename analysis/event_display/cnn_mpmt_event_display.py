@@ -57,7 +57,7 @@ class CNNmPMTEventDisplay(CNNmPMTDataset):
     """
     This class extends the CNNmPMTDataset class to provide event display functionality.
     """
-    def plot_data_2d(self, data, channel=None, transformations=None, **kwargs):
+    def plot_data_2d(self, data, channel=None, transforms=None, **kwargs):
         """
         Plots CNN mPMT data as a 2D event-display-like image.
 
@@ -67,7 +67,7 @@ class CNNmPMTEventDisplay(CNNmPMTDataset):
             Array of PMT data formatted for use in CNN, i.e. with dimensions of (channels, x, y)
         channel : str
             Name of the channel to plot. By default, plots whatever is provided by the dataset.
-        transformations : function or str or sequence of function or str, optional
+        transforms : function or str or sequence of function or str, optional
             Transformation function, or the name of a method of the dataset, or a sequence of functions or method names
             to apply to the data, such as those used for augmentation.
         kwargs : optional
@@ -97,8 +97,8 @@ class CNNmPMTEventDisplay(CNNmPMTDataset):
         columns = self.mpmt_positions[:, 1]
         data_nan = np.full_like(data, np.nan)  # fill an array with nan for positions where there's no actual PMTs
         data_nan[:, rows, columns] = data[:, rows, columns]  # replace the nans with the data where there is a PMT
-        if transformations is not None:
-            data_nan = self.apply_transformation(transformations, data_nan)
+        if transforms is not None:
+            data_nan = self.apply_transform(transforms, data_nan)
         if channel is not None:
             data_nan = data_nan[self.channel_ranges[channel]]
         coordinates = coordinates_from_data(data_nan)  # coordinates corresponding to each element of the data array
@@ -106,7 +106,7 @@ class CNNmPMTEventDisplay(CNNmPMTDataset):
         mpmt_coordinates = coordinates[((~np.isnan(data_nan)) & (np.indices(data_nan.shape)[0] == 18)).flatten()]
         return plot_event_2d(data_nan.flatten(), coordinates, mpmt_coordinates, **kwargs)
 
-    def plot_event_2d(self, event, channel=None, transformations=None, **kwargs):
+    def plot_event_2d(self, event, channel=None, transforms=None, **kwargs):
         """
         Plots an event as a 2D event-display-like image.
 
@@ -116,7 +116,7 @@ class CNNmPMTEventDisplay(CNNmPMTDataset):
             index of the event to plot
         channel : str
             Name of the channel to plot. By default, plots whatever is provided by the dataset.
-        transformations : function or str or sequence of function or str, optional
+        transforms : function or str or sequence of function or str, optional
             Transformation function, or the name of a method of this class, or a sequence of functions or method names
             to apply to the event data, such as those used for augmentation.
         kwargs : optional
@@ -143,16 +143,16 @@ class CNNmPMTEventDisplay(CNNmPMTDataset):
         ax: matplotlib.axes.Axes
         """
         data = self[event]['data']
-        return self.plot_data_2d(data, channel, transformations=transformations, **kwargs)
+        return self.plot_data_2d(data, channel, transforms=transforms, **kwargs)
 
-    def apply_transformation(self, transformation, data):
+    def apply_transform(self, transform, data):
         """
-        Apply a transformation or sequence of transformations to data.
+        Apply a transformation or sequence of transforms to data.
 
         Parameters
         ----------
-        transformation : function or str or sequence of function or str, optional
-            Transformation function, or the name of a method of this class, or a sequence of functions or method names
+        transform : function or str or sequence of function or str, optional
+            Transform function, or the name of a method of this class, or a sequence of functions or method names
             to apply to the event data, such as those used for augmentation.
         data : array_like
             Array of PMT data formatted for use in CNN, i.e. with dimensions of (channels, x, y)
@@ -162,13 +162,13 @@ class CNNmPMTEventDisplay(CNNmPMTDataset):
         np.ndarray
             transformed data
         """
-        if isinstance(transformation, str):
-            transformation = getattr(self, transformation)
-        if callable(transformation):
-            return transformation(data)
+        if isinstance(transform, str):
+            transform = getattr(self, transform)
+        if callable(transform):
+            return transform(data)
         else:
-            for t in transformation:
-                data = self.apply_transformation(t, data)
+            for t in transform:
+                data = self.apply_transform(t, data)
             return data
 
     def plot_event_3d(self, event, geometry_file_path, channel="charge", **kwargs):
