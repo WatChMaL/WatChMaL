@@ -1,4 +1,7 @@
 _target_: watchmal.dataset.cnn_mpmt.cnn_mpmt_dataset.CNNmPMTDataset
 mpmt_positions_file: /data/WatChMaL/data/IWCDshort_mPMT_image_positions.npz
-collapse_arrays: False
-padding_type: double_cover
+channels: ['charge']
+transforms:
+  - double_cover
+channel_scaling:
+  time: [950, 10]

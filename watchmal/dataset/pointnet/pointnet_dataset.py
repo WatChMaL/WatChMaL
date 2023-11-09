@@ -74,7 +74,8 @@ class PointNetDataset(H5Dataset):
             data[-2, :n_hits] = self.event_hit_times[:n_hits]
         data[-1, :n_hits] = self.event_hit_charges[:n_hits]
 
-        data = du.apply_random_transformations(self.transforms, data)
+        for t in self.transforms:
+            data = t(data)
 
         data_dict["data"] = data
         return data_dict
