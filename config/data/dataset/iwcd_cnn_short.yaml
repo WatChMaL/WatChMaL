@@ -4,5 +4,4 @@ channels: ['charge']
 transforms:
   - double_cover
 channel_scaling:
-  charge: [2.634658, 6.9462004]
-  time: [1115.6687, 263.4307]
+  time: [950, 10]
