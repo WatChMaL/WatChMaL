@@ -122,12 +122,11 @@ class ReconstructionEngine(ABC):
         for name, tensor in output_dict.items():
             if self.is_distributed:
                 if self.rank == 0:
-                    global_tensor = [torch.zeros_like(tensor, device=self.device) for _ in range(self.ngpus)]
+                    tensor_list = [torch.zeros_like(tensor, device=self.device) for _ in range(self.ngpus)]
+                    torch.distributed.gather(tensor, tensor_list)
+                    global_output_dict[name] = torch.cat(tensor_list).detach().cpu().numpy()
                 else:
-                    global_tensor = None
-                torch.distributed.gather(global_tensor, tensor, 0)
-                if self.rank == 0:
-                    global_output_dict[name] = torch.cat(global_tensor).detach().cpu().numpy()
+                    torch.distributed.gather(tensor, dst=0)
             else:
                 global_output_dict[name] = tensor.detach().cpu().numpy()
         return global_output_dict
