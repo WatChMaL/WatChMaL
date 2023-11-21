@@ -370,7 +370,7 @@ class ReconstructionEngine(ABC):
         for k in eval_metrics.keys():
             eval_metrics[k] /= self.step+1
         eval_outputs["indices"] = indices.to(self.device)
-        eval_outputs["targets"] = targets
+        eval_outputs[self.truth_key] = targets
         # Gather results from all processes
         eval_metrics = self.get_synchronized_metrics(eval_metrics)
         eval_outputs = self.get_synchronized_outputs(eval_outputs)
@@ -556,12 +556,6 @@ class RegressionEngine(ReconstructionEngine):
 
         self.target = None
 
-        # placeholders for overall median and IQR values
-        self.positions_median = 0
-        self.positions_overall_IQR = []
-        self.energies_median = None
-        self.energies_IQR = None
-
     def forward(self, train=True):
         """
         Compute predictions and metrics for a batch of data
@@ -582,8 +576,8 @@ class RegressionEngine(ReconstructionEngine):
             scaled_target = self.scale_values(self.target)
             scaled_model_out = self.scale_values(model_out)
             self.loss = self.criterion(scaled_model_out, scaled_target)
-            outputs = {self.truth_key: model_out}
-            metrics = {'loss': self.loss.item()}
+            outputs = {"predicted_"+self.truth_key: model_out}
+            metrics = {'loss': self.loss}
         return outputs, metrics
 
     def scale_values(self, data):
