@@ -104,7 +104,7 @@ class ReconstructionEngine(ABC):
         for name, loader_config in loaders_config.items():
             self.data_loaders[name] = get_data_loader(**data_config, **loader_config, is_distributed=is_distributed, seed=seed)
 
-    def get_synchronized_concatenated_tensors(self, metric_dict):
+    def get_synchronized_outputs(self, metric_dict):
         """
         Gathers results from multiple processes using pytorch distributed operations for DistributedDataParallel
 
@@ -120,16 +120,19 @@ class ReconstructionEngine(ABC):
         """
         global_output_dict = {}
         for name, tensor in metric_dict.items():
-            if self.rank == 0:
-                global_tensor = [torch.zeros_like(tensor, device=self.device) for _ in range(self.ngpus)]
+            if self.is_distributed:
+                if self.rank == 0:
+                    global_tensor = [torch.zeros_like(tensor, device=self.device) for _ in range(self.ngpus)]
+                else:
+                    global_tensor = None
+                torch.distributed.gather(global_tensor, tensor, 0)
+                if self.rank == 0:
+                    global_output_dict[name] = torch.cat(global_tensor).detach().cpu().numpy()
             else:
-                global_tensor = None
-            torch.distributed.gather(global_tensor, tensor, 0)
-            if self.rank == 0:
-                global_output_dict[name] = torch.cat(global_tensor).detach().cpu().numpy()
+                global_output_dict[name] = tensor.detach().cpu().numpy()
         return global_output_dict
-    
-    def get_synchronized_mean_metrics(self, metric_dict):
+
+    def get_synchronized_metrics(self, metric_dict):
         """
         Gathers metrics from multiple processes using pytorch distributed operations for DistributedDataParallel
 
@@ -145,15 +148,18 @@ class ReconstructionEngine(ABC):
         """
         global_metric_dict = {}
         for name, tensor in zip(metric_dict.keys(), metric_dict.values()):
-            torch.distributed.reduce(tensor, 0)
-            if self.rank == 0:
-                global_metric_dict[name] = tensor.item()/self.ngpus
+            if self.is_distributed:
+                torch.distributed.reduce(tensor, 0)
+                if self.rank == 0:
+                    global_metric_dict[name] = tensor.item()/self.ngpus
+            else:
+                global_metric_dict[name] = tensor.item()
         return global_metric_dict
 
     @abstractmethod
     def forward(self, train=True):
         pass
-    
+
     def backward(self):
         """Backward pass using the loss computed for a mini-batch"""
         self.optimizer.zero_grad()  # reset accumulated gradient
@@ -302,11 +308,7 @@ class ReconstructionEngine(ABC):
 
         # record the validation stats to the csv
         val_metrics = {k: v/num_val_batches for k, v in val_metrics.items()}
-
-        if self.is_distributed:
-            val_metrics = self.get_synchronized_mean_metrics(val_metrics)
-        else:
-            val_metrics = {k: v.item() for k, v in val_metrics.items()}
+        val_metrics = self.get_synchronized_metrics(val_metrics)
 
         if self.rank == 0:
             log_entries = {"Iteration": self.iteration, "epoch": self.epoch, **val_metrics, "saved_best": False}
@@ -338,14 +340,14 @@ class ReconstructionEngine(ABC):
             self.model.eval()
 
             # Variables for the outputs
-            self.data = next(iter(self.data_loaders["test"]))['data']
-            self.target = next(iter(self.data_loaders["test"].dataset))[self.truth_key]
+            self.data = next(iter(self.data_loaders["test"]))['data'].to(self.device)
+            self.target = next(iter(self.data_loaders["test"]))[self.truth_key].to(self.device)
             # A forward run just to figure out the outputs
             outputs, metrics = self.forward(train=False)
             indices = torch.zeros((0,), device=self.device)
-            targets = torch.zeros((0, *self.target.shape), device=self.device)
-            eval_outputs = {k: torch.zeros((0, *v[0].shape), device=self.device) for k, v in outputs.items()}
-            eval_metrics = {k: torch.zeros((0, *v[0].shape), device=self.device) for k, v in metrics.items()}
+            targets = torch.zeros((0, *self.target.shape[1:]), device=self.device)
+            eval_outputs = {k: torch.zeros((0, *v.shape[1:]), device=self.device) for k, v in outputs.items()}
+            eval_metrics = {k: 0 for k, v in metrics.items()}
             # evaluation loop
             start_time = time()
             step_time = start_time
@@ -353,7 +355,7 @@ class ReconstructionEngine(ABC):
             for self.step, eval_data in enumerate(self.data_loaders["test"]):
                 # load data
                 self.data = eval_data['data'].to(self.device)
-                self.target = eval_data[self.truth_key].squeeze().to(self.device)
+                self.target = eval_data[self.truth_key].to(self.device)
                 # Run the forward procedure and output the result
                 outputs, metrics = self.forward(train=False)
                 # Add the local result to the final result
@@ -362,7 +364,7 @@ class ReconstructionEngine(ABC):
                 for k in eval_outputs.keys():
                     eval_outputs[k] = torch.cat((eval_outputs[k], outputs[k]))
                 for k in eval_metrics.keys():
-                    eval_metrics[k] = torch.cat((eval_metrics[k], metrics[k]))
+                    eval_metrics[k] += metrics[k]
                 # print the metrics at given intervals
                 if self.rank == 0 and self.step % test_config.report_interval == 0:
                     previous_step_time = step_time
@@ -372,15 +374,13 @@ class ReconstructionEngine(ABC):
                           f" Evaluation {', '.join(f'{k}: {v:.5g}' for k, v in metrics.items())},"
                           f" Step time {timedelta(seconds=average_step_time)},"
                           f" Total time {timedelta(seconds=step_time-start_time)}")
+        for k in eval_metrics.keys():
+            eval_metrics[k] /= self.step+1
         eval_outputs["indices"] = indices
         eval_outputs["targets"] = targets
-        if self.is_distributed:
-            # Gather results from all processes
-            eval_metrics = self.get_synchronized_concatenated_tensors(eval_metrics)
-            eval_outputs = self.get_synchronized_concatenated_tensors(eval_outputs)
-        else:
-            eval_metrics = {k: v.detach().cpu().numpy() for k, v in eval_metrics.items()}
-            eval_outputs = {k: v.detach().cpu().numpy() for k, v in eval_outputs.items()}
+        # Gather results from all processes
+        eval_metrics = self.get_synchronized_metrics(eval_metrics)
+        eval_outputs = self.get_synchronized_outputs(eval_outputs)
         if self.rank == 0:
             # Save overall evaluation results
             print("Saving Data...")
@@ -388,7 +388,7 @@ class ReconstructionEngine(ABC):
                 np.save(self.dirpath + k + ".npy", v)
             # Compute overall evaluation metrics
             for k, v in eval_metrics.items():
-                print(f"Average evaluation {k}: {np.mean(v)}")
+                print(f"Average evaluation {k}: {v}")
 
     def save_state(self, name=""):
         """
