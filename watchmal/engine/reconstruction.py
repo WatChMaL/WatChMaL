@@ -104,13 +104,13 @@ class ReconstructionEngine(ABC):
         for name, loader_config in loaders_config.items():
             self.data_loaders[name] = get_data_loader(**data_config, **loader_config, is_distributed=is_distributed, seed=seed)
 
-    def get_synchronized_outputs(self, metric_dict):
+    def get_synchronized_outputs(self, output_dict):
         """
         Gathers results from multiple processes using pytorch distributed operations for DistributedDataParallel
 
         Parameters
         ==========
-        metric_dict : dict of torch.Tensor
+        output_dict : dict of torch.Tensor
             Dictionary containing values that are tensor outputs of a single process.
 
         Returns
@@ -119,7 +119,7 @@ class ReconstructionEngine(ABC):
             Dictionary containing concatenated tensor values gathered from all processes
         """
         global_output_dict = {}
-        for name, tensor in metric_dict.items():
+        for name, tensor in output_dict.items():
             if self.is_distributed:
                 if self.rank == 0:
                     global_tensor = [torch.zeros_like(tensor, device=self.device) for _ in range(self.ngpus)]
@@ -332,22 +332,10 @@ class ReconstructionEngine(ABC):
     def evaluate(self, test_config):
         """Evaluate the performance of the trained model on the test set."""
         print("evaluating in directory: ", self.dirpath)
-
         # Iterate over the validation set to calculate val_loss and val_acc
         with torch.no_grad():
-
             # Set the model to evaluation mode
             self.model.eval()
-
-            # Variables for the outputs
-            self.data = next(iter(self.data_loaders["test"]))['data'].to(self.device)
-            self.target = next(iter(self.data_loaders["test"]))[self.truth_key].to(self.device)
-            # A forward run just to figure out the outputs
-            outputs, metrics = self.forward(train=False)
-            indices = torch.zeros((0,), device=self.device)
-            targets = torch.zeros((0, *self.target.shape[1:]), device=self.device)
-            eval_outputs = {k: torch.zeros((0, *v.shape[1:]), device=self.device) for k, v in outputs.items()}
-            eval_metrics = {k: 0 for k, v in metrics.items()}
             # evaluation loop
             start_time = time()
             step_time = start_time
@@ -359,12 +347,18 @@ class ReconstructionEngine(ABC):
                 # Run the forward procedure and output the result
                 outputs, metrics = self.forward(train=False)
                 # Add the local result to the final result
-                indices = torch.cat((indices, eval_data['indices']))
-                targets = torch.cat((targets, self.target))
-                for k in eval_outputs.keys():
-                    eval_outputs[k] = torch.cat((eval_outputs[k], outputs[k]))
-                for k in eval_metrics.keys():
-                    eval_metrics[k] += metrics[k]
+                if self.step == 0:
+                    indices = eval_data['indices']
+                    targets = self.target
+                    eval_outputs = outputs
+                    eval_metrics = metrics
+                else:
+                    indices = torch.cat((indices, eval_data['indices']))
+                    targets = torch.cat((targets, self.target))
+                    for k in eval_outputs.keys():
+                        eval_outputs[k] = torch.cat((eval_outputs[k], outputs[k]))
+                    for k in eval_metrics.keys():
+                        eval_metrics[k] += metrics[k]
                 # print the metrics at given intervals
                 if self.rank == 0 and self.step % test_config.report_interval == 0:
                     previous_step_time = step_time
