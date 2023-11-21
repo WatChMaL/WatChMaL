@@ -242,9 +242,9 @@ class ReconstructionEngine(ABC):
                 if self.rank == 0 and self.iteration % report_interval == 0:
                     previous_iteration_time = iteration_time
                     iteration_time = time()
-                    print(f"Iteration {self.iteration}, Epoch {self.epoch}/{epochs}, Step {self.step}/{steps_per_epoch}"
-                          f" Training {', '.join(f'{k}: {v}' for k, v in metrics.items())}, Time Elapsed"
-                          f" {iteration_time - start_time}, Iteration Time {iteration_time - previous_iteration_time}")
+                    print(f"Iteration {self.iteration}, Epoch {self.epoch+1}/{epochs}, Step {self.step}/{steps_per_epoch}"
+                          f" Training {', '.join(f'{k}: {v:.5g}' for k, v in metrics.items())}, Time Elapsed"
+                          f" {iteration_time - start_time:.1f}s, Iteration Time {iteration_time - previous_iteration_time:.1f}s")
 
             if self.scheduler is not None:
                 self.scheduler.step()
@@ -294,8 +294,6 @@ class ReconstructionEngine(ABC):
                     val_metrics[k] += v
 
         # record the validation stats to the csv
-        for k in val_metrics.keys():
-            val_metrics[k] /= num_val_batches
         val_metrics = {k: v/num_val_batches for k, v in val_metrics.items()}
 
         if self.is_distributed:
@@ -305,7 +303,7 @@ class ReconstructionEngine(ABC):
 
         if self.rank == 0:
             log_entries = {"Iteration": self.iteration, "epoch": self.epoch, **val_metrics, "saved_best": False}
-            print(f"  Validation {', '.join(f'{k}: {v}' for k, v in val_metrics.items())}")
+            print(f"  Validation {', '.join(f'{k}: {v:.5g}' for k, v in val_metrics.items())}")
             # Save if this is the best model so far
             if val_metrics["loss"] < self.best_validation_loss:
                 self.best_validation_loss = val_metrics["loss"]
@@ -345,7 +343,7 @@ class ReconstructionEngine(ABC):
             start_time = time()
             iteration_time = start_time
             steps_per_epoch = len(self.data_loaders["test"])
-            for it, eval_data in enumerate(self.data_loaders["test"]):
+            for self.step, eval_data in enumerate(self.data_loaders["test"]):
                 # load data
                 self.data = eval_data['data'].to(self.device)
                 self.target = eval_data[self.truth_key].squeeze().to(self.device)
@@ -359,12 +357,12 @@ class ReconstructionEngine(ABC):
                 for k in eval_metrics.keys():
                     eval_metrics[k] = torch.cat((eval_metrics[k], metrics[k]))
                 # print the metrics at given intervals
-                if self.rank == 0 and it % test_config.report_interval == 0:
+                if self.rank == 0 and self.step % test_config.report_interval == 0:
                     previous_iteration_time = iteration_time
                     iteration_time = time()
-                    print(f"Iteration {self.iteration}, Step {self.step}/{steps_per_epoch}"
-                          f" Evaluation {', '.join(f'{k}: {v}' for k, v in metrics.items())}, Time Elapsed"
-                          f" {iteration_time - start_time}, Iteration Time {iteration_time - previous_iteration_time}")
+                    print(f"Step {self.step}/{steps_per_epoch}"
+                          f" Evaluation {', '.join(f'{k}: {v:.5g}' for k, v in metrics.items())}, Time Elapsed"
+                          f" {iteration_time - start_time:.1f}s, Iteration Time {iteration_time - previous_iteration_time:.1f}s")
         eval_outputs["indices"] = indices
         eval_outputs["targets"] = targets
         if self.is_distributed:
