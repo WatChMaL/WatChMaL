@@ -12,6 +12,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 # generic imports
 import numpy as np
 from time import strftime, localtime, time
+from datetime import timedelta
 
 # WatChMaL imports
 from watchmal.dataset.data_utils import get_data_loader
@@ -194,12 +195,12 @@ class ReconstructionEngine(ABC):
         val_iter = iter(self.data_loaders["validation"])
 
         # global training loop for multiple epochs
+        start_time = time()
         for self.epoch in range(epochs):
+            epoch_start_time = time()
+            step_time = epoch_start_time
             if self.rank == 0:
                 print('Epoch', self.epoch+1, 'Starting @', strftime("%Y-%m-%d %H:%M:%S", localtime()))
-
-            start_time = time()
-            iteration_time = start_time
 
             train_loader = self.data_loaders["train"]
             self.step = 0
@@ -240,11 +241,14 @@ class ReconstructionEngine(ABC):
 
                 # print the metrics at given intervals
                 if self.rank == 0 and self.iteration % report_interval == 0:
-                    previous_iteration_time = iteration_time
-                    iteration_time = time()
+                    previous_step_time = step_time
+                    step_time = time()
+                    average_step_time = (step_time - previous_step_time)/report_interval
                     print(f"Iteration {self.iteration}, Epoch {self.epoch+1}/{epochs}, Step {self.step}/{steps_per_epoch}"
-                          f" Training {', '.join(f'{k}: {v:.5g}' for k, v in metrics.items())}, Time Elapsed"
-                          f" {iteration_time - start_time:.1f}s, Iteration Time {iteration_time - previous_iteration_time:.1f}s")
+                          f" Training {', '.join(f'{k}: {v:.5g}' for k, v in metrics.items())},"
+                          f" Step time {timedelta(seconds=average_step_time)},"
+                          f" Epoch time {timedelta(seconds=step_time-epoch_start_time)}"
+                          f" Total time {timedelta(seconds=step_time-start_time)}")
 
             if self.scheduler is not None:
                 self.scheduler.step()
@@ -341,7 +345,7 @@ class ReconstructionEngine(ABC):
             eval_metrics = {k: torch.zeros((0, *v[0].shape), device=self.device) for k, v in metrics.items()}
             # evaluation loop
             start_time = time()
-            iteration_time = start_time
+            step_time = start_time
             steps_per_epoch = len(self.data_loaders["test"])
             for self.step, eval_data in enumerate(self.data_loaders["test"]):
                 # load data
@@ -358,11 +362,13 @@ class ReconstructionEngine(ABC):
                     eval_metrics[k] = torch.cat((eval_metrics[k], metrics[k]))
                 # print the metrics at given intervals
                 if self.rank == 0 and self.step % test_config.report_interval == 0:
-                    previous_iteration_time = iteration_time
-                    iteration_time = time()
+                    previous_step_time = step_time
+                    step_time = time()
+                    average_step_time = (step_time - previous_step_time)/test_config.report_interval
                     print(f"Step {self.step}/{steps_per_epoch}"
-                          f" Evaluation {', '.join(f'{k}: {v:.5g}' for k, v in metrics.items())}, Time Elapsed"
-                          f" {iteration_time - start_time:.1f}s, Iteration Time {iteration_time - previous_iteration_time:.1f}s")
+                          f" Evaluation {', '.join(f'{k}: {v:.5g}' for k, v in metrics.items())},"
+                          f" Step time {timedelta(seconds=average_step_time)},"
+                          f" Total time {timedelta(seconds=step_time-start_time)}")
         eval_outputs["indices"] = indices
         eval_outputs["targets"] = targets
         if self.is_distributed:
