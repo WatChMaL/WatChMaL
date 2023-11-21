@@ -197,9 +197,12 @@ class ReconstructionEngine(ABC):
         # global training loop for multiple epochs
         start_time = time()
         step_time = start_time
+        epoch_start_time = start_time
         for self.epoch in range(epochs):
-            epoch_start_time = time()
             if self.rank == 0:
+                if self.epoch > 0:
+                    print(f"Epoch {self.epoch} completed in {timedelta(seconds=time() - epoch_start_time)}")
+                    epoch_start_time = time()
                 print('Epoch', self.epoch+1, 'Starting @', strftime("%Y-%m-%d %H:%M:%S", localtime()))
 
             train_loader = self.data_loaders["train"]
