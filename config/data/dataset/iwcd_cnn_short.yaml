@@ -1,6 +1,6 @@
 _target_: watchmal.dataset.cnn_mpmt.cnn_mpmt_dataset.CNNmPMTDataset
 mpmt_positions_file: /data/WatChMaL/data/IWCDshort_mPMT_image_positions.npz
-channels: ['charge']
+channels: ['charge', 'time']
 transforms:
   - double_cover
 channel_scaling:
