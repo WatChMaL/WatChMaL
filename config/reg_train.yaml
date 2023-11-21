@@ -1,23 +1,23 @@
 gpu_list:
-    - 5
+  - 5
 seed: null
 dump_path: './outputs/'
 model:
-    feature_extractor:
-        num_output_channels: 3
+  feature_extractor:
+    num_output_channels: 3
 defaults:
-    - data: iwcd_electron
-    - data/dataset: iwcd_cnn_short
-    - model: regression
-    - model/feature_extractor: resnet18
-    - model/regression_alg: resnet
-    - engine: regression
-    - tasks/train: train_reg_resnet
-    - optimizers@tasks.train.optimizers: adam
-    - loss@tasks.train.loss: huber
-    - sampler@tasks.train.data_loaders.train.sampler: subset_random
-    - sampler@tasks.train.data_loaders.validation.sampler: subset_random
-    - tasks/restore_best_state: restore_best_state
-    - tasks/evaluate: test
-    - sampler@tasks.evaluate.data_loaders.test.sampler: subset_sequential
-    - _self_
+  - data: iwcd_electron
+  - data/dataset: iwcd_cnn_short
+  - model: regression
+  - model/feature_extractor: resnet18
+  - model/regression_alg: resnet
+  - engine: regression
+  - tasks/train: train_reg_resnet
+  - optimizers@tasks.train.optimizers: adam
+  - loss@tasks.train.loss: huber
+  - sampler@tasks.train.data_loaders.train.sampler: subset_random
+  - sampler@tasks.train.data_loaders.validation.sampler: subset_random
+  - tasks/restore_best_state: restore_best_state
+  - tasks/evaluate: test
+  - sampler@tasks.evaluate.data_loaders.test.sampler: subset_sequential
+  - _self_
