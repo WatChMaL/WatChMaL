@@ -3,3 +3,5 @@ truth_key: 'labels'
 label_set:
   - 0
   - 1
+  - 2
+  - 3

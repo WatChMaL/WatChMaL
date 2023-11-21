@@ -1,3 +1,0 @@
-_target_: watchmal.model.resnet-old.resnet18
-num_input_channels: 19
-num_output_channels: 128
