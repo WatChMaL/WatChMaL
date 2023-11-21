@@ -19,11 +19,14 @@ from watchmal.utils.logging_utils import CSVData
 
 from abc import ABC, abstractmethod
 
-class BaseEngine(ABC):
-    def __init__(self, model, rank, gpu, dump_path):
+
+class ReconstructionEngine(ABC):
+    def __init__(self, truth_key, model, rank, gpu, dump_path):
         """
         Parameters
         ==========
+        truth_key : string
+            Name of the key for the target values in the dictionary returned by the dataloader
         model
             nn.module object that contains the full network that the engine will use in training or evaluation.
         rank : int
@@ -42,6 +45,7 @@ class BaseEngine(ABC):
         self.rank = rank
         self.model = model
         self.device = torch.device(gpu)
+        self.truth_key = truth_key
 
         # Setup the parameters to save given the model type
         if isinstance(self.model, DDP):
@@ -56,7 +60,7 @@ class BaseEngine(ABC):
 
         # define the placeholder attributes
         self.data = None
-        self.labels = None
+        self.target = None
         self.loss = None
 
         # logging attributes
@@ -76,12 +80,10 @@ class BaseEngine(ABC):
         """Instantiate an optimizer from a hydra config."""
         self.optimizer = instantiate(optimizer_config, params=self.model_accs.parameters())
 
-
     def configure_scheduler(self, scheduler_config):
         """Instantiate a scheduler from a hydra config."""
         self.scheduler = instantiate(scheduler_config, optimizer=self.optimizer)
         print('Successfully set up Scheduler')
-
 
     def configure_data_loaders(self, data_config, loaders_config, is_distributed, seed):
         """
@@ -100,8 +102,33 @@ class BaseEngine(ABC):
         """
         for name, loader_config in loaders_config.items():
             self.data_loaders[name] = get_data_loader(**data_config, **loader_config, is_distributed=is_distributed, seed=seed)
+
+    def get_synchronized_concatenated_tensors(self, metric_dict):
+        """
+        Gathers results from multiple processes using pytorch distributed operations for DistributedDataParallel
+
+        Parameters
+        ==========
+        metric_dict : dict of torch.Tensor
+            Dictionary containing values that are tensor outputs of a single process.
+
+        Returns
+        =======
+        global_output_dict : dict of torch.Tensor
+            Dictionary containing concatenated tensor values gathered from all processes
+        """
+        global_output_dict = {}
+        for name, tensor in metric_dict.items():
+            if self.rank == 0:
+                global_tensor = [torch.zeros_like(tensor, device=self.device) for _ in range(self.ngpus)]
+            else:
+                global_tensor = None
+            torch.distributed.gather(global_tensor, tensor, 0)
+            if self.rank == 0:
+                global_output_dict[name] = torch.cat(global_tensor).detach().cpu().numpy()
+        return global_output_dict
     
-    def get_synchronized_metrics(self, metric_dict):
+    def get_synchronized_mean_metrics(self, metric_dict):
         """
         Gathers metrics from multiple processes using pytorch distributed operations for DistributedDataParallel
 
@@ -112,42 +139,19 @@ class BaseEngine(ABC):
 
         Returns
         =======
-        global_metric_dict : dict of torch.Tensor
-            Dictionary containing concatenated list of tensor values gathered from all processes
+        global_metric_dict : dict
+            Dictionary containing mean of tensor values gathered from all processes
         """
         global_metric_dict = {}
-        for name, array in zip(metric_dict.keys(), metric_dict.values()):
-            tensor = torch.as_tensor(array).to(self.device)
-            global_tensor = [torch.zeros_like(tensor).to(self.device) for i in range(self.ngpus)]
-            torch.distributed.all_gather(global_tensor, tensor)
-            global_metric_dict[name] = torch.cat(global_tensor)
-        
+        for name, tensor in zip(metric_dict.keys(), metric_dict.values()):
+            torch.distributed.reduce(tensor, 0)
+            if self.rank == 0:
+                global_metric_dict[name] = tensor.item()/self.ngpus
         return global_metric_dict
 
+    @abstractmethod
     def forward(self, train=True):
-        """
-        Compute predictions and metrics for a batch of data.
-
-        Parameters
-        ==========
-        train : bool
-            Whether in training mode, requiring computing gradients for backpropagation
-
-        Returns
-        =======
-        dict
-            Dictionary containing loss, predicted labels, softmax, accuracy, and raw model outputs
-        """
-        with torch.set_grad_enabled(train):
-            # Move the data and the labels to the GPU (if using CPU this has no effect)
-            data = self.data.to(self.device)
-            output = self.model(data)
-            self.loss = self.criterion(self.target, output)
-
-        result = {'output': output,
-                  'loss': self.loss}
-
-        return result
+        pass
     
     def backward(self):
         """Backward pass using the loss computed for a mini-batch"""
@@ -212,11 +216,11 @@ class BaseEngine(ABC):
                     self.validate(val_iter, num_val_batches, checkpointing)
 
                 # Train on batch
-                self.data = train_data['data']
-                self.labels = train_data['labels']
+                self.data = train_data['data'].to(self.device)
+                self.target = train_data[self.truth_key].to(self.device)
 
                 # Call forward: make a prediction & measure the average error using data = self.data
-                res = self.forward(True)
+                outputs, metrics = self.forward(True)
 
                 # Call backward: backpropagate error and update weights using loss = self.loss
                 self.backward()
@@ -227,10 +231,10 @@ class BaseEngine(ABC):
                 self.iteration += 1
 
                 # get relevant attributes of result for logging
-                train_metrics = {"iteration": self.iteration, "epoch": self.epoch, "loss": res["loss"], "accuracy": res["accuracy"]}
-                
+                log_entries = {"iteration": self.iteration, "epoch": self.epoch, **metrics}
+
                 # record the metrics for the mini-batch in the log
-                self.train_log.record(train_metrics)
+                self.train_log.record(log_entries)
                 self.train_log.write()
                 self.train_log.flush()
 
@@ -238,13 +242,14 @@ class BaseEngine(ABC):
                 if self.rank == 0 and self.iteration % report_interval == 0:
                     previous_iteration_time = iteration_time
                     iteration_time = time()
-                    print("... Iteration %d ... Epoch %d ... Step %d/%d  ... Training Loss %1.3f ... Training Accuracy %1.3f ... Time Elapsed %1.3f ... Iteration Time %1.3f" %
-                          (self.iteration, self.epoch + 1, self.step, steps_per_epoch, res["loss"], res["accuracy"], iteration_time - start_time, iteration_time - previous_iteration_time))
+                    print(f"Iteration {self.iteration}, Epoch {self.epoch}/{epochs}, Step {self.step}/{steps_per_epoch}"
+                          f" Training {', '.join(f'{k}: {v}' for k, v in metrics.items())}, Time Elapsed"
+                          f" {iteration_time - start_time}, Iteration Time {iteration_time - previous_iteration_time}")
 
             if self.scheduler is not None:
                 self.scheduler.step()
 
-            if self.rank == 0 and (save_interval is not None) and ((self.epoch+1)%save_interval == 0):
+            if self.rank == 0 and (save_interval is not None) and ((self.epoch+1) % save_interval == 0):
                 self.save_state(name=f'_epoch_{self.epoch+1}')
 
         self.train_log.close()
@@ -266,7 +271,7 @@ class BaseEngine(ABC):
         """
         # set model to eval mode
         self.model.eval()
-        val_metrics = {"iteration": self.iteration, "loss": 0., "accuracy": 0., "saved_best": 0}
+        val_metrics = None
         for val_batch in range(num_val_batches):
             try:
                 val_data = next(val_iter)
@@ -277,59 +282,49 @@ class BaseEngine(ABC):
                 val_data = next(val_iter)
 
             # extract the event data from the input data tuple
-            self.data = val_data['data']
-            self.labels = val_data['labels']
+            self.data = val_data['data'].to(self.device)
+            self.target = val_data[self.truth_key].to(self.device)
 
-            val_res = self.forward(False)
+            outputs, metrics = self.forward(False)
 
-            val_metrics["loss"] += val_res["loss"]
-            val_metrics["accuracy"] += val_res["accuracy"]
-        # return model to training mode
-        self.model.train()
+            if val_metrics is None:
+                val_metrics = metrics
+            else:
+                for k, v in metrics.items():
+                    val_metrics[k] += v
 
         # record the validation stats to the csv
-        val_metrics["loss"] /= num_val_batches
-        val_metrics["accuracy"] /= num_val_batches
-        local_val_metrics = {"loss": np.array([val_metrics["loss"]]), "accuracy": np.array([val_metrics["accuracy"]])}
+        for k in val_metrics.keys():
+            val_metrics[k] /= num_val_batches
+        val_metrics = {k: v/num_val_batches for k, v in val_metrics.items()}
 
         if self.is_distributed:
-            global_val_metrics = self.get_synchronized_metrics(local_val_metrics)
-            for name, tensor in zip(global_val_metrics.keys(), global_val_metrics.values()):
-                global_val_metrics[name] = np.array(tensor.cpu())
+            val_metrics = self.get_synchronized_mean_metrics(val_metrics)
         else:
-            global_val_metrics = local_val_metrics
+            val_metrics = {k: v.item() for k, v in val_metrics.items()}
 
         if self.rank == 0:
+            log_entries = {"Iteration": self.iteration, "epoch": self.epoch, **val_metrics, "saved_best": False}
+            print(f"  Validation {', '.join(f'{k}: {v}' for k, v in val_metrics.items())}")
             # Save if this is the best model so far
-            global_val_loss = np.mean(global_val_metrics["loss"])
-            global_val_accuracy = np.mean(global_val_metrics["accuracy"])
-
-            val_metrics["loss"] = global_val_loss
-            val_metrics["accuracy"] = global_val_accuracy
-            val_metrics["epoch"] = self.epoch
-
             if val_metrics["loss"] < self.best_validation_loss:
                 self.best_validation_loss = val_metrics["loss"]
-                print('best validation loss so far!: {}'.format(self.best_validation_loss))
+                print(f"  Best validation loss so far!: {self.best_validation_loss}")
                 self.save_state("BEST")
-                val_metrics["saved_best"] = 1
-
+                log_entries["saved_best"] = True
             # Save the latest model if checkpointing
             if checkpointing:
                 self.save_state()
-
-            self.val_log.record(val_metrics)
+            self.val_log.record(log_entries)
             self.val_log.write()
             self.val_log.flush()
+
+        # return model to training mode
+        self.model.train()
 
     def evaluate(self, test_config):
         """Evaluate the performance of the trained model on the test set."""
         print("evaluating in directory: ", self.dirpath)
-
-        # Variables to output at the end
-        eval_loss = 0.0
-        eval_acc = 0.0
-        eval_iterations = 0
 
         # Iterate over the validation set to calculate val_loss and val_acc
         with torch.no_grad():
@@ -338,97 +333,55 @@ class BaseEngine(ABC):
             self.model.eval()
 
             # Variables for the outputs
-            # TODO: find some way of determining the softmax_shape without having to do a forward run
             self.data = next(iter(self.data_loaders["test"]))['data']
-            self.labels = next(iter(self.data_loaders["test"].dataset))['labels']
-            softmax_shape = self.forward(train=False)['softmax'][0].shape
-            indices = np.zeros((0,))
-            labels = np.zeros((0,))
-            predictions = np.zeros((0,))
-            softmaxes = np.zeros((0, *softmax_shape))
-
+            self.target = next(iter(self.data_loaders["test"].dataset))[self.truth_key]
+            # A forward run just to figure out the outputs
+            outputs, metrics = self.forward(train=False)
+            indices = torch.zeros((0,), device=self.device)
+            targets = torch.zeros((0, *self.target.shape), device=self.device)
+            eval_outputs = {k: torch.zeros((0, *v[0].shape), device=self.device) for k, v in outputs.items()}
+            eval_metrics = {k: torch.zeros((0, *v[0].shape), device=self.device) for k, v in metrics.items()}
+            # evaluation loop
             start_time = time()
             iteration_time = start_time
-
-            # Extract the event data and label from the DataLoader iterator
             steps_per_epoch = len(self.data_loaders["test"])
             for it, eval_data in enumerate(self.data_loaders["test"]):
-
                 # load data
-                self.data = eval_data['data']
-                self.labels = eval_data['labels']
-
-                eval_indices = eval_data['indices']
-
+                self.data = eval_data['data'].to(self.device)
+                self.target = eval_data[self.truth_key].squeeze().to(self.device)
                 # Run the forward procedure and output the result
-                result = self.forward(train=False)
-
-                eval_loss += result['loss']
-                eval_acc  += result['accuracy']
-
+                outputs, metrics = self.forward(train=False)
                 # Add the local result to the final result
-                indices = np.concatenate((indices, eval_indices))
-                labels = np.concatenate((labels, self.labels))
-                predictions = np.concatenate((predictions, result['predicted_labels'].detach().cpu().numpy()))
-                softmaxes = np.concatenate((softmaxes, result['softmax'].detach().cpu().numpy()))
-
-                eval_iterations += 1
-
+                indices = torch.cat((indices, eval_data['indices']))
+                targets = torch.cat((targets, self.target))
+                for k in eval_outputs.keys():
+                    eval_outputs[k] = torch.cat((eval_outputs[k], outputs[k]))
+                for k in eval_metrics.keys():
+                    eval_metrics[k] = torch.cat((eval_metrics[k], metrics[k]))
                 # print the metrics at given intervals
                 if self.rank == 0 and it % test_config.report_interval == 0:
                     previous_iteration_time = iteration_time
                     iteration_time = time()
-                    print("... Iteration %d / %d ... Evaluation Loss %1.3f ... Evaluation Accuracy %1.3f ... Time Elapsed %1.3f ... Iteration Time %1.3f" %
-                          (it, steps_per_epoch, result['loss'], result['accuracy'], iteration_time - start_time, iteration_time - previous_iteration_time))
-
-        print("loss : " + str(eval_loss / eval_iterations) + " accuracy : " + str(eval_acc/eval_iterations))
-
-        iterations = np.array([eval_iterations])
-        loss = np.array([eval_loss])
-        accuracy = np.array([eval_acc])
-
-        local_eval_metrics_dict = {"eval_iterations": iterations, "eval_loss": loss, "eval_acc": accuracy}
-
-        indices     = np.array(indices)
-        labels      = np.array(labels)
-        predictions = np.array(predictions)
-        softmaxes   = np.array(softmaxes)
-
-        local_eval_results_dict = {"indices": indices, "labels": labels, "predictions": predictions, "softmaxes": softmaxes}
-
+                    print(f"Iteration {self.iteration}, Step {self.step}/{steps_per_epoch}"
+                          f" Evaluation {', '.join(f'{k}: {v}' for k, v in metrics.items())}, Time Elapsed"
+                          f" {iteration_time - start_time}, Iteration Time {iteration_time - previous_iteration_time}")
+        eval_outputs["indices"] = indices
+        eval_outputs["targets"] = targets
         if self.is_distributed:
             # Gather results from all processes
-            global_eval_metrics_dict = self.get_synchronized_metrics(local_eval_metrics_dict)
-            global_eval_results_dict = self.get_synchronized_metrics(local_eval_results_dict)
-
-            if self.rank == 0:
-                for name, tensor in zip(global_eval_metrics_dict.keys(), global_eval_metrics_dict.values()):
-                    local_eval_metrics_dict[name] = np.array(tensor.cpu())
-
-                indices     = global_eval_results_dict["indices"].cpu()
-                labels      = global_eval_results_dict["labels"].cpu()
-                predictions = global_eval_results_dict["predictions"].cpu()
-                softmaxes   = global_eval_results_dict["softmaxes"].cpu()
-
+            eval_metrics = self.get_synchronized_concatenated_tensors(eval_metrics)
+            eval_outputs = self.get_synchronized_concatenated_tensors(eval_outputs)
+        else:
+            eval_metrics = {k: v.detach().cpu().numpy() for k, v in eval_metrics.items()}
+            eval_outputs = {k: v.detach().cpu().numpy() for k, v in eval_outputs.items()}
         if self.rank == 0:
-
             # Save overall evaluation results
             print("Saving Data...")
-            np.save(self.dirpath + "indices.npy", indices)
-            np.save(self.dirpath + "labels.npy", labels)
-            np.save(self.dirpath + "predictions.npy", predictions)
-            np.save(self.dirpath + "softmax.npy", softmaxes)
-
+            for k, v in eval_outputs.items():
+                np.save(self.dirpath + k + ".npy", v)
             # Compute overall evaluation metrics
-            val_iterations = np.sum(local_eval_metrics_dict["eval_iterations"])
-            val_loss = np.sum(local_eval_metrics_dict["eval_loss"])
-            val_acc = np.sum(local_eval_metrics_dict["eval_acc"])
-
-            print("\nAvg eval loss : " + str(val_loss / val_iterations),
-                  "\nAvg eval acc : "  + str(val_acc / val_iterations))
-
-    # ========================================================================
-    # Saving and loading models
+            for k, v in eval_metrics.items():
+                print(f"Average evaluation {k}: {np.mean(v)}")
 
     def save_state(self, name=""):
         """
@@ -449,10 +402,7 @@ class BaseEngine(ABC):
             print("Attempted to save state, but not rank 0! NOT saving state!")
             return
 
-        filename = "{}{}{}{}".format(self.dirpath,
-                                     str(self.model._get_name()),
-                                     name,
-                                     ".pth")
+        filename = f"{self.dirpath}{str(self.model._get_name())}{name}.pth"
 
         # Save model state dict in appropriate from depending on number of gpus
         model_dict = self.model_accs.state_dict()
@@ -470,12 +420,7 @@ class BaseEngine(ABC):
 
     def restore_best_state(self, placeholder):
         """Restore model using best model found in current directory."""
-        best_validation_path = "{}{}{}{}".format(self.dirpath,
-                                     str(self.model._get_name()),
-                                     "BEST",
-                                     ".pth")
-
-        self.restore_state_from_file(best_validation_path)
+        self.restore_state_from_file(f"{self.dirpath}{str(self.model._get_name())}BEST.pth")
 
     def restore_state(self, restore_config):
         """Restore model and training state from a file given in the `weight_file` entry of the config."""
@@ -507,3 +452,140 @@ class BaseEngine(ABC):
             self.iteration = checkpoint['global_step']
 
         print('Restoration complete.')
+
+
+class ClassifierEngine(ReconstructionEngine):
+    """Engine for performing training or evaluation for a classification network."""
+    def __init__(self, truth_key, model, rank, gpu, dump_path, label_set=None):
+        """
+        Parameters
+        ==========
+        truth_key : string
+            Name of the key for the target labels in the dictionary returned by the dataloader
+        model
+            nn.module object that contains the full network that the engine will use in training or evaluation.
+        rank : int
+            The rank of process among all spawned processes (in multiprocessing mode).
+        gpu : int
+            The gpu that this process is running on.
+        dump_path : string
+            The path to store outputs in.
+        label_set : sequence
+            The set of possible labels to classify (if None, which is the default, then class labels in the data must be
+            0 to N).
+        """
+        # create the directory for saving the log and dump files
+        super().__init__(truth_key, model, rank, gpu, dump_path)
+
+        self.softmax = torch.nn.Softmax(dim=1)
+        self.label_set = label_set
+
+    def configure_data_loaders(self, data_config, loaders_config, is_distributed, seed):
+        """
+        Set up data loaders from loaders hydra configs for the data config, and a list of data loader configs.
+
+        Parameters
+        ==========
+        data_config
+            Hydra config specifying dataset.
+        loaders_config
+            Hydra config specifying a list of dataloaders.
+        is_distributed : bool
+            Whether running in multiprocessing mode.
+        seed : int
+            Random seed to use to initialize dataloaders.
+        """
+        super().configure_data_loaders(data_config, loaders_config, is_distributed, seed)
+        if self.label_set is not None:
+            for name in loaders_config.keys():
+                self.data_loaders[name].dataset.map_labels(self.label_set)
+
+    def forward(self, train=True):
+        """
+        Compute predictions and metrics for a batch of data.
+
+        Parameters
+        ==========
+        train : bool
+            Whether in training mode, requiring computing gradients for backpropagation
+
+        Returns
+        =======
+        dict
+            Dictionary containing loss, predicted labels, softmax, accuracy, and raw model outputs
+        """
+        with torch.set_grad_enabled(train):
+            # Move the data and the labels to the GPU (if using CPU this has no effect)
+            model_out = self.model(self.data)
+            softmax = self.softmax(model_out)
+            predicted_labels = torch.argmax(model_out, dim=-1)
+            self.loss = self.criterion(model_out, self.target)
+            accuracy = (predicted_labels == self.target).sum() / float(predicted_labels.nelement())
+            outputs = {'softmax': softmax}
+            metrics = {'loss': self.loss,
+                       'accuracy': accuracy}
+        return outputs, metrics
+
+
+class RegressionEngine(ReconstructionEngine):
+    """Engine for performing training or evaluation for a regression network."""
+    def __init__(self, truth_key, model, rank, gpu, dump_path, output_center=0, output_scale=1):
+        """
+        Parameters
+        ==========
+        truth_key : string
+            Name of the key for the target values in the dictionary returned by the dataloader
+        model
+            nn.module object that contains the full network that the engine will use in training or evaluation.
+        rank : int
+            The rank of process among all spawned processes (in multiprocessing mode).
+        gpu : int
+            The gpu that this process is running on.
+        dump_path : string
+            The path to store outputs in.
+        output_center : float
+            Value to subtract from target values
+        output_scale : float
+            Value to divide target values by
+        """
+        # create the directory for saving the log and dump files
+        super().__init__(truth_key, model, rank, gpu, dump_path)
+
+        self.output_center = output_center
+        self.output_scale = output_scale
+
+        self.target = None
+
+        # placeholders for overall median and IQR values
+        self.positions_median = 0
+        self.positions_overall_IQR = []
+        self.energies_median = None
+        self.energies_IQR = None
+
+    def forward(self, train=True):
+        """
+        Compute predictions and metrics for a batch of data
+
+        Parameters
+        ==========
+        train : bool
+            Whether in training mode, requiring computing gradients for backpropagation
+
+        Returns
+        =======
+        dict
+            Dictionary containing loss and predicted values
+        """
+        with torch.set_grad_enabled(train):
+            # Move the data and the labels to the GPU (if using CPU this has no effect)
+            model_out = self.model(self.data).reshape(self.target.shape)
+            scaled_target = self.scale_values(self.target)
+            scaled_model_out = self.scale_values(model_out)
+            self.loss = self.criterion(scaled_model_out, scaled_target)
+            outputs = {self.truth_key: model_out}
+            metrics = {'loss': self.loss.item()}
+        return outputs, metrics
+
+    def scale_values(self, data):
+        scaled = (data - self.output_center) / self.output_scale
+        return scaled

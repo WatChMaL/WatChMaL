@@ -1,2 +1,2 @@
-_target_: watchmal.engine.engine_regression.RegressionEngine
-output_type: 'positions'
+_target_: watchmal.engine.reconstruction.RegressionEngine
+truth_key: 'positions'
