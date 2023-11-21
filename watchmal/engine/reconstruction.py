@@ -369,7 +369,7 @@ class ReconstructionEngine(ABC):
                           f" Total time {timedelta(seconds=step_time-start_time)}")
         for k in eval_metrics.keys():
             eval_metrics[k] /= self.step+1
-        eval_outputs["indices"] = indices
+        eval_outputs["indices"] = indices.to(self.device)
         eval_outputs["targets"] = targets
         # Gather results from all processes
         eval_metrics = self.get_synchronized_metrics(eval_metrics)
