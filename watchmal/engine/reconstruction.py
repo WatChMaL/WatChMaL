@@ -316,7 +316,7 @@ class ReconstructionEngine(ABC):
             if val_metrics["loss"] < self.best_validation_loss:
                 self.best_validation_loss = val_metrics["loss"]
                 print(f"  Best validation loss so far!: {self.best_validation_loss}")
-                self.save_state("BEST")
+                self.save_state("_BEST")
                 log_entries["saved_best"] = True
             # Save the latest model if checkpointing
             if checkpointing:
@@ -390,7 +390,7 @@ class ReconstructionEngine(ABC):
         Parameters
         ==========
         suffix : string
-            The suffix for the filename. Should be "BEST" for saving the best validation state.
+            The suffix for the filename. Should be "_BEST" for saving the best validation state.
         name : string
             The name for the filename. By default, use the engine class name followed by model class name.
 
@@ -425,7 +425,7 @@ class ReconstructionEngine(ABC):
         """Restore model using best model found in current directory."""
         if name is None:
             name = f"{self.__class__.__name__}_{self.module.__class__.__name__}"
-        self.restore_state_from_file(f"{self.dirpath}{name}BEST.pth")
+        self.restore_state_from_file(f"{self.dirpath}{name}_BEST.pth")
 
     def restore_state(self, restore_config):
         """Restore model and training state from a file given in the `weight_file` entry of the config."""
