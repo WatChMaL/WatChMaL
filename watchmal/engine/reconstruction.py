@@ -7,7 +7,7 @@ from hydra.utils import instantiate
 
 # torch imports
 import torch
-from torch.nn.parallel import DistributedDataParallel as DDP
+from torch.nn.parallel import DistributedDataParallel
 
 # generic imports
 import numpy as np
@@ -48,14 +48,14 @@ class ReconstructionEngine(ABC):
         self.device = torch.device(gpu)
         self.truth_key = truth_key
 
-        # Setup the parameters to save given the model type
-        if isinstance(self.model, DDP):
+        # Set up the parameters to save given the model type
+        if isinstance(self.model, DistributedDataParallel):
             self.is_distributed = True
-            self.model_accs = self.model.module
+            self.module = self.model.module
             self.ngpus = torch.distributed.get_world_size()
         else:
             self.is_distributed = False
-            self.model_accs = self.model
+            self.module = self.model
 
         self.data_loaders = {}
 
@@ -79,7 +79,7 @@ class ReconstructionEngine(ABC):
 
     def configure_optimizers(self, optimizer_config):
         """Instantiate an optimizer from a hydra config."""
-        self.optimizer = instantiate(optimizer_config, params=self.model_accs.parameters())
+        self.optimizer = instantiate(optimizer_config, params=self.module.parameters())
 
     def configure_scheduler(self, scheduler_config):
         """Instantiate a scheduler from a hydra config."""
@@ -383,14 +383,16 @@ class ReconstructionEngine(ABC):
             for k, v in eval_metrics.items():
                 print(f"Average evaluation {k}: {v}")
 
-    def save_state(self, name=""):
+    def save_state(self, suffix="", name=None):
         """
         Save model weights and other training state information to a file.
 
         Parameters
         ==========
-        name
-            Suffix for the filename. Should be "BEST" for saving the best validation state.
+        suffix : string
+            The suffix for the filename. Should be "BEST" for saving the best validation state.
+        name : string
+            The name for the filename. By default, use the engine class name followed by model class name.
 
         Returns
         =======
@@ -401,11 +403,12 @@ class ReconstructionEngine(ABC):
         if self.is_distributed and self.rank != 0:
             print("Attempted to save state, but not rank 0! NOT saving state!")
             return
-
-        filename = f"{self.dirpath}{str(self.model._get_name())}{name}.pth"
+        if name is None:
+            name = f"{self.__class__.__name__}_{self.module.__class__.__name__}"
+        filename = f"{self.dirpath}{name}{suffix}.pth"
 
         # Save model state dict in appropriate from depending on number of gpus
-        model_dict = self.model_accs.state_dict()
+        model_dict = self.module.state_dict()
 
         # Save parameters
         # 0+1) iteration counter + optimizer state => in case we want to "continue training" later
@@ -418,9 +421,11 @@ class ReconstructionEngine(ABC):
         print('Saved checkpoint as:', filename)
         return filename
 
-    def restore_best_state(self, placeholder):
+    def restore_best_state(self, name=None):
         """Restore model using best model found in current directory."""
-        self.restore_state_from_file(f"{self.dirpath}{str(self.model._get_name())}BEST.pth")
+        if name is None:
+            name = f"{self.__class__.__name__}_{self.module.__class__.__name__}"
+        self.restore_state_from_file(f"{self.dirpath}{name}BEST.pth")
 
     def restore_state(self, restore_config):
         """Restore model and training state from a file given in the `weight_file` entry of the config."""
@@ -442,7 +447,7 @@ class ReconstructionEngine(ABC):
                 checkpoint = torch.load(f, map_location=torch.device('cpu'))
 
             # load network weights
-            self.model_accs.load_state_dict(checkpoint['state_dict'])
+            self.module.load_state_dict(checkpoint['state_dict'])
 
             # if optim is provided, load the state of the optim
             if self.optimizer is not None:
