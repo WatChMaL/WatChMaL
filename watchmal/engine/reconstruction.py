@@ -274,7 +274,6 @@ class ReconstructionEngine(ABC):
                 val_data = next(val_iter)
             except StopIteration:
                 del val_iter
-                print("Fetching new validation iterator...")
                 val_iter = iter(self.data_loaders["validation"])
                 val_data = next(val_iter)
             # extract the event data and target from the input data dict
