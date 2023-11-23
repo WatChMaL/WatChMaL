@@ -4,7 +4,7 @@ Main file used for running the code
 
 # hydra imports
 import hydra
-from omegaconf import OmegaConf
+from omegaconf import OmegaConf, open_dict
 from hydra.utils import instantiate, to_absolute_path
 
 # torch imports
@@ -115,25 +115,20 @@ def main_worker_function(rank, ngpus_per_node, is_distributed, config):
     # Instantiate the engine
     engine = instantiate(config.engine, model=model, rank=rank, gpu=gpu, dump_path=config.dump_path)
     
-    # Configure data loaders
     for task, task_config in config.tasks.items():
-        if 'data_loaders' in task_config:
-            engine.configure_data_loaders(config.data, task_config.data_loaders, is_distributed, config.seed)
-    
-    # Configure optimizers
-    for task, task_config in config.tasks.items():
-        if 'optimizers' in task_config:
-            engine.configure_optimizers(task_config.optimizers)
-
-    # Configure scheduler
-    for task, task_config in config.tasks.items():
-        if 'scheduler' in task_config:
-            engine.configure_scheduler(task_config.scheduler)
-
-    # Configure loss
-    for task, task_config in config.tasks.items():
-        if 'loss' in task_config:
-            engine.configure_loss(task_config.loss)
+        with open_dict(task_config):
+            # Configure data loaders
+            if 'data_loaders' in task_config:
+                engine.configure_data_loaders(config.data, task_config.pop("data_loaders"), is_distributed, config.seed)
+            # Configure optimizers
+            if 'optimizers' in task_config:
+                engine.configure_optimizers(task_config.pop("optimizers"))
+            # Configure scheduler
+            if 'scheduler' in task_config:
+                engine.configure_scheduler(task_config.pop("scheduler"))
+            # Configure loss
+            if 'loss' in task_config:
+                engine.configure_loss(task_config.pop("loss"))
 
     # Perform tasks
     for task, task_config in config.tasks.items():
