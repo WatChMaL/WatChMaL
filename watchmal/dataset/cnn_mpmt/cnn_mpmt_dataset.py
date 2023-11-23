@@ -58,6 +58,8 @@ class CNNmPMTDataset(H5Dataset):
 
         self.mpmt_positions = np.load(mpmt_positions_file)['mpmt_image_positions']
         self.transforms = du.get_transformations(self, transforms)
+        if self.transforms is None:
+            self.transforms = []
         if channels is None:
             channels = ['charge', 'time']
         if collapse_mpmt_channels is None:
