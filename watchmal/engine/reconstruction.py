@@ -2,6 +2,12 @@
 Class for training a fully supervised classifier
 """
 
+# generic imports
+import numpy as np
+from time import strftime, localtime, time
+from datetime import timedelta
+from abc import ABC, abstractmethod
+
 # hydra imports
 from hydra.utils import instantiate
 
@@ -9,16 +15,9 @@ from hydra.utils import instantiate
 import torch
 from torch.nn.parallel import DistributedDataParallel
 
-# generic imports
-import numpy as np
-from time import strftime, localtime, time
-from datetime import timedelta
-
 # WatChMaL imports
 from watchmal.dataset.data_utils import get_data_loader
 from watchmal.utils.logging_utils import CSVData
-
-from abc import ABC, abstractmethod
 
 
 class ReconstructionEngine(ABC):
@@ -29,7 +28,7 @@ class ReconstructionEngine(ABC):
         truth_key : string
             Name of the key for the target values in the dictionary returned by the dataloader
         model
-            nn.module object that contains the full network that the engine will use in training or evaluation.
+            `nn.module` object that contains the full network that the engine will use in training or evaluation.
         rank : int
             The rank of process among all spawned processes (in multiprocessing mode).
         gpu : int
@@ -42,7 +41,7 @@ class ReconstructionEngine(ABC):
         self.step = 0
         self.iteration = 0
         self.best_validation_loss = 1.0e10
-        self.dirpath = dump_path
+        self.dump_path = dump_path
         self.rank = rank
         self.model = model
         self.device = torch.device(gpu)
@@ -52,7 +51,7 @@ class ReconstructionEngine(ABC):
         if isinstance(self.model, DistributedDataParallel):
             self.is_distributed = True
             self.module = self.model.module
-            self.ngpus = torch.distributed.get_world_size()
+            self.n_gpus = torch.distributed.get_world_size()
         else:
             self.is_distributed = False
             self.module = self.model
@@ -65,10 +64,10 @@ class ReconstructionEngine(ABC):
         self.loss = None
 
         # logging attributes
-        self.train_log = CSVData(self.dirpath + "log_train_{}.csv".format(self.rank))
+        self.train_log = CSVData(self.dump_path + "log_train_{}.csv".format(self.rank))
 
         if self.rank == 0:
-            self.val_log = CSVData(self.dirpath + "log_val.csv")
+            self.val_log = CSVData(self.dump_path + "log_val.csv")
 
         self.criterion = None
         self.optimizer = None
@@ -122,7 +121,7 @@ class ReconstructionEngine(ABC):
         for name, tensor in output_dict.items():
             if self.is_distributed:
                 if self.rank == 0:
-                    tensor_list = [torch.zeros_like(tensor, device=self.device) for _ in range(self.ngpus)]
+                    tensor_list = [torch.zeros_like(tensor, device=self.device) for _ in range(self.n_gpus)]
                     torch.distributed.gather(tensor, tensor_list)
                     global_output_dict[name] = torch.cat(tensor_list).detach().cpu().numpy()
                 else:
@@ -150,7 +149,7 @@ class ReconstructionEngine(ABC):
             if self.is_distributed:
                 torch.distributed.reduce(tensor, 0)
                 if self.rank == 0:
-                    global_metric_dict[name] = tensor.item()/self.ngpus
+                    global_metric_dict[name] = tensor.item()/self.n_gpus
             else:
                 global_metric_dict[name] = tensor.item()
         return global_metric_dict
@@ -165,40 +164,35 @@ class ReconstructionEngine(ABC):
         self.loss.backward()  # compute new gradient
         self.optimizer.step()  # step params
 
-    def train(self, train_config):
+    def train(self, epochs=0, val_interval=20, num_val_batches=4, checkpointing=False, save_interval=None):
         """
-        Train the model on the training set.
+        Train the model on the training set. The best state is always saved during training.
 
         Parameters
         ==========
-        train_config
-            Hydra config specifying training parameters
+        epochs: int
+            Number of epochs to train, default 1
+        val_interval: int
+            Number of iterations between each validation, default 20
+        num_val_batches: int
+            Number of mini-batches in each validation, default 4
+        checkpointing: bool
+            Whether to save state every validation, default False
+        save_interval: int
+            Number of epochs between each state save, by default don't save
         """
-        # initialize training params
-        epochs = train_config.epochs
-        report_interval = train_config.report_interval
-        val_interval = train_config.val_interval
-        num_val_batches = train_config.num_val_batches
-        checkpointing = train_config.checkpointing
-        save_interval = train_config.save_interval if 'save_interval' in train_config else None
-
-        # set the iterations at which to dump the events and their metrics
         if self.rank == 0:
             print(f"Training... Validation Interval: {val_interval}")
-
         # set model to training mode
         self.model.train()
-
         # initialize epoch and iteration counters
         self.epoch = 0
         self.iteration = 0
         self.step = 0
         # keep track of the validation loss
-        self.best_validation_loss = 1.0e10
-
+        self.best_validation_loss = np.inf
         # initialize the iterator over the validation set
         val_iter = iter(self.data_loaders["validation"])
-
         # global training loop for multiple epochs
         start_time = time()
         step_time = start_time
@@ -215,57 +209,48 @@ class ReconstructionEngine(ABC):
             # update seeding for distributed samplers
             if self.is_distributed:
                 train_loader.sampler.set_epoch(self.epoch)
-
             # local training loop for batches in a single epoch
             steps_per_epoch = len(train_loader)
             for self.step, train_data in enumerate(train_loader):
-
-                # run validation on given intervals
-                if self.iteration % val_interval == 0:
-                    self.validate(val_iter, num_val_batches, checkpointing)
-
                 # Train on batch
                 self.data = train_data['data'].to(self.device)
                 self.target = train_data[self.truth_key].to(self.device)
-
                 # Call forward: make a prediction & measure the average error using data = self.data
                 outputs, metrics = self.forward(True)
-
-                # Call backward: backpropagate error and update weights using loss = self.loss
+                # Call backward: back-propagate error and update weights using loss = self.loss
                 self.backward()
-
                 # update the epoch and iteration
                 # self.epoch += 1. / len(self.data_loaders["train"])
                 self.step += 1
                 self.iteration += 1
-
                 # get relevant attributes of result for logging
                 log_entries = {"iteration": self.iteration, "epoch": self.epoch, **metrics}
-
                 # record the metrics for the mini-batch in the log
                 self.train_log.record(log_entries)
                 self.train_log.write()
                 self.train_log.flush()
-
-                # print the metrics at given intervals
-                if self.rank == 0 and self.iteration % report_interval == 0:
-                    previous_step_time = step_time
-                    step_time = time()
-                    average_step_time = (step_time - previous_step_time)/report_interval
-                    print(f"Iteration {self.iteration}, Epoch {self.epoch+1}/{epochs}, Step {self.step}/{steps_per_epoch}"
-                          f" Training {', '.join(f'{k}: {v:.5g}' for k, v in metrics.items())},"
-                          f" Step time {timedelta(seconds=average_step_time)},"
-                          f" Epoch time {timedelta(seconds=step_time-epoch_start_time)}"
-                          f" Total time {timedelta(seconds=step_time-start_time)}")
-
-            if self.scheduler is not None:
-                self.scheduler.step()
-
+                # run validation on given intervals
+                if self.iteration % val_interval == 0:
+                    if self.rank == 0:
+                        previous_step_time = step_time
+                        step_time = time()
+                        average_step_time = (step_time - previous_step_time)/val_interval
+                        print(f"Iteration {self.iteration}, Epoch {self.epoch+1}/{epochs}, Step {self.step}/{steps_per_epoch}"
+                              f" Step time {timedelta(seconds=average_step_time)},"
+                              f" Epoch time {timedelta(seconds=step_time-epoch_start_time)}"
+                              f" Total time {timedelta(seconds=step_time-start_time)}")
+                        print(f"  Training   {', '.join(f'{k}: {v:.5g}' for k, v in metrics.items())},", end="")
+                    self.validate(val_iter, num_val_batches, checkpointing)
+                # run scheduler
+                if self.scheduler is not None:
+                    self.scheduler.step()
+            # save state at end of epoch
             if self.rank == 0 and (save_interval is not None) and ((self.epoch+1) % save_interval == 0):
-                self.save_state(name=f'_epoch_{self.epoch+1}')
-
+                self.save_state(suffix=f'_epoch_{self.epoch+1}')
         self.train_log.close()
         if self.rank == 0:
+            print(f"Epoch {self.epoch} completed in {timedelta(seconds=time() - epoch_start_time)}")
+            print(f"Training {epochs} epochs completed in {timedelta(seconds=time()-start_time)}")
             self.val_log.close()
 
     def validate(self, val_iter, num_val_batches, checkpointing):
@@ -285,6 +270,7 @@ class ReconstructionEngine(ABC):
         self.model.eval()
         val_metrics = None
         for val_batch in range(num_val_batches):
+            # get validation data mini-batch
             try:
                 val_data = next(val_iter)
             except StopIteration:
@@ -292,23 +278,19 @@ class ReconstructionEngine(ABC):
                 print("Fetching new validation iterator...")
                 val_iter = iter(self.data_loaders["validation"])
                 val_data = next(val_iter)
-
-            # extract the event data from the input data tuple
+            # extract the event data and target from the input data dict
             self.data = val_data['data'].to(self.device)
             self.target = val_data[self.truth_key].to(self.device)
-
+            # evaluate the network
             outputs, metrics = self.forward(False)
-
             if val_metrics is None:
                 val_metrics = metrics
             else:
                 for k, v in metrics.items():
                     val_metrics[k] += v
-
         # record the validation stats to the csv
         val_metrics = {k: v/num_val_batches for k, v in val_metrics.items()}
         val_metrics = self.get_synchronized_metrics(val_metrics)
-
         if self.rank == 0:
             log_entries = {"Iteration": self.iteration, "epoch": self.epoch, **val_metrics, "saved_best": False}
             print(f"  Validation {', '.join(f'{k}: {v:.5g}' for k, v in val_metrics.items())}")
@@ -316,7 +298,7 @@ class ReconstructionEngine(ABC):
             if val_metrics["loss"] < self.best_validation_loss:
                 self.best_validation_loss = val_metrics["loss"]
                 print(f"  Best validation loss so far!: {self.best_validation_loss}")
-                self.save_state("_BEST")
+                self.save_state(suffix="_BEST")
                 log_entries["saved_best"] = True
             # Save the latest model if checkpointing
             if checkpointing:
@@ -324,13 +306,12 @@ class ReconstructionEngine(ABC):
             self.val_log.record(log_entries)
             self.val_log.write()
             self.val_log.flush()
-
         # return model to training mode
         self.model.train()
 
-    def evaluate(self, test_config):
+    def evaluate(self, report_interval=20):
         """Evaluate the performance of the trained model on the test set."""
-        print("evaluating in directory: ", self.dirpath)
+        print("evaluating in directory: ", self.dump_path)
         # Iterate over the validation set to calculate val_loss and val_acc
         with torch.no_grad():
             # Set the model to evaluation mode
@@ -359,10 +340,10 @@ class ReconstructionEngine(ABC):
                     for k in eval_metrics.keys():
                         eval_metrics[k] += metrics[k]
                 # print the metrics at given intervals
-                if self.rank == 0 and self.step % test_config.report_interval == 0:
+                if self.rank == 0 and self.step % report_interval == 0:
                     previous_step_time = step_time
                     step_time = time()
-                    average_step_time = (step_time - previous_step_time)/test_config.report_interval
+                    average_step_time = (step_time - previous_step_time)/report_interval
                     print(f"Step {self.step}/{steps_per_epoch}"
                           f" Evaluation {', '.join(f'{k}: {v:.5g}' for k, v in metrics.items())},"
                           f" Step time {timedelta(seconds=average_step_time)},"
@@ -378,7 +359,7 @@ class ReconstructionEngine(ABC):
             # Save overall evaluation results
             print("Saving Data...")
             for k, v in eval_outputs.items():
-                np.save(self.dirpath + k + ".npy", v)
+                np.save(self.dump_path + k + ".npy", v)
             # Compute overall evaluation metrics
             for k, v in eval_metrics.items():
                 print(f"Average evaluation {k}: {v}")
@@ -399,17 +380,14 @@ class ReconstructionEngine(ABC):
         filename : string
             Filename where the saved state is saved.
         """
-
         if self.is_distributed and self.rank != 0:
             print("Attempted to save state, but not rank 0! NOT saving state!")
             return
         if name is None:
             name = f"{self.__class__.__name__}_{self.module.__class__.__name__}"
-        filename = f"{self.dirpath}{name}{suffix}.pth"
-
+        filename = f"{self.dump_path}{name}{suffix}.pth"
         # Save model state dict in appropriate from depending on number of gpus
         model_dict = self.module.state_dict()
-
         # Save parameters
         # 0+1) iteration counter + optimizer state => in case we want to "continue training" later
         # 2) network weight
@@ -425,18 +403,13 @@ class ReconstructionEngine(ABC):
         """Restore model using best model found in current directory."""
         if name is None:
             name = f"{self.__class__.__name__}_{self.module.__class__.__name__}"
-        self.restore_state_from_file(f"{self.dirpath}{name}_BEST.pth")
+        self.restore_state(f"{self.dump_path}{name}_BEST.pth")
 
-    def restore_state(self, restore_config):
-        """Restore model and training state from a file given in the `weight_file` entry of the config."""
-        self.restore_state_from_file(restore_config.weight_file)
-
-    def restore_state_from_file(self, weight_file):
+    def restore_state(self, weight_file):
         """Restore model and training state from a given filename."""
         # Open a file in read-binary mode
         with open(weight_file, 'rb') as f:
             print('Restoring state from', weight_file)
-
             # prevent loading while DDP operations are happening
             if self.is_distributed:
                 torch.distributed.barrier()
@@ -445,17 +418,13 @@ class ReconstructionEngine(ABC):
                 checkpoint = torch.load(f)
             else:
                 checkpoint = torch.load(f, map_location=torch.device('cpu'))
-
             # load network weights
             self.module.load_state_dict(checkpoint['state_dict'])
-
             # if optim is provided, load the state of the optim
             if self.optimizer is not None:
                 self.optimizer.load_state_dict(checkpoint['optimizer'])
-
             # load iteration count
             self.iteration = checkpoint['global_step']
-
         print('Restoration complete.')
 
 
@@ -468,7 +437,7 @@ class ClassifierEngine(ReconstructionEngine):
         truth_key : string
             Name of the key for the target labels in the dictionary returned by the dataloader
         model
-            nn.module object that contains the full network that the engine will use in training or evaluation.
+            `nn.module` object that contains the full network that the engine will use in training or evaluation.
         rank : int
             The rank of process among all spawned processes (in multiprocessing mode).
         gpu : int
@@ -481,7 +450,6 @@ class ClassifierEngine(ReconstructionEngine):
         """
         # create the directory for saving the log and dump files
         super().__init__(truth_key, model, rank, gpu, dump_path)
-
         self.softmax = torch.nn.Softmax(dim=1)
         self.label_set = label_set
 
@@ -541,7 +509,7 @@ class RegressionEngine(ReconstructionEngine):
         truth_key : string
             Name of the key for the target values in the dictionary returned by the dataloader
         model
-            nn.module object that contains the full network that the engine will use in training or evaluation.
+            `nn.module` object that contains the full network that the engine will use in training or evaluation.
         rank : int
             The rank of process among all spawned processes (in multiprocessing mode).
         gpu : int
@@ -555,11 +523,8 @@ class RegressionEngine(ReconstructionEngine):
         """
         # create the directory for saving the log and dump files
         super().__init__(truth_key, model, rank, gpu, dump_path)
-
         self.output_center = output_center
         self.output_scale = output_scale
-
-        self.target = None
 
     def forward(self, train=True):
         """
