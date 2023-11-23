@@ -49,7 +49,7 @@ class DistributedSamplerWrapper(DistributedSampler):
         shuffle : bool, optional
             If true sampler will shuffle the indices, false by default.
         """
-        super(DistributedSamplerWrapper, self).__init__(
+        super().__init__(
             list(sampler),
             num_replicas=num_replicas,
             rank=rank,
@@ -57,23 +57,12 @@ class DistributedSamplerWrapper(DistributedSampler):
             seed=seed
         )
         self.sampler = sampler
-        self.epoch = 0
-    
-    def set_epoch(self, epoch):
-        """Set the epoch number, used for setting the random seed so that each epoch has a different random seed."""
-        self.epoch = epoch
-    
+
     def __iter__(self):
         # fetch DistributedSampler indices
         indexes_of_indexes = super().__iter__()
-        
-        # deterministically shuffle based on epoch
-        updated_seed = self.seed + int(self.epoch)
-        torch.manual_seed(updated_seed)
-
         # fetch subsampler indices with synchronized seeding
         subsampler_indices = list(self.sampler)
-
         # get subsampler_indexes[indexes_of_indexes]
         distributed_subsampler_indices = itemgetter(*indexes_of_indexes)(subsampler_indices)
 
