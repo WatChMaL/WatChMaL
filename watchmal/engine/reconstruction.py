@@ -219,8 +219,10 @@ class ReconstructionEngine(ABC):
                 outputs, metrics = self.forward(True)
                 # Call backward: back-propagate error and update weights using loss = self.loss
                 self.backward()
+                # run scheduler
+                if self.scheduler is not None:
+                    self.scheduler.step()
                 # update the epoch and iteration
-                # self.epoch += 1. / len(self.data_loaders["train"])
                 self.step += 1
                 self.iteration += 1
                 # get relevant attributes of result for logging
@@ -241,9 +243,6 @@ class ReconstructionEngine(ABC):
                               f" Total time {timedelta(seconds=step_time-start_time)}")
                         print(f"  Training   {', '.join(f'{k}: {v:.5g}' for k, v in metrics.items())},", end="")
                     self.validate(val_iter, num_val_batches, checkpointing)
-                # run scheduler
-                if self.scheduler is not None:
-                    self.scheduler.step()
             # save state at end of epoch
             if self.rank == 0 and (save_interval is not None) and ((self.epoch+1) % save_interval == 0):
                 self.save_state(suffix=f'_epoch_{self.epoch+1}')
