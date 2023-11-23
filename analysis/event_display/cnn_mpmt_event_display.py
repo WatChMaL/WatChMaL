@@ -98,7 +98,7 @@ class CNNmPMTEventDisplay(CNNmPMTDataset):
         data_nan = np.full_like(data, np.nan)  # fill an array with nan for positions where there's no actual PMTs
         data_nan[:, rows, columns] = data[:, rows, columns]  # replace the nans with the data where there is a PMT
         if transforms is not None:
-            data_nan = self.apply_transform(transforms, {"data": data_nan})
+            data_nan = self.apply_transform(transforms, {"data": data_nan})["data"]
         if channel is not None:
             data_nan = data_nan[self.channel_ranges[channel]]
         coordinates = coordinates_from_data(data_nan)  # coordinates corresponding to each element of the data array
