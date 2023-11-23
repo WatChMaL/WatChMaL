@@ -274,6 +274,8 @@ class ReconstructionEngine(ABC):
                 val_data = next(val_iter)
             except StopIteration:
                 del val_iter
+                if self.is_distributed:
+                    self.data_loaders["validation"].sampler.set_epoch(self.data_loaders["validation"].sampler.epoch+1)
                 val_iter = iter(self.data_loaders["validation"])
                 val_data = next(val_iter)
             # extract the event data and target from the input data dict
