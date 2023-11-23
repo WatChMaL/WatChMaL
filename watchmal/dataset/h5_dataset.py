@@ -117,9 +117,9 @@ class H5CommonDataset(Dataset, ABC):
 
         data_dict = {
             "labels": self.labels[item].astype(np.int64),
-            "energies": self.energies[item],
-            "angles": self.angles[item],
-            "positions": self.positions[item],
+            "energies": self.energies[item].copy(),
+            "angles": self.angles[item].copy(),
+            "positions": self.positions[item].copy(),
             # "event_ids": self.event_ids[item],
             # "root_files": self.root_files[item],
             "indices": item
