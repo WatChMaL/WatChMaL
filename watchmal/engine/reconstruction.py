@@ -7,6 +7,7 @@ import numpy as np
 from time import strftime, localtime, time
 from datetime import timedelta
 from abc import ABC, abstractmethod
+import logging
 
 # hydra imports
 from hydra.utils import instantiate
@@ -17,7 +18,9 @@ from torch.nn.parallel import DistributedDataParallel
 
 # WatChMaL imports
 from watchmal.dataset.data_utils import get_data_loader
-from watchmal.utils.logging_utils import CSVData
+from watchmal.utils.logging_utils import CSVLog
+
+log = logging.getLogger(__name__)
 
 
 class ReconstructionEngine(ABC):
@@ -64,10 +67,10 @@ class ReconstructionEngine(ABC):
         self.loss = None
 
         # logging attributes
-        self.train_log = CSVData(self.dump_path + "log_train_{}.csv".format(self.rank))
+        self.train_log = CSVLog(self.dump_path + f"log_train_{self.rank}.csv")
 
         if self.rank == 0:
-            self.val_log = CSVData(self.dump_path + "log_val.csv")
+            self.val_log = CSVLog(self.dump_path + "log_val.csv")
 
         self.criterion = None
         self.optimizer = None
@@ -83,7 +86,6 @@ class ReconstructionEngine(ABC):
     def configure_scheduler(self, scheduler_config):
         """Instantiate a scheduler from a hydra config."""
         self.scheduler = instantiate(scheduler_config, optimizer=self.optimizer)
-        print('Successfully set up Scheduler')
 
     def configure_data_loaders(self, data_config, loaders_config, is_distributed, seed):
         """
@@ -182,7 +184,7 @@ class ReconstructionEngine(ABC):
             Number of epochs between each state save, by default don't save
         """
         if self.rank == 0:
-            print(f"Training... Validation Interval: {val_interval}")
+            log.info(f"Training {epochs} epochs with {num_val_batches}-batch validation each {val_interval} iterations")
         # set model to training mode
         self.model.train()
         # initialize epoch and iteration counters
@@ -200,9 +202,9 @@ class ReconstructionEngine(ABC):
         for self.epoch in range(epochs):
             if self.rank == 0:
                 if self.epoch > 0:
-                    print(f"Epoch {self.epoch} completed in {timedelta(seconds=time() - epoch_start_time)}")
+                    log.info(f"Epoch {self.epoch} completed in {timedelta(seconds=time() - epoch_start_time)}")
                     epoch_start_time = time()
-                print('Epoch', self.epoch+1, 'Starting @', strftime("%Y-%m-%d %H:%M:%S", localtime()))
+                log.info('Epoch', self.epoch+1, 'Starting @', strftime("%Y-%m-%d %H:%M:%S", localtime()))
 
             train_loader = self.data_loaders["train"]
             self.step = 0
@@ -228,9 +230,7 @@ class ReconstructionEngine(ABC):
                 # get relevant attributes of result for logging
                 log_entries = {"iteration": self.iteration, "epoch": self.epoch, **metrics}
                 # record the metrics for the mini-batch in the log
-                self.train_log.record(log_entries)
-                self.train_log.write()
-                self.train_log.flush()
+                self.train_log.log(log_entries)
                 # run validation on given intervals
                 if self.iteration % val_interval == 0:
                     if self.rank == 0:
@@ -248,8 +248,8 @@ class ReconstructionEngine(ABC):
                 self.save_state(suffix=f'_epoch_{self.epoch+1}')
         self.train_log.close()
         if self.rank == 0:
-            print(f"Epoch {self.epoch} completed in {timedelta(seconds=time() - epoch_start_time)}")
-            print(f"Training {epochs} epochs completed in {timedelta(seconds=time()-start_time)}")
+            log.info(f"Epoch {self.epoch} completed in {timedelta(seconds=time() - epoch_start_time)}")
+            log.info(f"Training {epochs} epochs completed in {timedelta(seconds=time()-start_time)}")
             self.val_log.close()
 
     def validate(self, val_iter, num_val_batches, checkpointing):
@@ -297,21 +297,19 @@ class ReconstructionEngine(ABC):
             # Save if this is the best model so far
             if val_metrics["loss"] < self.best_validation_loss:
                 self.best_validation_loss = val_metrics["loss"]
-                print(f"  Best validation loss so far!: {self.best_validation_loss}")
+                log.info(f"Best validation loss so far!: {self.best_validation_loss}")
                 self.save_state(suffix="_BEST")
                 log_entries["saved_best"] = True
             # Save the latest model if checkpointing
             if checkpointing:
                 self.save_state()
-            self.val_log.record(log_entries)
-            self.val_log.write()
-            self.val_log.flush()
+            self.val_log.log(log_entries)
         # return model to training mode
         self.model.train()
 
     def evaluate(self, report_interval=20):
         """Evaluate the performance of the trained model on the test set."""
-        print("evaluating in directory: ", self.dump_path)
+        log.info("Evaluating, output to directory: ", self.dump_path)
         # Iterate over the validation set to calculate val_loss and val_acc
         with torch.no_grad():
             # Set the model to evaluation mode
@@ -357,12 +355,12 @@ class ReconstructionEngine(ABC):
         eval_outputs = self.get_synchronized_outputs(eval_outputs)
         if self.rank == 0:
             # Save overall evaluation results
-            print("Saving Data...")
+            log.info("Saving Data...")
             for k, v in eval_outputs.items():
                 np.save(self.dump_path + k + ".npy", v)
             # Compute overall evaluation metrics
             for k, v in eval_metrics.items():
-                print(f"Average evaluation {k}: {v}")
+                log.info(f"Average evaluation {k}: {v}")
 
     def save_state(self, suffix="", name=None):
         """
@@ -380,9 +378,6 @@ class ReconstructionEngine(ABC):
         filename : string
             Filename where the saved state is saved.
         """
-        if self.is_distributed and self.rank != 0:
-            print("Attempted to save state, but not rank 0! NOT saving state!")
-            return
         if name is None:
             name = f"{self.__class__.__name__}_{self.module.__class__.__name__}"
         filename = f"{self.dump_path}{name}{suffix}.pth"
@@ -396,7 +391,7 @@ class ReconstructionEngine(ABC):
             'optimizer': self.optimizer.state_dict(),
             'state_dict': model_dict
         }, filename)
-        print('Saved checkpoint as:', filename)
+        log.info('Saved state as:', filename)
         return filename
 
     def restore_best_state(self, name=None):
@@ -409,7 +404,7 @@ class ReconstructionEngine(ABC):
         """Restore model and training state from a given filename."""
         # Open a file in read-binary mode
         with open(weight_file, 'rb') as f:
-            print('Restoring state from', weight_file)
+            log.info('Restoring state from', weight_file)
             # prevent loading while DDP operations are happening
             if self.is_distributed:
                 torch.distributed.barrier()
@@ -425,7 +420,6 @@ class ReconstructionEngine(ABC):
                 self.optimizer.load_state_dict(checkpoint['optimizer'])
             # load iteration count
             self.iteration = checkpoint['global_step']
-        print('Restoration complete.')
 
 
 class ClassifierEngine(ReconstructionEngine):
