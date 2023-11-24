@@ -1,2 +1,0 @@
-_target_: watchmal.model.regression.LinearRegression
-num_outputs: 4

@@ -5,9 +5,7 @@ dump_path: './outputs/'
 defaults:
     - data: iwcd_short
     - data/dataset: iwcd_cnn_short
-    - model: classifier
-    - model/feature_extractor: resnet18
-    - model/classification_network: resnet
+    - model: resnet18
     - engine: classifier
     - tasks/train: train_resnet
     - optimizers@tasks.train.optimizers: adam

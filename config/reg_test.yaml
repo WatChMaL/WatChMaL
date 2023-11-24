@@ -8,9 +8,7 @@ model:
 defaults:
     - data: iwcd_electron
     - data/dataset: iwcd_cnn_short
-    - model: regression
-    - model/feature_extractor: resnet18
-    - model/regression_alg: resnet
+    - model: resnet18
     - engine: regression
     - tasks/restore_state: restore_state
     - tasks/evaluate: test

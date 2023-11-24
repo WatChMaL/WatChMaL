@@ -1,3 +1,0 @@
-_target_: watchmal.model.classifier.PassThrough
-num_inputs: 4
-num_classes: 4
