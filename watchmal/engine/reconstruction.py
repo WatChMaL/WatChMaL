@@ -4,8 +4,8 @@ Class for training a fully supervised classifier
 
 # generic imports
 import numpy as np
-from time import localtime, time
 from datetime import timedelta
+from datetime import datetime
 from abc import ABC, abstractmethod
 import logging
 
@@ -196,15 +196,15 @@ class ReconstructionEngine(ABC):
         # initialize the iterator over the validation set
         val_iter = iter(self.data_loaders["validation"])
         # global training loop for multiple epochs
-        start_time = time()
+        start_time = datetime.now()
         step_time = start_time
         epoch_start_time = start_time
         for self.epoch in range(epochs):
             if self.rank == 0:
                 if self.epoch > 0:
-                    log.info(f"Epoch {self.epoch} completed in {timedelta(seconds=time() - epoch_start_time)}")
-                    epoch_start_time = time()
-                log.info(f"Epoch {self.epoch+1} starting at {localtime()}")
+                    log.info(f"Epoch {self.epoch} completed in {datetime.now() - epoch_start_time}")
+                    epoch_start_time = datetime.now()
+                log.info(f"Epoch {self.epoch+1} starting at {datetime.now()}")
 
             train_loader = self.data_loaders["train"]
             self.step = 0
@@ -235,21 +235,21 @@ class ReconstructionEngine(ABC):
                 if self.iteration % val_interval == 0:
                     if self.rank == 0:
                         previous_step_time = step_time
-                        step_time = time()
+                        step_time = datetime.now()
                         average_step_time = (step_time - previous_step_time)/val_interval
                         print(f"Iteration {self.iteration}, Epoch {self.epoch+1}/{epochs}, Step {self.step}/{steps_per_epoch}"
-                              f" Step time {timedelta(seconds=average_step_time)},"
-                              f" Epoch time {timedelta(seconds=step_time-epoch_start_time)}"
-                              f" Total time {timedelta(seconds=step_time-start_time)}")
-                        print(f"  Training   {', '.join(f'{k}: {v:.5g}' for k, v in metrics.items())},")
+                              f" Step time {average_step_time},"
+                              f" Epoch time {step_time-epoch_start_time}"
+                              f" Total time {step_time-start_time}")
+                        print(f"  Training   {', '.join(f'{k}: {v:.5g}' for k, v in metrics.items())}")
                     self.validate(val_iter, num_val_batches, checkpointing)
             # save state at end of epoch
             if self.rank == 0 and (save_interval is not None) and ((self.epoch+1) % save_interval == 0):
                 self.save_state(suffix=f'_epoch_{self.epoch+1}')
         self.train_log.close()
         if self.rank == 0:
-            log.info(f"Epoch {self.epoch} completed in {timedelta(seconds=time() - epoch_start_time)}")
-            log.info(f"Training {epochs} epochs completed in {timedelta(seconds=time()-start_time)}")
+            log.info(f"Epoch {self.epoch} completed in {datetime.now() - epoch_start_time}")
+            log.info(f"Training {epochs} epochs completed in {datetime.now()-start_time}")
             self.val_log.close()
 
     def validate(self, val_iter, num_val_batches, checkpointing):
@@ -317,7 +317,7 @@ class ReconstructionEngine(ABC):
             # Set the model to evaluation mode
             self.model.eval()
             # evaluation loop
-            start_time = time()
+            start_time = datetime.now()
             step_time = start_time
             steps_per_epoch = len(self.data_loaders["test"])
             for self.step, eval_data in enumerate(self.data_loaders["test"]):
@@ -342,12 +342,12 @@ class ReconstructionEngine(ABC):
                 # print the metrics at given intervals
                 if self.rank == 0 and self.step % report_interval == 0:
                     previous_step_time = step_time
-                    step_time = time()
+                    step_time = datetime.now()
                     average_step_time = (step_time - previous_step_time)/report_interval
                     print(f"Step {self.step}/{steps_per_epoch}"
                           f" Evaluation {', '.join(f'{k}: {v:.5g}' for k, v in metrics.items())},"
-                          f" Step time {timedelta(seconds=average_step_time)},"
-                          f" Total time {timedelta(seconds=step_time-start_time)}")
+                          f" Step time {average_step_time},"
+                          f" Total time {step_time-start_time}")
         for k in eval_metrics.keys():
             eval_metrics[k] /= self.step+1
         eval_outputs["indices"] = indices.to(self.device)
