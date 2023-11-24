@@ -409,10 +409,7 @@ class ReconstructionEngine(ABC):
             if self.is_distributed:
                 torch.distributed.barrier()
             # torch interprets the file, then we can access using string keys
-            if torch.cuda.is_available():
-                checkpoint = torch.load(f)
-            else:
-                checkpoint = torch.load(f, map_location=torch.device('cpu'))
+            checkpoint = torch.load(f, map_location=self.device)
             # load network weights
             self.module.load_state_dict(checkpoint['state_dict'])
             # if optim is provided, load the state of the optim
