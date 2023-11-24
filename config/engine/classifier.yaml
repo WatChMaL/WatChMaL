@@ -1,4 +1,4 @@
-_target_: watchmal.engine.reconstruction.ClassifierEngine
+_target_: watchmal.engine.classification.ClassifierEngine
 truth_key: 'labels'
 label_set:
   - 0
