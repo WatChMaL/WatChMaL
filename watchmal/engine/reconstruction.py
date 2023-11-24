@@ -241,7 +241,7 @@ class ReconstructionEngine(ABC):
                               f" Step time {timedelta(seconds=average_step_time)},"
                               f" Epoch time {timedelta(seconds=step_time-epoch_start_time)}"
                               f" Total time {timedelta(seconds=step_time-start_time)}")
-                        print(f"  Training   {', '.join(f'{k}: {v:.5g}' for k, v in metrics.items())},", end="")
+                        print(f"  Training   {', '.join(f'{k}: {v:.5g}' for k, v in metrics.items())},")
                     self.validate(val_iter, num_val_batches, checkpointing)
             # save state at end of epoch
             if self.rank == 0 and (save_interval is not None) and ((self.epoch+1) % save_interval == 0):
@@ -294,12 +294,13 @@ class ReconstructionEngine(ABC):
         if self.rank == 0:
             log_entries = {"Iteration": self.iteration, "epoch": self.epoch, **val_metrics, "saved_best": False}
             # Save if this is the best model so far
+            print(f"  Validation {', '.join(f'{k}: {v:.5g}' for k, v in val_metrics.items())}", end="")
             if val_metrics["loss"] < self.best_validation_loss:
+                print(" ... Best validation loss so far!", end="")
                 self.best_validation_loss = val_metrics["loss"]
                 self.save_state(suffix="_BEST")
                 log_entries["saved_best"] = True
-            print(f"  Validation {', '.join(f'{k}: {v:.5g}' for k, v in val_metrics.items())}"+
-                  " ... Best validation loss so far!" if log_entries["saved_best"] else "")
+            print("")
             # Save the latest model if checkpointing
             if checkpointing:
                 self.save_state()
