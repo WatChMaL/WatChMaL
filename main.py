@@ -66,13 +66,13 @@ def main(config):
         log.info("Using multiprocessing...")
         devids = [f"cuda:{x}" for x in config.gpu_list]
         log.info(f"Using DistributedDataParallel on these devices: {devids}")
-        mp.spawn(main_worker_function, nprocs=ngpus, args=(ngpus, is_distributed, config))
+        mp.spawn(main_worker_function, nprocs=ngpus, args=(ngpus, is_distributed, config, HydraConfig.get()))
     else:
         log.info("Only one gpu found, not using multiprocessing...")
         main_worker_function(0, ngpus, is_distributed, config)
 
 
-def main_worker_function(rank, ngpus_per_node, is_distributed, config):
+def main_worker_function(rank, ngpus_per_node, is_distributed, config, hydra_config=None):
     """
     Instantiate model on a particular GPU, and perform train/evaluation tasks as specified
 
@@ -81,11 +81,11 @@ def main_worker_function(rank, ngpus_per_node, is_distributed, config):
         ngpus_per_node  ... number of gpus being used (in multiprocessing mode)
         is_distributed  ... boolean indicating if running in multiprocessing mode
         config          ... hydra config specified in the @hydra.main annotation
+        hydra_config    ... HydraConfig object for logging in multiprocessing
     """
     if is_distributed:
-        # Spawned process needs to get the job logging configuration
-        hc = HydraConfig.get()
-        configure_log(hc.job_logging, hc.verbose)
+        # Spawned process needs to configure the job logging configuration
+        configure_log(hydra_config.job_logging, hydra_config.verbose)
         # Set up pytorch distributed processing
         torch.distributed.init_process_group('nccl', init_method='env://', world_size=ngpus_per_node, rank=rank)
     if ngpus_per_node == 0:
