@@ -296,11 +296,12 @@ class ReconstructionEngine(ABC):
             # Save if this is the best model so far
             print(f"  Validation {', '.join(f'{k}: {v:.5g}' for k, v in val_metrics.items())}", end="")
             if val_metrics["loss"] < self.best_validation_loss:
-                print(" ... Best validation loss so far!", end="")
+                print(" ... Best validation loss so far!")
                 self.best_validation_loss = val_metrics["loss"]
                 self.save_state(suffix="_BEST")
                 log_entries["saved_best"] = True
-            print("")
+            else:
+                print("")
             # Save the latest model if checkpointing
             if checkpointing:
                 self.save_state()
