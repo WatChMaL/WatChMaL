@@ -4,7 +4,7 @@ Class for training a fully supervised classifier
 
 # generic imports
 import numpy as np
-from time import strftime, localtime, time
+from time import localtime, time
 from datetime import timedelta
 from abc import ABC, abstractmethod
 import logging
@@ -204,7 +204,7 @@ class ReconstructionEngine(ABC):
                 if self.epoch > 0:
                     log.info(f"Epoch {self.epoch} completed in {timedelta(seconds=time() - epoch_start_time)}")
                     epoch_start_time = time()
-                log.info('Epoch', self.epoch+1, 'Starting @', strftime("%Y-%m-%d %H:%M:%S", localtime()))
+                log.info(f"Epoch {self.epoch+1} starting at {localtime()}")
 
             train_loader = self.data_loaders["train"]
             self.step = 0
@@ -309,7 +309,7 @@ class ReconstructionEngine(ABC):
 
     def evaluate(self, report_interval=20):
         """Evaluate the performance of the trained model on the test set."""
-        log.info("Evaluating, output to directory: ", self.dump_path)
+        log.info(f"Evaluating, output to directory: {self.dump_path}")
         # Iterate over the validation set to calculate val_loss and val_acc
         with torch.no_grad():
             # Set the model to evaluation mode
@@ -391,7 +391,7 @@ class ReconstructionEngine(ABC):
             'optimizer': self.optimizer.state_dict(),
             'state_dict': model_dict
         }, filename)
-        log.info('Saved state as:', filename)
+        log.info(f"Saved state as: {filename}")
         return filename
 
     def restore_best_state(self, name=None):
@@ -404,7 +404,7 @@ class ReconstructionEngine(ABC):
         """Restore model and training state from a given filename."""
         # Open a file in read-binary mode
         with open(weight_file, 'rb') as f:
-            log.info('Restoring state from', weight_file)
+            log.info(f"Restoring state from {weight_file}")
             # prevent loading while DDP operations are happening
             if self.is_distributed:
                 torch.distributed.barrier()
@@ -417,5 +417,3 @@ class ReconstructionEngine(ABC):
                 self.optimizer.load_state_dict(checkpoint['optimizer'])
             # load iteration count
             self.iteration = checkpoint['global_step']
-
-
