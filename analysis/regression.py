@@ -593,6 +593,9 @@ class FitQun1ParticleFit(RegressionRun, PositionPrediction, DirectionPrediction,
 
 class WatChMaLRegression(RegressionRun, WatChMaLOutput, ABC):
     """Base class to hold predictions of a WatChMaL regression run"""
+
+    predictions_name = None
+
     def __init__(self, directory, run_label, indices=None, selection=None, **plot_args):
         """
         Constructs the object holding the results of a WatChMaL regression run.
@@ -649,12 +652,18 @@ class WatChMaLRegression(RegressionRun, WatChMaLOutput, ABC):
     def predictions(self):
         """Predictions output from the WatChMaL regression run"""
         if self._predictions is None:
-            self._predictions = self.get_outputs("predictions")
+            try:
+                self._predictions = self.get_outputs("predicted_"+self.predictions_name)
+            except (FileNotFoundError, TypeError):
+                self._predictions = self.get_outputs("predictions")
         return self._predictions
 
 
 class WatChMaLPositionRegression(WatChMaLRegression, PositionPrediction):
     """Class to hold position predictions of a WatChMaL regression run"""
+
+    predictions_name = "positions"
+
     def __init__(self, directory, run_label, true_positions=None, true_directions=None, indices=None, selection=None,
                  **plot_args):
         """
@@ -692,6 +701,9 @@ class WatChMaLPositionRegression(WatChMaLRegression, PositionPrediction):
 
 class WatChMaLDirectionRegression(WatChMaLRegression, DirectionPrediction):
     """Class to hold direction predictions of a WatChMaL regression run"""
+
+    predictions_name = "angles"
+
     def __init__(self, directory, run_label, true_directions=None, indices=None, zenith_axis=None, selection=None,
                  **plot_args):
         """
@@ -734,6 +746,9 @@ class WatChMaLDirectionRegression(WatChMaLRegression, DirectionPrediction):
 
 class WatChMaLEnergyRegression(WatChMaLRegression, MomentumPrediction):
     """Class to hold momentum predictions of a WatChMaL regression run"""
+
+    predictions_name = "energies"
+
     def __init__(self, directory, run_label, true_momenta=None, true_labels=None, indices=None, selection=None,
                  **plot_args):
         """
