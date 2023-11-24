@@ -293,13 +293,13 @@ class ReconstructionEngine(ABC):
         val_metrics = self.get_synchronized_metrics(val_metrics)
         if self.rank == 0:
             log_entries = {"Iteration": self.iteration, "epoch": self.epoch, **val_metrics, "saved_best": False}
-            print(f"  Validation {', '.join(f'{k}: {v:.5g}' for k, v in val_metrics.items())}")
             # Save if this is the best model so far
             if val_metrics["loss"] < self.best_validation_loss:
                 self.best_validation_loss = val_metrics["loss"]
-                log.info(f"Best validation loss so far!: {self.best_validation_loss}")
                 self.save_state(suffix="_BEST")
                 log_entries["saved_best"] = True
+            print(f"  Validation {', '.join(f'{k}: {v:.5g}' for k, v in val_metrics.items())}"+
+                  " ... Best validation loss so far!" if log_entries["saved_best"] else "")
             # Save the latest model if checkpointing
             if checkpointing:
                 self.save_state()
