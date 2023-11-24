@@ -18,7 +18,6 @@ import torch.multiprocessing as mp
 # generic imports
 import logging
 import os
-import numpy as np
 
 from watchmal.utils.logging_utils import get_git_version
 
@@ -61,7 +60,7 @@ def main(config):
 
     # initialize seed
     if config.seed is None:
-        config.seed = np.random.seed(torch.seed())
+        config.seed = torch.seed()
     
     if is_distributed:
         log.info("Using multiprocessing...")
