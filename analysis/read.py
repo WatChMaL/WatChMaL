@@ -134,7 +134,7 @@ class WatChMaLOutput(ABC, metaclass=ABCMeta):
         it_per_epoch = np.min(train_iteration[train_epoch == 1]) - 1
         self._train_log_epoch = train_iteration / it_per_epoch
         self._train_log_loss = np.mean(self._log_train['loss'], axis=0)
-        self._val_log_epoch = self._log_val['epoch'] / it_per_epoch
+        self._val_log_epoch = self._log_val['iteration'] / it_per_epoch
         self._val_log_loss = self._log_val['loss']
         self._val_log_best = self._log_val['saved_best']
         return self._train_log_epoch, self._train_log_loss, self._val_log_epoch, self._val_log_loss, self._val_log_best
