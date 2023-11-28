@@ -219,6 +219,7 @@ class ReconstructionEngine(ABC):
                 self.target = train_data[self.truth_key].to(self.device)
                 # Call forward: make a prediction & measure the average error using data = self.data
                 outputs, metrics = self.forward(True)
+                metrics = {k: v.item() for k, v in metrics.items()}
                 # Call backward: back-propagate error and update weights using loss = self.loss
                 self.backward()
                 # run scheduler
@@ -228,7 +229,7 @@ class ReconstructionEngine(ABC):
                 self.step += 1
                 self.iteration += 1
                 # get relevant attributes of result for logging
-                log_entries = {"iteration": self.iteration, "epoch": self.epoch, **{k: v.item() for k, v in metrics}}
+                log_entries = {"iteration": self.iteration, "epoch": self.epoch, **metrics}
                 # record the metrics for the mini-batch in the log
                 self.train_log.log(log_entries)
                 # run validation on given intervals

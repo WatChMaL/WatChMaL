@@ -20,6 +20,7 @@ class CSVLog:
             self.writer = csv.DictWriter(self.file, fieldnames=fields.keys())
             self.writer.writeheader()
         self.writer.writerow(fields)
+        self.file.flush()
 
     def close(self):
         if self.file is not None:
