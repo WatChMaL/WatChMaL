@@ -5,7 +5,7 @@ data:
     is_graph: True
 dump_path: './outputs/'
 defaults:
-    - data: iwcd_short
+    - data: iwcd
     - data/dataset: iwcd_gnn
     - model: gnn
     - engine: classifier

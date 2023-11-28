@@ -4,8 +4,8 @@ gpu_list:
 seed: null
 dump_path: './outputs/'
 defaults:
-    - data: iwcd_short
-    - data/dataset: iwcd_cnn_short
+    - data: iwcd
+    - data/dataset: iwcd_cnn
     - model: resnet18
     - engine: classifier
     - tasks/restore_state: restore_state
