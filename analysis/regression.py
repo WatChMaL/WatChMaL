@@ -620,34 +620,6 @@ class WatChMaLRegression(RegressionRun, WatChMaLOutput, ABC):
         WatChMaLOutput.__init__(self, directory=directory, indices=indices)
         self._predictions = None
 
-    def read_training_log_from_csv(self, directory):
-        """
-        Read the training progression logs from the given directory.
-
-        Parameters
-        ----------
-        directory: str
-            Path to the directory of the training run.
-
-        Returns
-        -------
-        np.ndarray
-            Array of train epoch values for each entry in the training progression log.
-        np.ndarray
-            Array of train loss values for each entry in the training progression log.
-        np.ndarray
-            Array of validation epoch values for each entry in the training progression log
-        np.ndarray
-            Array of validation loss values for each entry in the training progression log
-        np.ndarray
-            Array of boolean values indicating whether each entry had the best validation loss so far in the training
-            progression log
-        """
-        super().read_training_log_from_csv(directory)
-        self._val_log_loss = self._log_val[:, 2]
-        self._val_log_best = self._log_val[:, 3].astype(bool)
-        return self._train_log_epoch, self._train_log_loss, self._val_log_epoch, self._val_log_loss, self._val_log_best
-
     @property
     def predictions(self):
         """Predictions output from the WatChMaL regression run"""

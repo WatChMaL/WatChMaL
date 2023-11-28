@@ -228,7 +228,7 @@ class ReconstructionEngine(ABC):
                 self.step += 1
                 self.iteration += 1
                 # get relevant attributes of result for logging
-                log_entries = {"iteration": self.iteration, "epoch": self.epoch, **metrics}
+                log_entries = {"iteration": self.iteration, "epoch": self.epoch, **{k: v.item() for k, v in metrics}}
                 # record the metrics for the mini-batch in the log
                 self.train_log.log(log_entries)
                 # run validation on given intervals
@@ -292,7 +292,7 @@ class ReconstructionEngine(ABC):
         val_metrics = {k: v/num_val_batches for k, v in val_metrics.items()}
         val_metrics = self.get_synchronized_metrics(val_metrics)
         if self.rank == 0:
-            log_entries = {"Iteration": self.iteration, "epoch": self.epoch, **val_metrics, "saved_best": False}
+            log_entries = {"iteration": self.iteration, "epoch": self.epoch, **val_metrics, "saved_best": False}
             # Save if this is the best model so far
             print(f"  Validation {', '.join(f'{k}: {v:.5g}' for k, v in val_metrics.items())}", end="")
             if val_metrics["loss"] < self.best_validation_loss:
