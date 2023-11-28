@@ -10,7 +10,7 @@ data_loaders:
     split_key: train_idxs
     batch_size: 128
     num_workers: 4
-    transforms:
+    pre-transforms:
       - random_reflections
   validation:
     split_key: val_idxs

@@ -112,7 +112,6 @@ class WatChMaLOutput(ABC, metaclass=ABCMeta):
         sorted_outputs[intersection[1]] = outputs[intersection[2]]
         return sorted_outputs.squeeze()
 
-    @abstractmethod
     def read_training_log_from_csv(self, directory):
         """
         Read the training progression logs from the given directory.
