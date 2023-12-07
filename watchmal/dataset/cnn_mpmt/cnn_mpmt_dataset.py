@@ -169,6 +169,7 @@ class CNNmPMTDataset(H5Dataset):
             data_dict["positions"][..., 1] *= -1
         if "angles" in data_dict:
             data_dict["angles"][..., 0] *= -1
+            data_dict["angles"][..., 0] += np.pi
         return data_dict
 
     def front_back_reflection(self, data_dict):
