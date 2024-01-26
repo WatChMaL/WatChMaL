@@ -676,8 +676,8 @@ class WatChMaLDirectionRegression(WatChMaLRegression, DirectionPrediction):
 
     predictions_name = "angles"
 
-    def __init__(self, directory, run_label, true_directions=None, indices=None, zenith_axis=None, selection=None,
-                 **plot_args):
+    def __init__(self, directory, run_label, true_directions=None, indices=None, is_angles=True, zenith_axis=None,
+                 selection=None, **plot_args):
         """
         Constructs the object holding the results of a WatChMaL direction regression run.
 
@@ -692,6 +692,9 @@ class WatChMaLDirectionRegression(WatChMaLRegression, DirectionPrediction):
         indices: array_like of int, optional
             Array of indices of events to select out of the indices output by WatChMaL (by default use all events sorted
             by their indices).
+        is_angles: bool, optional
+            If true (default), indicates that the regression run was for (zenith, azimuth) angles, otherwise indicates
+            it was for (x, y, z) unit vectors
         zenith_axis: int, optional
             Axis representing the zenith direction, for converting from WatChMaL's predicted zenith and azimuth angles
             into unit vector directions. By default, use the default tank axis set in `analysis.utils.math`.
@@ -705,6 +708,7 @@ class WatChMaLDirectionRegression(WatChMaLRegression, DirectionPrediction):
         WatChMaLRegression.__init__(self, directory=directory, run_label=run_label, indices=indices,
                                     selection=selection, **plot_args)
         self._direction_prediction = None
+        self.is_angles = is_angles
         self.zenith_axis = zenith_axis
         DirectionPrediction.__init__(self, true_directions=true_directions)
 
@@ -712,7 +716,10 @@ class WatChMaLDirectionRegression(WatChMaLRegression, DirectionPrediction):
     def direction_prediction(self):
         """Direction predictions calculated from predicted angles output from the WatChMaL regression run"""
         if self._direction_prediction is None:
-            self._direction_prediction = math.direction_from_angles(self.predictions, self.zenith_axis)
+            if self.is_angles:
+                self._direction_prediction = math.direction_from_angles(self.predictions, self.zenith_axis)
+            else:
+                self._direction_prediction = self.predictions
         return self._direction_prediction
 
 
