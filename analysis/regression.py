@@ -674,8 +674,6 @@ class WatChMaLPositionRegression(WatChMaLRegression, PositionPrediction):
 class WatChMaLDirectionRegression(WatChMaLRegression, DirectionPrediction):
     """Class to hold direction predictions of a WatChMaL regression run"""
 
-    predictions_name = "angles"
-
     def __init__(self, directory, run_label, true_directions=None, indices=None, is_angles=True, zenith_axis=None,
                  selection=None, **plot_args):
         """
@@ -710,6 +708,7 @@ class WatChMaLDirectionRegression(WatChMaLRegression, DirectionPrediction):
         self._direction_prediction = None
         self.is_angles = is_angles
         self.zenith_axis = zenith_axis
+        self.predictions_name = "angles" if is_angles else "directions"
         DirectionPrediction.__init__(self, true_directions=true_directions)
 
     @property
