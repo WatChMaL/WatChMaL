@@ -718,7 +718,9 @@ class WatChMaLDirectionRegression(WatChMaLRegression, DirectionPrediction):
             if self.is_angles:
                 self._direction_prediction = math.direction_from_angles(self.predictions, self.zenith_axis)
             else:
-                self._direction_prediction = self.predictions
+                norm = np.linalg.norm(self.predictions, axis=1, keepdims=True)
+                norm[norm == 0] = 1
+                self._direction_prediction = self.predictions/norm
         return self._direction_prediction
 
 
