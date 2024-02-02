@@ -10,6 +10,15 @@ import h5py
 import numpy as np
 from abc import ABC, abstractmethod
 
+def normalize(data, x_bounds=(-1600,1600), y_bounds=(-1600,1600), z_bounds=(-1600,1600)):
+    '''
+    normalizes all data to be roughly [-1,1] but not exactly
+    '''
+    bounds = [x_bounds, y_bounds, z_bounds]
+    for i in range(3):
+        data[i] /= bounds[i][1]
+
+    return data
 
 class H5CommonDataset(Dataset, ABC):
     """
@@ -59,7 +68,7 @@ class H5CommonDataset(Dataset, ABC):
         self.labels = np.array(self.h5_file["labels"])
         self.range = np.array(self.h5_file["primary_charged_range"])
 
-#        self.positions  = np.array(self.h5_file["positions"])
+        self.positions  = np.array(self.h5_file["positions"])
 #        self.angles     = np.array(self.h5_file["angles"])
 #        self.energies   = np.array(self.h5_file["energies"])
 #        if "veto" in self.h5_file.keys():
@@ -117,12 +126,17 @@ class H5CommonDataset(Dataset, ABC):
         if not self.initialized:
             self.initialize()
 
+        positions = np.squeeze(self.positions[item], axis=0)
+        norm_position = True
+        if norm_position == True:
+            positions = normalize(positions)
+
         data_dict = {
             "labels": self.labels[item].astype(np.int64),
             "range": self.range[item].astype(np.float32),
             # "energies": self.energies[item],
             # "angles": self.angles[item],
-            # "positions": self.positions[item],
+            "positions": self.positions[item],
             # "event_ids": self.event_ids[item],
             "root_files": self.root_files[item],
             "indices": item
