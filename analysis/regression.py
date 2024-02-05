@@ -674,8 +674,8 @@ class WatChMaLPositionRegression(WatChMaLRegression, PositionPrediction):
 class WatChMaLDirectionRegression(WatChMaLRegression, DirectionPrediction):
     """Class to hold direction predictions of a WatChMaL regression run"""
 
-    def __init__(self, directory, run_label, true_directions=None, indices=None, is_angles=True, zenith_axis=None,
-                 selection=None, **plot_args):
+    def __init__(self, directory, run_label, true_directions=None, indices=None, zenith_axis=None, selection=None,
+                 **plot_args):
         """
         Constructs the object holding the results of a WatChMaL direction regression run.
 
@@ -706,21 +706,20 @@ class WatChMaLDirectionRegression(WatChMaLRegression, DirectionPrediction):
         WatChMaLRegression.__init__(self, directory=directory, run_label=run_label, indices=indices,
                                     selection=selection, **plot_args)
         self._direction_prediction = None
-        self.is_angles = is_angles
         self.zenith_axis = zenith_axis
-        self.predictions_name = "angles" if is_angles else "directions"
+        self.predictions_name = "angles"
         DirectionPrediction.__init__(self, true_directions=true_directions)
 
     @property
     def direction_prediction(self):
         """Direction predictions calculated from predicted angles output from the WatChMaL regression run"""
-        if self._direction_prediction is None:
-            if self.is_angles:
-                self._direction_prediction = math.direction_from_angles(self.predictions, self.zenith_axis)
-            else:
-                norm = np.linalg.norm(self.predictions, axis=1, keepdims=True)
-                norm[norm == 0] = 1
-                self._direction_prediction = self.predictions/norm
+        try:
+            self._direction_prediction = math.direction_from_angles(self.predictions, self.zenith_axis)
+        except (FileNotFoundError, TypeError):
+            self.predictions_name = "directions"
+            norm = np.linalg.norm(self.predictions, axis=1, keepdims=True)
+            norm[norm == 0] = 1
+            self._direction_prediction = self.predictions / norm
         return self._direction_prediction
 
 
