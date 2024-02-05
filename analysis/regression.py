@@ -692,9 +692,6 @@ class WatChMaLDirectionRegression(WatChMaLRegression, DirectionPrediction):
         indices: array_like of int, optional
             Array of indices of events to select out of the indices output by WatChMaL (by default use all events sorted
             by their indices).
-        is_angles: bool, optional
-            If true (default), indicates that the regression run was for (zenith, azimuth) angles, otherwise indicates
-            it was for (x, y, z) unit vectors
         zenith_axis: int, optional
             Axis representing the zenith direction, for converting from WatChMaL's predicted zenith and azimuth angles
             into unit vector directions. By default, use the default tank axis set in `analysis.utils.math`.
