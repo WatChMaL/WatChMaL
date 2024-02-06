@@ -30,7 +30,7 @@ from watchmal.utils.logging_utils import CSVData
 
 class ClassifierEngine:
     """Engine for performing training or evaluation  for a classification network."""
-    def __init__(self, model, rank, gpu, dump_path, restore_path = None, label_set=None):
+    def __init__(self, model, rank, gpu, dump_path, restore_path = None, label_set=None, regression=False):
         """
         Parameters
         ==========
@@ -46,6 +46,9 @@ class ClassifierEngine:
             The set of possible labels to classify (if None, which is the default, then class labels in the data must be
             0 to N).
         """
+        # train for regression as well depending on given args
+        self.regression = regression
+
         # create the directory for saving the log and dump files
         self.epoch = 0.
         self.step = 0
@@ -76,7 +79,7 @@ class ClassifierEngine:
         # define the placeholder attributes
         self.data = None
         self.labels = None
-        self.range = None
+        self.positions = None
         self.loss = None
         self.loss_c = None
         self.loss_r = None
@@ -166,24 +169,29 @@ class ClassifierEngine:
             # Move the data and the labels to the GPU (if using CPU this has no effect)
             data = self.data.to(self.device)
             labels = self.labels.to(self.device)
-            primary_range = self.range.to(self.device)
+            positions = self.positions.to(self.device)
 
             model_out = self.model(data)
             
             softmax = self.softmax(model_out[0])
-            pred_range = model_out[1]
+            pred_positions = model_out[1]
             predicted_labels = torch.argmax(model_out[0], dim=-1)
 
             result = {'predicted_labels': predicted_labels,
                       'softmax': softmax,
-                      'pred_range': pred_range,
+                      'pred_positions': pred_positions,
                       'raw_pred_labels': model_out[0]}
 
             self.loss_c = self.criterion(model_out[0], labels)
-            #print(f"True range: {primary_range}")
-            #print(f"Pred range: {model_out[1]}")
-            self.loss_r = self.criterion_r(model_out[1], primary_range)
-            self.loss = self.loss_c + 0*(self.loss_r)
+            self.loss_r = self.criterion_r(model_out[1], positions)
+            if self.regression:
+                mult_r = 1.0
+            else:
+                mult_r = 0
+
+            mult_c = 1.0
+
+            self.loss = mult_c*self.loss_c + mult_r*self.loss_r
             accuracy = (predicted_labels == labels).sum().item() / float(predicted_labels.nelement())
 
             result['loss'] = float(self.loss.item())
@@ -283,7 +291,7 @@ class ClassifierEngine:
                         # Train on batch
                 self.data = train_data['data']
                 self.labels = train_data['labels']
-                self.range = train_data['range']
+                self.positions = train_data['positions']
 
                         # Call forward: make a prediction & measure the average error using data = self.data
                 res = self.forward(True)
@@ -311,7 +319,7 @@ class ClassifierEngine:
 
                     print("... Iteration %d ... Epoch %d ... Step %d/%d  ... Training Classification Loss %1.3f ... Training Regression Loss %1.3f ... Training Accuracy %1.3f ... Time Elapsed %1.3f ... Iteration Time %1.3f" %
                                 (self.iteration, self.epoch+1, self.step, len(train_loader), res["loss_c"], res["loss_r"], res["accuracy"], iteration_time - start_time, iteration_time - previous_iteration_time))
-
+                
                 if early_stop:
                     break
                                         
@@ -352,7 +360,7 @@ class ClassifierEngine:
             # extract the event data from the input data tuple
             self.data = val_data['data']
             self.labels = val_data['labels']
-            self.range = val_data['range']
+            self.positions = val_data['positions']
 
             val_res = self.forward(False)
 
@@ -368,7 +376,6 @@ class ClassifierEngine:
         val_metrics["loss_r"] /= num_val_batches
         val_metrics["accuracy"] /= num_val_batches
         local_val_metrics = {"loss": np.array([val_metrics["loss"]]), "loss_c": np.array([val_metrics["loss_c"]]), "loss_r": np.array([val_metrics["loss_r"]]), "accuracy": np.array([val_metrics["accuracy"]])}
-
         if self.is_distributed:
             global_val_metrics = self.get_synchronized_metrics(local_val_metrics)
             for name, tensor in zip(global_val_metrics.keys(), global_val_metrics.values()):
@@ -389,15 +396,28 @@ class ClassifierEngine:
             val_metrics["accuracy"] = global_val_accuracy
             val_metrics["epoch"] = self.epoch
 
-            if val_metrics["loss_c"] < self.best_validation_loss:
-                self.best_validation_loss = val_metrics["loss_c"]
-                self.best_iteration = self.iteration
-                print('best validation loss so far!: {}'.format(self.best_validation_loss))
-                self.save_state("BEST")
-                val_metrics["saved_best"] = 1
-            elif self.iteration - self.best_iteration >= int(early_stopping_patience*iterations_per_epoch):
-                print("DOING EARLY STOPPING")
-                self.do_early_stop=True
+            go = False
+            if self.regression:
+                if val_metrics["loss_r"] < self.best_validation_loss:
+                    self.best_validation_loss = val_metrics["loss_r"]
+                    print('best (REGRESSION) validation loss so far!: {}'.format(self.best_validation_loss))
+                    go = True
+                
+            else:
+                if val_metrics["loss_c"] < self.best_validation_loss:
+                    self.best_validation_loss = val_metrics["loss_c"]
+                    print('best (CLASSIFICATION) validation loss so far!: {}'.format(self.best_validation_loss))
+                    go = True
+
+                if go:
+                    self.best_iteration = self.iteration
+                    self.save_state("BEST")
+                    val_metrics["saved_best"] = 1
+
+                elif self.iteration - self.best_iteration >= int(early_stopping_patience*iterations_per_epoch):
+                    print("DOING EARLY STOPPING")
+                    self.do_early_stop=True
+            
             print(f'CHECK early stopping: Iteration: {self.iteration}, best iteration: {self.best_iteration}, val loss: {val_metrics["loss"]}, val regression loss: {val_metrics["loss_r"]}, val classification loss: {val_metrics["loss_c"]}, best val classification loss: {self.best_validation_loss}, val acc: {val_metrics["accuracy"]}, patience: {early_stopping_patience*iterations_per_epoch}')
 
             # Save the latest model if checkpointing
@@ -427,7 +447,7 @@ class ClassifierEngine:
             self.model.eval()
             
             # Variables for the confusion matrix
-            loss, accuracy, indices, labels, predictions, softmaxes, pred_range, true_range, rootfiles= [],[],[],[],[],[],[],[],[]
+            loss, accuracy, indices, labels, predictions, softmaxes, pred_positions, true_positions, rootfiles= [],[],[],[],[],[],[],[],[]
             
             # Extract the event data and label from the DataLoader iterator
             for it, eval_data in enumerate(self.data_loaders["test"]):
@@ -435,7 +455,7 @@ class ClassifierEngine:
                 # load data
                 self.data = eval_data['data']
                 self.labels = eval_data['labels']
-                self.range = eval_data['range']
+                self.positios = eval_data['positions']
 
                 eval_indices = eval_data['indices']
                 eval_rootfile = eval_data['root_files']
@@ -450,10 +470,10 @@ class ClassifierEngine:
                 indices.extend(eval_indices.numpy())
                 rootfiles.extend(np.array(eval_rootfile))
                 labels.extend(self.labels.numpy())
-                true_range.extend(self.range.numpy())
+                true_positions.extend(self.positions.numpy())
                 predictions.extend(result['predicted_labels'].detach().cpu().numpy())
                 softmaxes.extend(result["softmax"].detach().cpu().numpy())
-                pred_range.extend(result["pred_range"].detach().cpu().numpy())
+                pred_positions.extend(result["pred_positions"].detach().cpu().numpy())
            
                 print("eval_iteration : " + str(it) + " eval_loss : " + str(result["loss"]) + " eval_accuracy : " + str(result["accuracy"]))
             
@@ -471,12 +491,12 @@ class ClassifierEngine:
         indices     = np.array(indices)
         rootfiles    = np.array(rootfiles)
         labels      = np.array(labels)
-        true_range      = np.array(true_range)
+        true_positions      = np.array(true_positions)
         predictions = np.array(predictions)
         softmaxes   = np.array(softmaxes)
-        pred_range   = np.array(pred_range)
+        pred_positions   = np.array(pred_positions)
         
-        local_eval_results_dict = {"indices":indices, "labels":labels, "true_range":true_range, "predictions":predictions, "softmaxes":softmaxes, "pred_range": pred_range}
+        local_eval_results_dict = {"indices":indices, "labels":labels, "true_positions":true_positions, "predictions":predictions, "softmaxes":softmaxes, "pred_positions": pred_positions}
 
         if self.is_distributed:
             # Gather results from all processes
@@ -489,10 +509,10 @@ class ClassifierEngine:
                 
                 indices     = np.array(global_eval_results_dict["indices"].cpu())
                 labels      = np.array(global_eval_results_dict["labels"].cpu())
-                true_range      = np.array(global_eval_results_dict["true_range"].cpu())
+                true_positions      = np.array(global_eval_results_dict["true_positions"].cpu())
                 predictions = np.array(global_eval_results_dict["predictions"].cpu())
                 softmaxes   = np.array(global_eval_results_dict["softmaxes"].cpu())
-                pred_range   = np.array(global_eval_results_dict["pred_range"].cpu())
+                pred_positions   = np.array(global_eval_results_dict["pred_positions"].cpu())
 
         
         if self.rank == 0:
@@ -503,11 +523,13 @@ class ClassifierEngine:
             print(f"Saving Data to {self.dirpath}...")
             np.save(self.dirpath + "indices.npy", indices)#sorted_indices)
             np.save(self.dirpath + "rootfiles.npy", rootfiles)#sorted_indices)
-            np.save(self.dirpath + "labels.npy", labels)#[sorted_indices])
-            np.save(self.dirpath + "predictions.npy", predictions)#[sorted_indices])
+            np.save(self.dirpath + "true_class.npy", labels)#[sorted_indices])
+            np.save(self.dirpath + "pred_class.npy", predictions)#[sorted_indices])
             np.save(self.dirpath + "softmax.npy", softmaxes)#[sorted_indices])
-            np.save(self.dirpath + "true_range.npy", true_range)#[sorted_indices])
-            np.save(self.dirpath + "pred_range.npy", pred_range)#[sorted_indices])
+
+            if self.regression:
+                np.save(self.dirpath + "true_positions.npy", true_positions)#[sorted_indices])
+                np.save(self.dirpath + "pred_positions.npy", pred_positions)#[sorted_indices])
 
             # Compute overall evaluation metrics
             val_iterations = np.sum(local_eval_metrics_dict["eval_iterations"])
