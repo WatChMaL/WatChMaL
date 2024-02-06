@@ -63,7 +63,8 @@ class PointNetMultiPMTDataset(H5Dataset):
         data[charge_channels, unique_hit_mpmts] = self.event_hit_charges
         data[time_channels, unique_hit_mpmts] = self.event_hit_times
 
-        data = du.apply_random_transformations(self.transforms, data)
+        for t in self.transforms:
+            data = t(data)
 
         data_dict["data"] = data
         return data_dict

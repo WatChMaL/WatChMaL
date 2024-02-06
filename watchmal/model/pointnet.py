@@ -121,3 +121,36 @@ class PointNetFeat(nn.Module):
         x = self.pool(x)
         x = x.view(-1, self.max_feat)
         return x
+
+class PointNetFullyConnected(nn.Module):
+    def __init__(self, num_inputs, num_classes):
+        super().__init__()
+        min_channels = 256
+        channels_1 = max(num_inputs // 2, min_channels)
+        channels_2 = max(num_inputs // 4, min_channels)
+        self.fc1 = nn.Linear(num_inputs, channels_1)
+        self.fc2 = nn.Linear(channels_1, channels_2)
+        self.fc3 = nn.Linear(channels_2, num_classes)
+        self.dropout = nn.Dropout(p=0.3)
+        self.bn1 = nn.BatchNorm1d(channels_1)
+        self.bn2 = nn.BatchNorm1d(channels_2)
+        self.relu = nn.ReLU()
+
+
+    def forward(self, x):
+        x = self.relu(self.bn1(self.fc1(x)))
+        x = self.relu(self.bn2(self.dropout(self.fc2(x))))
+        x = self.fc3(x)
+        return x
+
+
+class PointNet(nn.Module):
+    def __init__(self, num_input_channels, num_output_channels, **kwargs):
+        super().__init__()
+        self.feature_extractor = PointNetFeat(k=num_input_channels, num_output_channels=256, **kwargs)
+        self.fully_connected = PointNetFullyConnected(256, num_classes=num_output_channels)
+
+    def forward(self, x):
+        x = self.feature_extractor(x)
+        x = self.fully_connected(x)
+        return x

@@ -1,4 +1,5 @@
-_target_: watchmal.engine.engine_classifier.ClassifierEngine
+_target_: watchmal.engine.classification.ClassifierEngine
+truth_key: 'labels'
 label_set:
   - 1
   - 2

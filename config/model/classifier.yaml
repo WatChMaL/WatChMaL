@@ -1,3 +1,0 @@
-_recursive_: False
-_target_: watchmal.model.classifier.Classifier
-num_classes: 2

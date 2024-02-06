@@ -28,7 +28,8 @@ from matplotlib.patches import Ellipse
 #from torch_geometric.loader import DataLoader as PyGDataLoader
 
 
-def get_data_loader(dataset, batch_size, sampler, num_workers, is_distributed, seed, is_graph=False, split_path=None, split_key=None, transforms=None):
+def get_data_loader(dataset, batch_size, sampler, num_workers, is_distributed, seed, is_graph=False,
+                    split_path=None, split_key=None, pre_transforms=None, post_transforms=None):
     """
     Creates a dataloader given the dataset and sampler configs. The dataset and sampler are instantiated using their
     corresponding configs. If using DistributedDataParallel, the sampler is wrapped using DistributedSamplerWrapper.
@@ -55,15 +56,20 @@ def get_data_loader(dataset, batch_size, sampler, num_workers, is_distributed, s
         Path to an npz file containing an array of indices to use as a subset of the full dataset.
     split_key : string
         Name of the array to use in the file specified by split_path.
-    transforms : list of string
-        List of transforms to apply to the dataset.
+    pre_transforms : list of string
+        List of transforms to apply to the dataset before any transforms specified by the dataset config.
+    pre_transforms : list of string
+        List of transforms to apply to the dataset after any transforms specified by the dataset config.
     
     Returns
     -------
     torch.utils.data.DataLoader
         dataloader created with instantiated dataset and (possibly wrapped) sampler
     """
-    dataset = instantiate(dataset)
+    # combine transforms specified in data loader with transforms specified in dataset
+    transforms = dataset["transforms"] if (("transforms" in dataset) and (dataset["transforms"] is not None)) else []
+    transforms = (pre_transforms or []) + transforms + (post_transforms or [])
+    dataset = instantiate(dataset, transforms=(transforms or None))
     
     print(split_path)
     if split_path is not None and split_key is not None:
@@ -84,7 +90,8 @@ def get_data_loader(dataset, batch_size, sampler, num_workers, is_distributed, s
         return PyGDataLoader(dataset, sampler=sampler, batch_size=batch_size, num_workers=num_workers)
     else:
         # TODO: added drop_last, should decide if we want to keep this
-        return DataLoader(dataset, sampler=sampler, batch_size=batch_size, num_workers=num_workers, drop_last=False, persistent_workers=True, pin_memory=True)
+        return DataLoader(dataset, sampler=sampler, batch_size=batch_size, num_workers=num_workers, drop_last=False,
+                          persistent_workers=(num_workers > 0), pin_memory=True)
 
 
 def get_transformations(transformations, transform_names):

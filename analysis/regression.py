@@ -593,6 +593,9 @@ class FitQun1ParticleFit(RegressionRun, PositionPrediction, DirectionPrediction,
 
 class WatChMaLRegression(RegressionRun, WatChMaLOutput, ABC):
     """Base class to hold predictions of a WatChMaL regression run"""
+
+    predictions_name = None
+
     def __init__(self, directory, run_label, indices=None, selection=None, **plot_args):
         """
         Constructs the object holding the results of a WatChMaL regression run.
@@ -617,44 +620,22 @@ class WatChMaLRegression(RegressionRun, WatChMaLOutput, ABC):
         WatChMaLOutput.__init__(self, directory=directory, indices=indices)
         self._predictions = None
 
-    def read_training_log_from_csv(self, directory):
-        """
-        Read the training progression logs from the given directory.
-
-        Parameters
-        ----------
-        directory: str
-            Path to the directory of the training run.
-
-        Returns
-        -------
-        np.ndarray
-            Array of train epoch values for each entry in the training progression log.
-        np.ndarray
-            Array of train loss values for each entry in the training progression log.
-        np.ndarray
-            Array of validation epoch values for each entry in the training progression log
-        np.ndarray
-            Array of validation loss values for each entry in the training progression log
-        np.ndarray
-            Array of boolean values indicating whether each entry had the best validation loss so far in the training
-            progression log
-        """
-        super().read_training_log_from_csv(directory)
-        self._val_log_loss = self._log_val[:, 2]
-        self._val_log_best = self._log_val[:, 3].astype(bool)
-        return self._train_log_epoch, self._train_log_loss, self._val_log_epoch, self._val_log_loss, self._val_log_best
-
     @property
     def predictions(self):
         """Predictions output from the WatChMaL regression run"""
         if self._predictions is None:
-            self._predictions = self.get_outputs("predictions")
+            try:
+                self._predictions = self.get_outputs("predicted_"+self.predictions_name)
+            except (FileNotFoundError, TypeError):
+                self._predictions = self.get_outputs("predictions")
         return self._predictions
 
 
 class WatChMaLPositionRegression(WatChMaLRegression, PositionPrediction):
     """Class to hold position predictions of a WatChMaL regression run"""
+
+    predictions_name = "positions"
+
     def __init__(self, directory, run_label, true_positions=None, true_directions=None, indices=None, selection=None,
                  **plot_args):
         """
@@ -692,6 +673,9 @@ class WatChMaLPositionRegression(WatChMaLRegression, PositionPrediction):
 
 class WatChMaLDirectionRegression(WatChMaLRegression, DirectionPrediction):
     """Class to hold direction predictions of a WatChMaL regression run"""
+
+    predictions_name = "angles"
+
     def __init__(self, directory, run_label, true_directions=None, indices=None, zenith_axis=None, selection=None,
                  **plot_args):
         """
@@ -734,6 +718,9 @@ class WatChMaLDirectionRegression(WatChMaLRegression, DirectionPrediction):
 
 class WatChMaLEnergyRegression(WatChMaLRegression, MomentumPrediction):
     """Class to hold momentum predictions of a WatChMaL regression run"""
+
+    predictions_name = "energies"
+
     def __init__(self, directory, run_label, true_momenta=None, true_labels=None, indices=None, selection=None,
                  **plot_args):
         """

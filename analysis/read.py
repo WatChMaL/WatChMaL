@@ -112,7 +112,6 @@ class WatChMaLOutput(ABC, metaclass=ABCMeta):
         sorted_outputs[intersection[1]] = outputs[intersection[2]]
         return sorted_outputs.squeeze()
 
-    @abstractmethod
     def read_training_log_from_csv(self, directory):
         """
         Read the training progression logs from the given directory.
@@ -127,15 +126,18 @@ class WatChMaLOutput(ABC, metaclass=ABCMeta):
         tuple
             Tuple of arrays of training progression log values, see `read_training_log_from_csv` for details.
         """
-        train_files = glob.glob(directory + "/log_train*.csv")
-        self._log_train = np.array([np.genfromtxt(f, delimiter=',', skip_header=1) for f in train_files])
-        self._log_val = np.genfromtxt(directory + "/log_val.csv", delimiter=',', skip_header=1)
-        train_iteration = self._log_train[0, :, 0]
-        train_epoch = self._log_train[0, :, 1]
+        train_files = glob.glob(directory + "/outputs/log_train*.csv")
+        self._log_train = np.array([np.genfromtxt(f, delimiter=',', names=True, dtype=None) for f in train_files])
+        self._log_val = np.genfromtxt(directory + "/outputs/log_val.csv", delimiter=',', names=True, dtype=None)
+        train_iteration = self._log_train['iteration'][0]
+        train_epoch = self._log_train['epoch'][0]
         it_per_epoch = np.min(train_iteration[train_epoch == 1]) - 1
         self._train_log_epoch = train_iteration / it_per_epoch
-        self._train_log_loss = np.mean(self._log_train[:, :, 2], axis=0)
-        self._val_log_epoch = self._log_val[:, 0] / it_per_epoch
+        self._train_log_loss = np.mean(self._log_train['loss'], axis=0)
+        self._val_log_epoch = self._log_val['iteration'] / it_per_epoch
+        self._val_log_loss = self._log_val['loss']
+        self._val_log_best = self._log_val['saved_best']
+        return self._train_log_epoch, self._train_log_loss, self._val_log_epoch, self._val_log_loss, self._val_log_best
 
     @property
     def training_log(self):

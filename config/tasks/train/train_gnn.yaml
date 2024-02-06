@@ -1,6 +1,5 @@
 epochs: 10
 
-report_interval: 100
 val_interval: 100
 num_val_batches: 32
 

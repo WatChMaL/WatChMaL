@@ -1,5 +1,0 @@
-_target_: watchmal.dataset.pointnet.pointnet_dataset.PointNetDataset
-geometry_file: /fast_scratch/WatChMaL/data/geometries/geo_mPMTshort.npz
-use_times: True
-use_orientations: False
-n_points: 4000

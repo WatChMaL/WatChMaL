@@ -1,41 +1,30 @@
 import subprocess
-import warnings
+import csv
+import logging
+
+log = logging.getLogger(__name__)
 
 
-class CSVData:
+class CSVLog:
     """
     Class to organize output csv file
     """
-    def __init__(self,fout):
-        self.name  = fout
-        self._fout = None
-        self._str  = None
-        self._dict = {}
+    def __init__(self, filename):
+        self.filename = filename
+        self.file = None
+        self.writer = None
 
-    def record(self, input_dict):
-        self._dict = input_dict.copy()
-
-    def write(self):
-        if self._str is None:
-            self._fout=open(self.name,'w')
-            self._str=''
-            for i,key in enumerate(self._dict.keys()):
-                if i:
-                    self._fout.write(',')
-                    self._str += ','
-                self._fout.write(key)
-                self._str+='{:f}'
-            self._fout.write('\n')
-            self._str+='\n'
-
-        self._fout.write(self._str.format(*(self._dict.values())))
-
-    def flush(self):
-        if self._fout: self._fout.flush()
+    def log(self, fields):
+        if self.file is None:
+            self.file = open(self.filename, 'w', newline='')
+            self.writer = csv.DictWriter(self.file, fieldnames=fields.keys())
+            self.writer.writeheader()
+        self.writer.writerow(fields)
+        self.file.flush()
 
     def close(self):
-        if self._str is not None:
-            self._fout.close()
+        if self.file is not None:
+            self.file.close()
 
 
 def get_git_version(path):
@@ -43,13 +32,13 @@ def get_git_version(path):
         git_version = subprocess.check_output(['git', '-C', path, 'describe', '--always', '--long', '--tags', '--dirty'], stderr=subprocess.PIPE)
     except subprocess.CalledProcessError as e:
         if b"not a git repository" in e.stderr:
-            warnings.warn("WARNING: Path is not in a git repository so version tracking is not available.", stacklevel=2)
+            log.warning("WARNING: Path is not in a git repository so version tracking is not available.", stacklevel=2)
         else:
-            warnings.warn("WARNING: Error when attempting to check git version so version tracking is not available.", stacklevel=2)
+            log.warning("WARNING: Error when attempting to check git version so version tracking is not available.", stacklevel=2)
         return None
     else:
         git_version = git_version.decode().strip()
         if "-dirty" in git_version:
-            warnings.warn("WARNING: The git repository has uncommitted changes. Please commit changes before running"
-                          " WatChMaL code for proper version control", stacklevel=2)
+            log.warning("WARNING: The git repository has uncommitted changes. Please commit changes before running "
+                        "WatChMaL code for proper version control", stacklevel=2)
         return git_version

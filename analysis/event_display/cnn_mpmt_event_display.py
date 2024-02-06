@@ -3,9 +3,8 @@ Tools for event displays from CNN mPMT dataset
 """
 import numpy as np
 from analysis.event_display.event_display import plot_event_2d, plot_event_3d
-from watchmal.dataset.cnn_mpmt.cnn_mpmt_dataset import CNNmPMTDataset
+from watchmal.dataset.cnn_mpmt.cnn_mpmt_dataset import CNNmPMTDataset, HORIZONTAL_FLIP_MPMT_MAP, VERTICAL_FLIP_MPMT_MAP
 from matplotlib.pyplot import cm
-import torch
 
 
 def channel_position_offset(channel):
@@ -58,7 +57,7 @@ class CNNmPMTEventDisplay(CNNmPMTDataset):
     """
     This class extends the CNNmPMTDataset class to provide event display functionality.
     """
-    def plot_data_2d(self, data, transformations=None, **kwargs):
+    def plot_data_2d(self, data, channel=None, transforms=None, **kwargs):
         """
         Plots CNN mPMT data as a 2D event-display-like image.
 
@@ -66,7 +65,9 @@ class CNNmPMTEventDisplay(CNNmPMTDataset):
         ----------
         data : array_like
             Array of PMT data formatted for use in CNN, i.e. with dimensions of (channels, x, y)
-        transformations : function or str or sequence of function or str, optional
+        channel : str
+            Name of the channel to plot. By default, plots whatever is provided by the dataset.
+        transforms : function or str or sequence of function or str, optional
             Transformation function, or the name of a method of the dataset, or a sequence of functions or method names
             to apply to the data, such as those used for augmentation.
         kwargs : optional
@@ -94,19 +95,18 @@ class CNNmPMTEventDisplay(CNNmPMTDataset):
         """
         rows = self.mpmt_positions[:, 0]
         columns = self.mpmt_positions[:, 1]
-        data = torch.Tensor(data)
-        mpmt_locations = torch.zeros_like(data, dtype=bool)  # fill a data-like array with False
-        mpmt_locations[18, rows, columns] = True  # replace channel 18 with True where there is an actual mPMT
-        if transformations is not None:
-            data = self.apply_transformation(transformations, data)
-            mpmt_locations = self.apply_transformation(transformations, mpmt_locations)
-        coordinates = coordinates_from_data(data)  # coordinates corresponding to each element of the data array
         data_nan = np.full_like(data, np.nan)  # fill an array with nan for positions where there's no actual PMTs
-        data_nan[:, mpmt_locations[18]] = data[:, mpmt_locations[18]]  # replace the nans with the data where there is a PMT
-        mpmt_coordinates = coordinates[mpmt_locations.flatten()]  # the coordinates of where the actual mPMTs are
+        data_nan[:, rows, columns] = data[:, rows, columns]  # replace the nans with the data where there is a PMT
+        if transforms is not None:
+            data_nan = self.apply_transform(transforms, {"data": data_nan})["data"]
+        if channel is not None:
+            data_nan = data_nan[self.channel_ranges[channel]]
+        coordinates = coordinates_from_data(data_nan)  # coordinates corresponding to each element of the data array
+        # also get the coordinates of the centre PMT (channel 18) where the actual mPMTs are (not nan)
+        mpmt_coordinates = coordinates[((~np.isnan(data_nan)) & (np.indices(data_nan.shape)[0] == 18)).flatten()]
         return plot_event_2d(data_nan.flatten(), coordinates, mpmt_coordinates, **kwargs)
 
-    def plot_event_2d(self, event, transformations=None, **kwargs):
+    def plot_event_2d(self, event, channel=None, transforms=None, **kwargs):
         """
         Plots an event as a 2D event-display-like image.
 
@@ -114,7 +114,9 @@ class CNNmPMTEventDisplay(CNNmPMTDataset):
         ----------
         event : int
             index of the event to plot
-        transformations : function or str or sequence of function or str, optional
+        channel : str
+            Name of the channel to plot. By default, plots whatever is provided by the dataset.
+        transforms : function or str or sequence of function or str, optional
             Transformation function, or the name of a method of this class, or a sequence of functions or method names
             to apply to the event data, such as those used for augmentation.
         kwargs : optional
@@ -141,16 +143,16 @@ class CNNmPMTEventDisplay(CNNmPMTDataset):
         ax: matplotlib.axes.Axes
         """
         data = self[event]['data']
-        return self.plot_data_2d(data, transformations=transformations, **kwargs)
+        return self.plot_data_2d(data, channel, transforms=transforms, **kwargs)
 
-    def apply_transformation(self, transformation, data):
+    def apply_transform(self, transform, data):
         """
-        Apply a transformation or sequence of transformations to data.
+        Apply a transformation or sequence of transforms to data.
 
         Parameters
         ----------
-        transformation : function or str or sequence of function or str, optional
-            Transformation function, or the name of a method of this class, or a sequence of functions or method names
+        transform : function or str or sequence of function or str, optional
+            Transform function, or the name of a method of this class, or a sequence of functions or method names
             to apply to the event data, such as those used for augmentation.
         data : array_like
             Array of PMT data formatted for use in CNN, i.e. with dimensions of (channels, x, y)
@@ -160,16 +162,16 @@ class CNNmPMTEventDisplay(CNNmPMTDataset):
         np.ndarray
             transformed data
         """
-        if isinstance(transformation, str):
-            transformation = getattr(self, transformation)
-        if callable(transformation):
-            return transformation(data)
+        if isinstance(transform, str):
+            transform = getattr(self, transform)
+        if callable(transform):
+            return transform(data)
         else:
-            for t in transformation:
-                data = self.apply_transformation(t, data)
+            for t in transform:
+                data = self.apply_transform(t, data)
             return data
 
-    def plot_event_3d(self, event, geometry_file_path, **kwargs):
+    def plot_event_3d(self, event, geometry_file_path, channel="charge", **kwargs):
         """
         Plots an event as a 3D event-display-like image.
 
@@ -179,6 +181,8 @@ class CNNmPMTEventDisplay(CNNmPMTDataset):
             index of the event to plot
         geometry_file_path : str
             path to the file containing 3D geometry of detector
+        channel : str
+            Name of the channel to plot. By default, plot charge.
         kwargs : optional
             Additional arguments to pass to `analysis.event_display.plot_event_3d`
             Valid arguments are:
@@ -215,7 +219,8 @@ class CNNmPMTEventDisplay(CNNmPMTDataset):
         pmt_coordinates = geo_file['position']
         data_coordinates = pmt_coordinates[self.event_hit_pmts, :]
         unhit_coordinates = np.delete(pmt_coordinates, self.event_hit_pmts, axis=0)
-        data = np.array(self.event_hit_charges)
+        hit_data = {"charge": self.event_hit_charges, "time": self.event_hit_times}
+        data = np.array(hit_data[channel])
         return plot_event_3d(data, data_coordinates, unhit_coordinates, **kwargs)
 
     def plot_geometry(self, geometry_file_path, plot=('x', 'y', 'z'), view='2d', **kwargs):
@@ -320,8 +325,18 @@ class CNNmPMTEventDisplay(CNNmPMTDataset):
                 data = data_map[p]
                 fig, ax = plot_event_3d(data, pmt_coordinates, **args)
             else:
+                # plotting geometry, we always want to permute PMT channels, so save and replace the flip_permutation
+                old_h_flip_permutation = self.h_flip_permutation
+                old_v_flip_permutation = self.v_flip_permutation
+                old_rotate_permutation = self.rotate_permutation
+                self.h_flip_permutation = HORIZONTAL_FLIP_MPMT_MAP
+                self.v_flip_permutation = VERTICAL_FLIP_MPMT_MAP
+                self.rotate_permutation = HORIZONTAL_FLIP_MPMT_MAP[VERTICAL_FLIP_MPMT_MAP]
                 data = self.process_data(pmt_ids, data_map[p])
                 fig, ax = self.plot_data_2d(data, **args)
+                self.h_flip_permutation = old_h_flip_permutation
+                self.v_flip_permutation = old_v_flip_permutation
+                self.rotate_permutation = old_rotate_permutation
             figs.append(fig)
             axes.append(ax)
         return figs, axes

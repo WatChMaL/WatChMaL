@@ -1,6 +1,5 @@
 epochs: 20
 
-report_interval: 50
 val_interval: 100
 num_val_batches: 32
 
@@ -11,10 +10,8 @@ data_loaders:
     split_key: train_idxs
     batch_size: 128
     num_workers: 4
-    transforms:
-      - x_flip
-      - y_flip
-      - z_flip
+    pre-transforms:
+      - random_reflections
   validation:
     split_key: val_idxs
     batch_size: 512

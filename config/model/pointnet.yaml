@@ -1,0 +1,5 @@
+_target_: watchmal.model.pointnet.PointNet
+feature_transform: True
+num_input_channels: 5
+num_output_channels: 4
+mean_pool: 256
