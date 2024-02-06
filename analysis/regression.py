@@ -3,7 +3,7 @@ import tabulate
 import matplotlib.pyplot as plt
 from abc import ABC, abstractmethod
 from analysis.read import WatChMaLOutput
-import analysis.utils.math as math
+import watchmal.utils.math as math
 import analysis.utils.binning as bins
 from analysis.utils.plotting import plot_binned_values
 

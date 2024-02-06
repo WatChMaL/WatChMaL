@@ -2,7 +2,7 @@
 Class for loading data in h5 format
 """
 
-from analysis.utils.math import direction_from_angles
+from watchmal.utils.math import direction_from_angles
 
 # torch imports
 from torch.utils.data import Dataset
