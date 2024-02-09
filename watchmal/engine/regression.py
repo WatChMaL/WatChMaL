@@ -26,8 +26,8 @@ class RegressionEngine(ReconstructionEngine):
         """
         # create the directory for saving the log and dump files
         super().__init__(truth_key, model, rank, gpu, dump_path)
-        self.output_center = output_center
-        self.output_scale = output_scale
+        self.output_center = torch.tensor(output_center).to(self.device)
+        self.output_scale = torch.tensor(output_scale).to(self.device)
 
     def forward(self, train=True):
         """
