@@ -24,7 +24,7 @@ log = logging.getLogger(__name__)
 
 
 class ReconstructionEngine(ABC):
-    def __init__(self, truth_key, model, rank, gpu, dump_path):
+    def __init__(self, truth_key, model, rank, device, dump_path):
         """
         Parameters
         ==========
@@ -34,7 +34,7 @@ class ReconstructionEngine(ABC):
             `nn.module` object that contains the full network that the engine will use in training or evaluation.
         rank : int
             The rank of process among all spawned processes (in multiprocessing mode).
-        gpu : int
+        device : int
             The gpu that this process is running on.
         dump_path : string
             The path to store outputs in.
@@ -47,7 +47,7 @@ class ReconstructionEngine(ABC):
         self.dump_path = dump_path
         self.rank = rank
         self.model = model
-        self.device = torch.device(gpu)
+        self.device = torch.device(device)
         self.truth_key = truth_key
 
         # Set up the parameters to save given the model type

@@ -106,7 +106,7 @@ def main_worker_function(rank, ngpus_per_node, is_distributed, config, hydra_con
         model = DDP(model, device_ids=[device])
 
     # Instantiate the engine
-    engine = instantiate(config.engine, model=model, rank=rank, gpu=device, dump_path=config.dump_path)
+    engine = instantiate(config.engine, model=model, rank=rank, device=device, dump_path=config.dump_path)
     
     for task, task_config in config.tasks.items():
         with open_dict(task_config):

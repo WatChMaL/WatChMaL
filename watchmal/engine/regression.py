@@ -5,7 +5,7 @@ from watchmal.engine.reconstruction import ReconstructionEngine
 
 class RegressionEngine(ReconstructionEngine):
     """Engine for performing training or evaluation for a regression network."""
-    def __init__(self, truth_key, model, rank, gpu, dump_path, output_center=0, output_scale=1):
+    def __init__(self, truth_key, model, rank, device, dump_path, output_center=0, output_scale=1):
         """
         Parameters
         ==========
@@ -15,7 +15,7 @@ class RegressionEngine(ReconstructionEngine):
             `nn.module` object that contains the full network that the engine will use in training or evaluation.
         rank : int
             The rank of process among all spawned processes (in multiprocessing mode).
-        gpu : int
+        device : int
             The gpu that this process is running on.
         dump_path : string
             The path to store outputs in.
@@ -25,7 +25,7 @@ class RegressionEngine(ReconstructionEngine):
             Value to divide target values by
         """
         # create the directory for saving the log and dump files
-        super().__init__(truth_key, model, rank, gpu, dump_path)
+        super().__init__(truth_key, model, rank, device, dump_path)
         self.output_center = torch.tensor(output_center).to(self.device)
         self.output_scale = torch.tensor(output_scale).to(self.device)
 

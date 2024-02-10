@@ -5,7 +5,7 @@ from watchmal.engine.reconstruction import ReconstructionEngine
 
 class ClassifierEngine(ReconstructionEngine):
     """Engine for performing training or evaluation for a classification network."""
-    def __init__(self, truth_key, model, rank, gpu, dump_path, label_set=None):
+    def __init__(self, truth_key, model, rank, device, dump_path, label_set=None):
         """
         Parameters
         ==========
@@ -15,7 +15,7 @@ class ClassifierEngine(ReconstructionEngine):
             `nn.module` object that contains the full network that the engine will use in training or evaluation.
         rank : int
             The rank of process among all spawned processes (in multiprocessing mode).
-        gpu : int
+        device : int
             The gpu that this process is running on.
         dump_path : string
             The path to store outputs in.
@@ -24,7 +24,7 @@ class ClassifierEngine(ReconstructionEngine):
             0 to N).
         """
         # create the directory for saving the log and dump files
-        super().__init__(truth_key, model, rank, gpu, dump_path)
+        super().__init__(truth_key, model, rank, device, dump_path)
         self.softmax = torch.nn.Softmax(dim=1)
         self.label_set = label_set
 
