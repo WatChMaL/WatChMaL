@@ -282,6 +282,7 @@ class ReconstructionEngine(ABC):
             # extract the event data and target from the input data dict
             self.data = val_data['data'].to(self.device)
             self.target = val_data[self.truth_key].to(self.device)
+            print(torch.mean(torch.abs(self.target),dim=0))
             # evaluate the network
             outputs, metrics = self.forward(False)
             if val_metrics is None:
@@ -327,6 +328,8 @@ class ReconstructionEngine(ABC):
                 self.target = eval_data[self.truth_key].to(self.device)
                 # Run the forward procedure and output the result
                 outputs, metrics = self.forward(train=False)
+                print(f"pred: {outputs['predicted_positions'][0]}")
+                print(f'output: {self.target.data[0]}')
                 # Add the local result to the final result
                 if self.step == 0:
                     indices = eval_data['indices']

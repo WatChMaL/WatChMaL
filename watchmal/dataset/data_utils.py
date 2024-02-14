@@ -71,10 +71,8 @@ def get_data_loader(dataset, batch_size, sampler, num_workers, is_distributed, s
     transforms = (pre_transforms or []) + transforms + (post_transforms or [])
     dataset = instantiate(dataset, transforms=(transforms or None))
     
-    print(split_path)
     if split_path is not None and split_key is not None:
         split_indices = np.load(split_path, allow_pickle=True)[split_key]
-        print(split_indices)
         sampler = instantiate(sampler, split_indices)
     else:
         sampler = instantiate(sampler)
@@ -154,15 +152,20 @@ def apply_random_transformations(transforms, data, segmented_labels=None, counte
     return data
 
 def save_fig(data,isPost, displacement=0, counter=0):
-    plt.imshow(data)
+    print("SAVE FIG")
+    print(data.size())
+    plt.imshow(data.numpy(), interpolation='none')
+    print("1")
     cbar = plt.colorbar()
+    print("2")
     cbar.ax.get_yaxis().labelpad = 15
     cbar.ax.set_ylabel("PMT Charge", rotation=270)
     plt.xlabel('X pixels')
     plt.ylabel('Y pixels')
     if isPost:
-        plt.savefig('/home/fcormier/t2k/ml/t2k_ml_training/plots/'+str(counter)+'_post_rot_img_dis'+str(displacement)+'.png')
+        plt.savefig('/home/fcormier/t2k/ml/t2k_ml_training/plots/'+str(counter)+'_post_rot_dc_img_dis'+str(displacement)+'.png')
     else:
         plt.savefig('/home/fcormier/t2k/ml/t2k_ml_training/plots/'+str(counter)+'_pre_rot_img'+'.png')
     plt.clf()
+    print("3")
 

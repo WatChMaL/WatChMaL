@@ -46,9 +46,13 @@ class RegressionEngine(ReconstructionEngine):
         with torch.set_grad_enabled(train):
             # Move the data and the labels to the GPU (if using CPU this has no effect)
             model_out = self.model(self.data).reshape(self.target.shape)
+            #model_out = self.model(self.data)
             scaled_target = self.scale_values(self.target)
             scaled_model_out = self.scale_values(model_out)
             self.loss = self.criterion(scaled_model_out, scaled_target)
+            if False:
+                print(f'center: {self.output_center}, scale: {self.output_scale}')
+                print(f'Loss: {self.loss}, pred: {torch.mean(torch.abs(scaled_model_out),dim=0)}, target: {torch.mean(torch.abs(scaled_target), dim=0)}, train: {train}')
             outputs = {"predicted_"+self.truth_key: model_out}
             metrics = {'loss': self.loss}
         return outputs, metrics

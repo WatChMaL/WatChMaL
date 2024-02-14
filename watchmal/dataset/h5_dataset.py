@@ -69,6 +69,7 @@ class H5CommonDataset(Dataset, ABC):
         self.positions  = np.array(self.h5_file["positions"])
         self.angles     = np.array(self.h5_file["angles"])
         self.energies   = np.array(self.h5_file["energies"])
+        self.rootfiles   = np.array(self.h5_file["root_files"])
         # if "veto" in self.h5_file.keys():
         #     self.veto  = np.array(self.h5_file["veto"])
         #     self.veto2 = np.array(self.h5_file["veto2"])
@@ -135,7 +136,7 @@ class H5CommonDataset(Dataset, ABC):
             "angles": self.angles[item].copy(),
             "positions": self.positions[item].copy(),
             # "event_ids": self.event_ids[item],
-            "root_files": self.root_files[item],
+            "root_files": self.rootfiles[item],
             "indices": item
         }
         return data_dict

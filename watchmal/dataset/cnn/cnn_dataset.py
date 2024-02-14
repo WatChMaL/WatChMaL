@@ -30,7 +30,7 @@ class CNNDataset(H5Dataset):
     event-display-like format.
     """
 
-    def __init__(self, h5file, pmt_positions_file, use_times=True, use_charges=True, transforms=None, one_indexed=False):
+    def __init__(self, h5file, pmt_positions_file, use_times=True, use_charges=True, transforms=None, one_indexed=True):
         """
         Constructs a dataset for CNN data. Event hit data is read in from the HDF5 file and the PMT charge and/or time
         data is formatted into an event-display-like image for input to a CNN. Each pixel of the image corresponds to
@@ -130,7 +130,9 @@ class CNNDataset(H5Dataset):
         #self.save_fig(processed_data[0],True, displacement = displacement)
         self.counter+=1
         processed_data = du.apply_random_transformations(self.transforms, processed_data, counter = self.counter)
-        processed_data = self.double_cover(processed_data)
+        #processed_data = self.double_cover(processed_data)
+        if False:
+            du.save_fig(processed_data[1],True, counter = self.counter)
 
         data_dict["data"] = processed_data
 
