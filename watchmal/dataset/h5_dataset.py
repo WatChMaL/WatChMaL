@@ -125,16 +125,18 @@ class H5CommonDataset(Dataset, ABC):
         if not self.initialized:
             self.initialize()
 
-        positions = np.squeeze(self.positions[item], axis=0)
+        positions = np.squeeze(self.positions[item].copy(), axis=0)
         norm_position = True
         if norm_position == True:
             positions = normalize(positions)
+
+        #print(f'Positions in h5: {np.mean(np.abs(self.positions[item].copy()/1800),axis=0)}')
 
         data_dict = {
             "labels": self.labels[item].astype(np.int64),
             "energies": self.energies[item].copy(),
             "angles": self.angles[item].copy(),
-            "positions": self.positions[item].copy(),
+            "positions": positions,
             # "event_ids": self.event_ids[item],
             "root_files": self.rootfiles[item],
             "indices": item

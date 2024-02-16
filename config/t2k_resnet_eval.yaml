@@ -1,9 +1,11 @@
 data:
-  split_path: '/fast_scratch_2/fcormier/t2k/jan24_electronsOnly_5M//train_val_test_nFolds10_fold7.npz' 
+  split_path: '/fast_scratch_2/fcormier/t2k/jan24_electronsOnly_5M//train_val_test_nFolds10_fold2.npz' 
   dataset:
     h5file: '/fast_scratch_2/fcormier/t2k/jan24_electronsOnly_5M/digi_combine.hy'
     _target_: watchmal.dataset.cnn.cnn_dataset.CNNDataset
     pmt_positions_file: /fast_scratch/WatChMaL/data/T2K/image_files/skdetsim_imagefile.npy
+    channel_scaling:
+      time: [950, 10]
 model:
   _target_: watchmal.model.resnet.resnet18
   num_input_channels: 2
@@ -28,11 +30,12 @@ tasks:
     data_loaders:
       test:
         split_key: test_idxs
-        batch_size: 128
+        batch_size: 512
         num_workers: 2
         sampler:
           _target_: torch.utils.data.sampler.SubsetRandomSampler
 gpu_list: 
-- 0
+- 4
+- 5
 seed: null
 dump_path: ./outputs/

@@ -4,6 +4,8 @@ data:
     h5file: '/fast_scratch_2/fcormier/t2k/jan24_electronsOnly_5M/digi_combine.hy'
     _target_: watchmal.dataset.cnn.cnn_dataset.CNNDataset
     pmt_positions_file: /fast_scratch/WatChMaL/data/T2K/image_files/skdetsim_imagefile.npy
+    channel_scaling:
+      time: [950, 10]
 model:
   _target_: watchmal.model.resnet.resnet18
   num_input_channels: 2
@@ -17,7 +19,7 @@ engine:
 tasks:
   train:
     epochs: 3
-    val_interval: 20
+    val_interval: 100
     num_val_batches: 50
     checkpointing: false
     loss:
@@ -26,13 +28,13 @@ tasks:
     data_loaders:
       train:
         split_key: train_idxs
-        batch_size: 40
+        batch_size: 80
         num_workers: 3
         sampler:
           _target_: torch.utils.data.sampler.SubsetRandomSampler
       validation:
-        split_key: test_idxs
-        batch_size: 128
+        split_key: val_idxs
+        batch_size: 256
         num_workers: 3
         sampler:
           _target_: torch.utils.data.sampler.SubsetRandomSampler
@@ -41,7 +43,6 @@ tasks:
       lr: 0.001
       weight_decay: 0
   evaluate:
-    restore_best_state: true
     data_loaders:
       test:
         split_key: test_idxs
@@ -50,6 +51,7 @@ tasks:
         sampler:
           _target_: torch.utils.data.sampler.SubsetRandomSampler
 gpu_list: 
-- 6
+- 0
+- 1
 seed: null
 dump_path: ./outputs/

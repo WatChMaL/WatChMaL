@@ -30,7 +30,7 @@ class CNNDataset(H5Dataset):
     event-display-like format.
     """
 
-    def __init__(self, h5file, pmt_positions_file, use_times=True, use_charges=True, transforms=None, one_indexed=True):
+    def __init__(self, h5file, pmt_positions_file, use_times=True, use_charges=True, transforms=None, one_indexed=True, channel_scaling=None):
         """
         Constructs a dataset for CNN data. Event hit data is read in from the HDF5 file and the PMT charge and/or time
         data is formatted into an event-display-like image for input to a CNN. Each pixel of the image corresponds to
@@ -66,6 +66,9 @@ class CNNDataset(H5Dataset):
         self.transforms = du.get_transformations(self, transforms)
         self.one_indexed = one_indexed
         self.counter=0
+        if channel_scaling is None:
+            channel_scaling = {}
+        self.scaling = channel_scaling
 
         n_channels = 0
         if use_times:
@@ -123,8 +126,11 @@ class CNNDataset(H5Dataset):
     def __getitem__(self, item):
 
         data_dict = super().__getitem__(item)
-
-        processed_data = from_numpy(self.process_data(self.event_hit_pmts, self.event_hit_times, self.event_hit_charges))
+        hit_data = {"charge": self.event_hit_charges, "time": self.event_hit_times}
+        # apply scaling to channels
+        for c, (offset, scale) in self.scaling.items():
+            hit_data[c] = (hit_data[c] - offset)/scale
+        processed_data = from_numpy(self.process_data(self.event_hit_pmts, hit_data["time"], hit_data["charge"]))
         #self.save_fig(processed_data[0],False)
         #processed_data, displacement = self.rotate_cylinder(Tensor.numpy(processed_data))
         #self.save_fig(processed_data[0],True, displacement = displacement)
