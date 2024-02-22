@@ -432,10 +432,8 @@ class WatChMaLClassification(ClassificationRun, WatChMaLOutput):
             progression log
         """
         super().read_training_log_from_csv(directory)
-        self._train_log_accuracy = np.mean(self._log_train[:, :, 3], axis=0)
-        self._val_log_loss = self._log_val[:, 1]
-        self._val_log_accuracy = self._log_val[:, 2]
-        self._val_log_best = self._log_val[:, 3].astype(bool)
+        self._train_log_accuracy = np.mean(self._log_train['accuracy'], axis=0)
+        self._val_log_accuracy = self._log_val['accuracy']
         return (self._train_log_epoch, self._train_log_loss, self._train_log_accuracy,
                 self._val_log_epoch, self._val_log_loss, self._val_log_accuracy, self._val_log_best)
 

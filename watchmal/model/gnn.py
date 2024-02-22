@@ -7,7 +7,7 @@ import torch_geometric
 
 
 class GCN(torch.nn.Module):
-    def __init__(self, in_feat=8, h_feat=8, num_classes=4):
+    def __init__(self, in_feat=8, h_feat=8, num_output_channels=4):
         '''
         Graph Convolutional Network (GCN)
         The Graph Neural Network from the 
@@ -20,7 +20,7 @@ class GCN(torch.nn.Module):
         self.conv2 = torch_geometric.nn.GCNConv(h_feat, h_feat*2)
         self.conv3 = torch_geometric.nn.GCNConv(h_feat*2, h_feat*4)
         self.conv4 = torch_geometric.nn.GCNConv(h_feat*4, h_feat*8)
-        self.lin = torch.nn.Linear(h_feat*8, num_classes)
+        self.lin = torch.nn.Linear(h_feat * 8, num_output_channels)
 
     def forward(self, graph):
         x, edge_index, batch = graph.x, graph.edge_index, graph.batch

@@ -1,0 +1,20 @@
+gpu_list:
+  - 5
+seed: null
+dump_path: './outputs/'
+model:
+  num_output_channels: 3
+defaults:
+  - data: iwcd_electron
+  - data/dataset: iwcd_cnn
+  - model: resnet18
+  - engine: regression
+  - tasks/train: train_resnet
+  - optimizers@tasks.train.optimizers: adam
+  - loss@tasks.train.loss: huber
+  - sampler@tasks.train.data_loaders.train.sampler: subset_random
+  - sampler@tasks.train.data_loaders.validation.sampler: subset_random
+  - tasks/restore_best_state: restore_best_state
+  - tasks/evaluate: test
+  - sampler@tasks.evaluate.data_loaders.test.sampler: subset_sequential
+  - _self_

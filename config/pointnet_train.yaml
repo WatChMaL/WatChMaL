@@ -1,11 +1,9 @@
 seed: null
 dump_path: './outputs/'
 defaults:
-    - data: iwcd_short
-    - data/dataset: iwcd_short_pointnet
-    - model: classifier
-    - model/feature_extractor: pointnet
-    - model/classification_network: pointnet_fc
+    - data: iwcd
+    - data/dataset: iwcd_pointnet
+    - model: pointnet
     - engine: classifier
     - tasks/train: train_pointnet
     - optimizers@tasks.train.optimizers: adam
