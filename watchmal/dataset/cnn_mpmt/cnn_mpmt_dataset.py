@@ -90,17 +90,19 @@ class CNNmPMTDataset(H5Dataset):
         self.rotate_permutation = self.h_flip_permutation[self.v_flip_permutation]
 
         # make some index expressions for different parts of the image, to use in transformations etc
-        rows, counts = np.unique(self.mpmt_positions[:, 0], return_counts=True)  # count occurrences of each row
+        rows, row_counts = np.unique(self.mpmt_positions[:, 0], return_counts=True)  # count occurrences of each row
+        cols, col_counts = np.unique(self.mpmt_positions[:, 1], return_counts=True)  # count occurrences of each column
         # barrel rows are those where the row appears in mpmt_positions as many times as the image width
-        barrel_rows = [row for row, count in zip(rows, counts) if count == self.image_width]
+        barrel_rows = rows[row_counts==self.image_width]
         # endcap size is the number of rows before the first barrel row
-        self.endcap_size = min(barrel_rows)
-        self.barrel = np.s_[..., self.endcap_size:max(barrel_rows) + 1, :]
-        # endcaps are assumed to be within squares centred above and below the barrel
-        endcap_left = (self.image_width - self.endcap_size) // 2
-        endcap_right = endcap_left + self.endcap_size
-        self.top_endcap = np.s_[..., :self.endcap_size, endcap_left:endcap_right]
-        self.bottom_endcap = np.s_[..., -self.endcap_size:, endcap_left:endcap_right]
+        self.endcap_size = np.min(barrel_rows)
+        self.barrel = np.s_[..., self.endcap_size:np.max(barrel_rows) + 1, :]
+        # endcaps are assumed to be within squares above and below the barrel
+        # endcap columns are those where the column appears in mpmt_positions more than the number of barrel rows
+        self.endcap_left = np.min(cols[col_counts > len(barrel_rows)])
+        self.endcap_right = self.endcap_left + self.endcap_size
+        self.top_endcap = np.s_[..., :self.endcap_size, self.endcap_left:self.endcap_right]
+        self.bottom_endcap = np.s_[..., -self.endcap_size:, self.endcap_left:self.endcap_right]
 
     def process_data(self, hit_pmts, hit_data):
         """Returns image-like event data array (channels, rows, columns) from arrays of PMT IDs and data at the PMTs."""
@@ -154,6 +156,10 @@ class CNNmPMTDataset(H5Dataset):
     def horizontal_reflection(self, data_dict):
         """Takes CNN input data and truth info and performs horizontal flip, permuting mPMT channels where needed."""
         data_dict["data"] = self.horizontal_image_flip(data_dict["data"])
+        # If the endcaps are offset from the middle of the image, need to roll the image to keep the same offset
+        offset = self.endcap_left - (self.image_width - self.endcap_right)
+        if offset != 0:
+            data_dict["data"] = np.roll(data_dict["data"], offset, 2)
         # Note: Below assumes y-axis is the tank's azimuth axis. True for IWCD and WCTE, not true for SK, HKFD.
         if "positions" in data_dict:
             data_dict["positions"][..., 2] *= -1
@@ -235,12 +241,12 @@ class CNNmPMTDataset(H5Dataset):
         padded_data = np.pad(data_dict["data"], ((0, 0), (0, 0), (0, self.image_width//2)), mode="edge")
         # copy the left half of the barrel to the right hand side
         left_barrel = np.array_split(data_dict["data"][self.barrel], 2, axis=2)[0]
-        padded_data[:, self.endcap_size:-self.endcap_size, -self.image_width//2] = left_barrel
+        padded_data[:, self.endcap_size:-self.endcap_size, -self.image_width//2:] = left_barrel
         # copy 180-deg rotated end-caps to the appropriate place
-        endcap_copy_left = self.image_width - (self.endcap_size // 2)
-        endcap_copy_right = endcap_copy_left + self.endcap_size
-        padded_data[:, :self.endcap_size, endcap_copy_left:endcap_copy_right] = self.rotate_image(data_dict["data"][self.top_endcap])
-        padded_data[:, -self.endcap_size:, endcap_copy_left:endcap_copy_right] = self.rotate_image(data_dict["data"][self.bottom_endcap])
+        endcap_copy_left = (self.image_width // 2) + self.endcap_left
+        endcap_copy_columns = np.s_[endcap_copy_left:endcap_copy_left + self.endcap_size]
+        padded_data[:, :self.endcap_size, endcap_copy_columns] = self.rotate_image(data_dict["data"][self.top_endcap])
+        padded_data[:, -self.endcap_size:, endcap_copy_columns] = self.rotate_image(data_dict["data"][self.bottom_endcap])
         data_dict["data"] = padded_data
         return data_dict
 
@@ -269,11 +275,10 @@ class CNNmPMTDataset(H5Dataset):
         # Roll the tensor so that the first quarter is the last quarter
         quarter_barrel_width = self.image_width // 4
         data = np.roll(data_dict["data"], -quarter_barrel_width, 2)
-        # Paste the copied flipped endcaps a quarter barrel-width from the end
-        endcap_copy_left = -quarter_barrel_width - (self.endcap_size // 2)
-        endcap_copy_right = endcap_copy_left + self.endcap_size
-        data[..., :self.endcap_size, endcap_copy_left:endcap_copy_right] = top_endcap_copy
-        data[..., -self.endcap_size:, endcap_copy_left:endcap_copy_right] = bottom_endcap_copy
+        # Paste the copied flipped endcaps a quarter barrel-width past the original endcap position
+        endcap_copy_columns = np.s_[quarter_barrel_width + self.endcap_left: quarter_barrel_width + self.endcap_right]
+        data[..., :self.endcap_size, endcap_copy_columns] = top_endcap_copy
+        data[..., -self.endcap_size:, endcap_copy_columns] = bottom_endcap_copy
         # Rotate the bottom and top halves of barrel and concatenate to the top and bottom of the image
         barrel_bottom_flipped, barrel_top_flipped = np.array_split(self.rotate_image(data[self.barrel]), 2, axis=1)
         data_dict["data"] = np.concatenate((barrel_top_flipped, data, barrel_bottom_flipped), axis=1)
