@@ -112,8 +112,9 @@ class CNNmPMTEventDisplay(CNNmPMTDataset):
         if channel is not None:
             data_nan = data_nan[self.channel_ranges[channel]]
         coordinates = coordinates_from_data(data_nan, self.use_new_mpmt_convention)  # coordinates corresponding to each element of the data array
-        # also get the coordinates of the centre PMT (channel 18) where the actual mPMTs are (not nan)
-        mpmt_coordinates = coordinates[((~np.isnan(data_nan)) & (np.indices(data_nan.shape)[0] == 18)).flatten()]
+        # also get the coordinates of the centre PMT (channel 18 or 0 depending on convention) where the actual mPMTs are (not nan)
+        channel = 0 if self.use_new_mpmt_convention else 18
+        mpmt_coordinates = coordinates[((~np.isnan(data_nan)) & (np.indices(data_nan.shape)[0] == channel)).flatten()]
         return plot_event_2d(data_nan.flatten(), coordinates, mpmt_coordinates, **kwargs)
 
     def plot_event_2d(self, event, channel=None, transforms=None, **kwargs):
@@ -281,7 +282,8 @@ class CNNmPMTEventDisplay(CNNmPMTDataset):
         pmt_directions = geo_file['orientation']
         pmt_ids = np.arange(pmt_coordinates.shape[0])
         mpmts = pmt_ids//19
-        center_pmt_ids = mpmts*19+18  # the index of the centre PMT in the same module
+        channel = 0 if self.use_new_mpmt_convention else 18
+        center_pmt_ids = mpmts * 19 + channel  # the index of the centre PMT in the same module
         pmt_offset_positions = pmt_coordinates[pmt_ids]-pmt_coordinates[center_pmt_ids]
         pmt_mpmts = pmt_ids % 19
         data_map = {
@@ -339,9 +341,9 @@ class CNNmPMTEventDisplay(CNNmPMTDataset):
                 old_h_flip_permutation = self.h_flip_permutation
                 old_v_flip_permutation = self.v_flip_permutation
                 old_rotate_permutation = self.rotate_permutation
-                self.h_flip_permutation = HORIZONTAL_FLIP_MPMT_MAP
-                self.v_flip_permutation = VERTICAL_FLIP_MPMT_MAP
-                self.rotate_permutation = HORIZONTAL_FLIP_MPMT_MAP[VERTICAL_FLIP_MPMT_MAP]
+                self.h_flip_permutation = self.horizontal_flip_mpmt_map
+                self.v_flip_permutation = self.vertical_flip_mpmt_map
+                self.rotate_permutation = self.horizontal_flip_mpmt_map[self.vertical_flip_mpmt_map]
                 data = self.process_data(pmt_ids, data_map[p])
                 fig, ax = self.plot_data_2d(data, **args)
                 self.h_flip_permutation = old_h_flip_permutation
