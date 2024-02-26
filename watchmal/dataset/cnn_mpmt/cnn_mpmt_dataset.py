@@ -314,6 +314,11 @@ class CNNmPMTDataset(H5Dataset):
         data[..., -self.endcap_size:, endcap_copy_columns] = bottom_endcap_copy
         # Rotate the bottom and top halves of barrel and concatenate to the top and bottom of the image
         barrel_bottom_flipped, barrel_top_flipped = np.array_split(self.rotate_image(data[self.barrel]), 2, axis=1)
+        # If the endcaps are offset from the middle of the image, need to roll the flipped barrel to keep the same offset
+        offset = self.endcap_left - (self.image_width - self.endcap_right)
+        if offset != 0:
+            barrel_bottom_flipped = np.roll(barrel_bottom_flipped, offset, 2)
+            barrel_top_flipped = np.roll(barrel_top_flipped, offset, 2)
         data_dict["data"] = np.concatenate((barrel_top_flipped, data, barrel_bottom_flipped), axis=1)
         return data_dict
 
