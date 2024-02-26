@@ -12,9 +12,32 @@ import watchmal.dataset.data_utils as du
 
 PMTS_PER_MPMT = 19
 # maps to permute the PMTs within mPMT for various transformations, etc.
+# Old convention starts with outer ring and works inwards, with mPMT oriented with a vertical line of PMTs in the mPMT
+#           06
+#      07        05
+#  08       15      04
+#      16        14
+# 09        18        03
+#      17        13
+#   10      12      02
+#      11        01
+#           00
 BARREL_MPMT_MAP = np.array([6, 7, 8, 9, 10, 11, 0, 1, 2, 3, 4, 5, 15, 16, 17, 12, 13, 14, 18])
 VERTICAL_FLIP_MPMT_MAP = np.array([6, 5, 4, 3, 2, 1, 0, 11, 10, 9, 8, 7, 15, 14, 13, 12, 17, 16, 18])
 HORIZONTAL_FLIP_MPMT_MAP = np.array([0, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 12, 17, 16, 15, 14, 13, 18])
+# New convention starts with central PMT and works outwards, with mPMT oriented with a horizontal line of PMTs in the mPMT
+#           10
+#       11      09
+#   12    03  02    08
+
+# 13   04   00   01   07
+#
+#   14    05  06    18
+#       15      17
+#           16
+BARREL_MPMT_MAP_NEW = np.array([0, 4, 5, 6, 1, 2, 3, 13, 14, 15, 16, 17, 18, 7, 8, 9, 10, 11, 12])
+VERTICAL_FLIP_MPMT_MAP_NEW = np.array([0, 1, 6, 5, 4, 3, 2, 7, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8])
+HORIZONTAL_FLIP_MPMT_MAP_NEW = np.array([0, 4, 3, 2, 1, 6, 5, 13, 12, 11, 10, 9, 8, 7, 18, 17, 16, 15, 14])
 
 
 class CNNmPMTDataset(H5Dataset):
@@ -25,7 +48,8 @@ class CNNmPMTDataset(H5Dataset):
     with mPMTs arrange in an event-display-like format.
     """
 
-    def __init__(self, h5file, mpmt_positions_file, transforms=None, channels=None, collapse_mpmt_channels=None, channel_scaling=None):
+    def __init__(self, h5file, mpmt_positions_file, transforms=None, use_new_mpmt_convention=False, channels=None,
+                 collapse_mpmt_channels=None, channel_scaling=None):
         """
         Constructs a dataset for CNN data. Event hit data is read in from the HDF5 file and the PMT charge data is
         formatted into an event-display-like image for input to a CNN. Each pixel of the image corresponds to one mPMT
@@ -56,6 +80,15 @@ class CNNmPMTDataset(H5Dataset):
 
         super().__init__(h5file)
 
+        self.use_new_mpmt_convention = use_new_mpmt_convention
+        if self.use_new_mpmt_convention:
+            self.barrel_mpmt_map = BARREL_MPMT_MAP_NEW
+            self.vertical_flip_mpmt_map = VERTICAL_FLIP_MPMT_MAP_NEW
+            self.horizontal_flip_mpmt_map = HORIZONTAL_FLIP_MPMT_MAP_NEW
+        else:
+            self.barrel_mpmt_map = BARREL_MPMT_MAP
+            self.vertical_flip_mpmt_map = VERTICAL_FLIP_MPMT_MAP
+            self.horizontal_flip_mpmt_map = HORIZONTAL_FLIP_MPMT_MAP
         self.mpmt_positions = np.load(mpmt_positions_file)['mpmt_image_positions']
         self.transforms = du.get_transformations(self, transforms)
         if self.transforms is None:
@@ -79,8 +112,8 @@ class CNNmPMTDataset(H5Dataset):
             self.channel_ranges[c] = range(self.image_depth, self.image_depth+channel_depth)
             # permutation maps are needed for applying transformations to the image that affect mPMT channel ordering
             if channel_depth == PMTS_PER_MPMT:
-                self.v_flip_permutation.extend(VERTICAL_FLIP_MPMT_MAP + self.image_depth)
-                self.h_flip_permutation.extend(HORIZONTAL_FLIP_MPMT_MAP + self.image_depth)
+                self.v_flip_permutation.extend(self.vertical_flip_mpmt_map + self.image_depth)
+                self.h_flip_permutation.extend(self.horizontal_flip_mpmt_map + self.image_depth)
             else:
                 self.v_flip_permutation = np.extend(self.channel_ranges[c])
                 self.h_flip_permutation = np.extend(self.channel_ranges[c])
@@ -93,7 +126,7 @@ class CNNmPMTDataset(H5Dataset):
         rows, row_counts = np.unique(self.mpmt_positions[:, 0], return_counts=True)  # count occurrences of each row
         cols, col_counts = np.unique(self.mpmt_positions[:, 1], return_counts=True)  # count occurrences of each column
         # barrel rows are those where the row appears in mpmt_positions as many times as the image width
-        barrel_rows = rows[row_counts==self.image_width]
+        barrel_rows = rows[row_counts == self.image_width]
         # endcap size is the number of rows before the first barrel row
         self.endcap_size = np.min(barrel_rows)
         self.barrel = np.s_[..., self.endcap_size:np.max(barrel_rows) + 1, :]
@@ -116,7 +149,7 @@ class CNNmPMTDataset(H5Dataset):
         data[hit_channel, hit_rows, hit_cols] = hit_data
 
         # fix indexing of barrel PMTs in mPMT modules to match that of endcaps in the projection to 2D
-        data[self.barrel] = data[BARREL_MPMT_MAP][self.barrel]
+        data[self.barrel] = data[self.barrel_mpmt_map][self.barrel]
 
         return data
 
