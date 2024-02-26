@@ -191,8 +191,7 @@ class CNNmPMTDataset(H5Dataset):
         data_dict["data"] = self.horizontal_image_flip(data_dict["data"])
         # If the endcaps are offset from the middle of the image, need to roll the image to keep the same offset
         offset = self.endcap_left - (self.image_width - self.endcap_right)
-        if offset != 0:
-            data_dict["data"] = np.roll(data_dict["data"], offset, 2)
+        data_dict["data"] = np.roll(data_dict["data"], offset, 2)
         # Note: Below assumes y-axis is the tank's azimuth axis. True for IWCD and WCTE, not true for SK, HKFD.
         if "positions" in data_dict:
             data_dict["positions"][..., 2] *= -1
@@ -221,10 +220,10 @@ class CNNmPMTDataset(H5Dataset):
         halves of the barrels and vertical flip of the end-caps. This is equivalent to reflecting the detector, swapping
         front and back. The channels of the PMTs within mPMTs also have the appropriate permutation applied.
         """
-        # Horizontal flip of the left and right halves of barrel
-        left_barrel, right_barrel = np.array_split(data_dict["data"][self.barrel], 2, axis=2)
-        left_barrel[:] = self.horizontal_image_flip(left_barrel)
-        right_barrel[:] = self.horizontal_image_flip(right_barrel)
+        # Horizontal flip of the left and right halves of barrel, by flipping and then rolling whole barrel
+        # If the endcaps are offset from the middle of the image, need to roll the barrel to keep the same offset
+        roll = self.image_width//2 + self.endcap_left - (self.image_width - self.endcap_right)
+        data_dict["data"][self.barrel] = np.roll(self.horizontal_image_flip(data_dict["data"][self.barrel]), roll, 2)
         # Vertical flip of the top and bottom endcaps
         data_dict["data"][self.top_endcap] = self.vertical_image_flip(data_dict["data"][self.top_endcap])
         data_dict["data"][self.bottom_endcap] = self.vertical_image_flip(data_dict["data"][self.bottom_endcap])
@@ -313,12 +312,10 @@ class CNNmPMTDataset(H5Dataset):
         data[..., :self.endcap_size, endcap_copy_columns] = top_endcap_copy
         data[..., -self.endcap_size:, endcap_copy_columns] = bottom_endcap_copy
         # Rotate the bottom and top halves of barrel and concatenate to the top and bottom of the image
-        barrel_bottom_flipped, barrel_top_flipped = np.array_split(self.rotate_image(data[self.barrel]), 2, axis=1)
         # If the endcaps are offset from the middle of the image, need to roll the flipped barrel to keep the same offset
-        offset = self.endcap_left - (self.image_width - self.endcap_right)
-        if offset != 0:
-            barrel_bottom_flipped = np.roll(barrel_bottom_flipped, offset, 2)
-            barrel_top_flipped = np.roll(barrel_top_flipped, offset, 2)
+        offset = (self.image_width - self.endcap_right) - self.endcap_left
+        barrel_rolled = np.roll(data[self.barrel], offset, 2)
+        barrel_bottom_flipped, barrel_top_flipped = np.array_split(self.rotate_image(barrel_rolled), 2, axis=1)
         data_dict["data"] = np.concatenate((barrel_top_flipped, data, barrel_bottom_flipped), axis=1)
         return data_dict
 
