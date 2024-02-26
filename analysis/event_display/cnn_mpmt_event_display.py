@@ -26,7 +26,7 @@ def channel_position_offset(channel, use_new_convention=False):
     """
     channel = channel % 19
     if use_new_convention:
-        theta = (channel > 6)*2*np.pi*(channel-7)/12 + ((channel > 0) & (channel <= 6))*2*np.pi*(channel-1)/6 - np.pi/2
+        theta = (channel > 6)*2*np.pi*(19-channel)/12 + ((channel > 0) & (channel <= 6))*2*np.pi*(7-channel)/6 + np.pi/2
         radius = 0.2*(channel > 0) + 0.2*(channel > 6)
     else:
         theta = (channel < 12)*2*np.pi*channel/12 + ((channel >= 12) & (channel < 18))*2*np.pi*(channel-12)/6
