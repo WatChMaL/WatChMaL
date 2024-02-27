@@ -711,13 +711,14 @@ class WatChMaLDirectionRegression(WatChMaLRegression, DirectionPrediction):
     @property
     def direction_prediction(self):
         """Direction predictions calculated from predicted angles output from the WatChMaL regression run"""
-        try:
-            self._direction_prediction = math.direction_from_angles(self.predictions, self.zenith_axis)
-        except (FileNotFoundError, TypeError):
-            self.predictions_name = "directions"
-            norm = np.linalg.norm(self.predictions, axis=1, keepdims=True)
-            norm[norm == 0] = 1
-            self._direction_prediction = self.predictions / norm
+        if self._direction_prediction is None:
+            try:
+                self._direction_prediction = math.direction_from_angles(self.predictions, self.zenith_axis)
+            except (FileNotFoundError, TypeError):
+                self.predictions_name = "directions"
+                norm = np.linalg.norm(self.predictions, axis=1, keepdims=True)
+                norm[norm == 0] = 1
+                self._direction_prediction = self.predictions / norm
         return self._direction_prediction
 
 
