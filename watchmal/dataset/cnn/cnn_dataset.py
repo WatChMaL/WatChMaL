@@ -11,6 +11,8 @@ import torchvision
 # generic imports
 import numpy as np
 
+import random
+
 # WatChMaL imports
 from WatChMaL.watchmal.dataset.h5_dataset import H5Dataset
 import WatChMaL.watchmal.dataset.data_utils as du
@@ -64,6 +66,8 @@ class CNNDataset(H5Dataset):
                             np.count_nonzero(self.pmt_positions[:, 0] == row) == self.data_size[1]]
         #self.transforms = None 
         self.transforms = du.get_transformations(self, transforms)
+        if self.transforms is None:
+            self.transforms = []
         self.one_indexed = one_indexed
         self.counter=0
         if channel_scaling is None:
@@ -71,12 +75,30 @@ class CNNDataset(H5Dataset):
         self.scaling = channel_scaling
 
         n_channels = 0
+        channels = []
         if use_times:
             n_channels += 1
+            channels.append('charge')
         if use_charges:
             n_channels += 1
+            channels.append('time')
         if n_channels == 0:
             raise Exception("Please set 'use_times' and/or 'use_charges' to 'True' in your data config.")
+
+
+        self.image_height, self.image_width = np.max(self.pmt_positions, axis=0) + 1
+        # make some index expressions for different parts of the image, to use in transformations etc
+        rows, counts = np.unique(self.pmt_positions[:, 0], return_counts=True)  # count occurrences of each row
+        # barrel rows are those where the row appears in mpmt_positions as many times as the image width
+        barrel_rows = [row for row, count in zip(rows, counts) if count == self.image_width]
+        # endcap size is the number of rows before the first barrel row
+        self.endcap_size = min(barrel_rows)
+        self.barrel = np.s_[..., self.endcap_size:max(barrel_rows) + 1, :]
+        # endcaps are assumed to be within squares centred above and below the barrel
+        endcap_left = (self.image_width - self.endcap_size) // 2
+        endcap_right = endcap_left + self.endcap_size
+        self.top_endcap = np.s_[..., :self.endcap_size, endcap_left:endcap_right]
+        self.bottom_endcap = np.s_[..., -self.endcap_size:, endcap_left:endcap_right]
        
         self.data_size = np.insert(self.data_size, 0, n_channels)
 
@@ -135,12 +157,19 @@ class CNNDataset(H5Dataset):
         #processed_data, displacement = self.rotate_cylinder(Tensor.numpy(processed_data))
         #self.save_fig(processed_data[0],True, displacement = displacement)
         self.counter+=1
-        processed_data = du.apply_random_transformations(self.transforms, processed_data, counter = self.counter)
-        #processed_data = self.double_cover(processed_data)
-        if False:
-            du.save_fig(processed_data[1],True, counter = self.counter)
-
         data_dict["data"] = processed_data
+        if False:
+            du.save_fig(processed_data[1],False, counter = self.counter)
+        for t in self.transforms:
+            #apply each transformation only half the time
+            #Probably should be implemented in data_utils?
+            if random.getrandbits(1):
+                data_dict = t(data_dict)
+        if False:
+            du.save_fig(data_dict["data"][1],True, counter = self.counter)
+        processed_data = self.double_cover(data_dict["data"])
+        #processed_data = du.apply_random_transformations(self.transforms, processed_data, counter = self.counter)
+
 
         return data_dict
 
@@ -170,6 +199,17 @@ class CNNDataset(H5Dataset):
         return torch.from_numpy(np.concatenate((new_top_endcap, new_barrel, new_bottom_endcap), axis=1)), displacement
 
 
+    def horizontal_image_flip(self, data):
+        """Perform horizontal flip of image data, permuting mPMT channels where needed."""
+        return torch.flip(data[ :, :], [2])
+
+    def vertical_image_flip(self, data):
+        """Perform vertical flip of image data, permuting mPMT channels where needed."""
+        return torch.flip(data[ :, :], [1])
+
+    def rotate_image(self, data):
+        """Perform 180 degree rotation of image data, permuting mPMT channels where needed."""
+        return torch.flip(data[ :, :], [1, 2])
 
     def horizontal_flip(self, data):
         """
@@ -177,7 +217,7 @@ class CNNDataset(H5Dataset):
         The channels of the PMTs within mPMTs also have the appropriate permutation applied.
         """
         #print('applying horizontal flip')
-        return flip(data[:, :], [2])
+        return flip(data[:, :], [1])
 
     def vertical_flip(self, data):
         """
@@ -185,7 +225,7 @@ class CNNDataset(H5Dataset):
         The channels of the PMTs within mPMTs also have the appropriate permutation applied.
         """
         #print('applying vertical flip')
-        return flip(data[:, :], [1])
+        return flip(data[:, :], [2])
 
     def flip_180(self, data):
         """
@@ -194,8 +234,75 @@ class CNNDataset(H5Dataset):
         The channels of the PMTs within mPMTs also have the appropriate permutation applied.
         """
         #print('applying 180 flip')
-        return self.horizontal_flip(self.vertical_flip(data))
+        return self.horizontal_image_flip(self.vertical_flip(data))
+
+    def horizontal_reflection(self, data_dict):
+        """Takes CNN input data and truth info and performs horizontal flip, permuting mPMT channels where needed."""
+        data_dict["data"] = self.horizontal_image_flip(data_dict["data"])
+        # Note: Below assumes z-axis is the tank's azimuth axis. True for SK, HKFD; not true for IWCD & WCTE
+        if "positions" in data_dict:
+            data_dict["positions"][..., 1] *= -1
+        if "angles" in data_dict:
+            data_dict["angles"][..., 1] *= -1
+        return data_dict
+
+    def vertical_reflection(self, data_dict):
+        """Takes CNN input data and truth info and performs vertical flip, permuting mPMT channels where needed."""
+        data_dict["data"] = self.vertical_image_flip(data_dict["data"])
+        # Note: Below assumes z-axis is the tank's azimuth axis. True for SK, HKFD; not true for IWCD & WCTE
+        if "positions" in data_dict:
+            data_dict["positions"][..., 2] *= -1
+        if "angles" in data_dict:
+            data_dict["angles"][..., 0] *= -1
+            data_dict["angles"][..., 0] += np.pi
+        return data_dict
+
+    def front_back_reflection(self, data_dict):
+        """
+        Takes CNN input data and truth information and returns the data with horizontal flip of the left and right
+        halves of the barrels and vertical flip of the end-caps. This is equivalent to reflecting the detector, swapping
+        front and back. The channels of the PMTs within mPMTs also have the appropriate permutation applied.
+        """
+        # Horizontal flip of the left and right halves of barrel
+        left_barrel, right_barrel = np.array_split(data_dict["data"][self.barrel], 2, axis=2)
+        left_barrel[:] = self.horizontal_image_flip(left_barrel)
+        right_barrel[:] = self.horizontal_image_flip(right_barrel)
+        # Vertical flip of the top and bottom endcaps
+        data_dict["data"][self.top_endcap] = self.vertical_image_flip(data_dict["data"][self.top_endcap])
+        data_dict["data"][self.bottom_endcap] = self.vertical_image_flip(data_dict["data"][self.bottom_endcap])
+        # Note: Below assumes z-axis is the tank's azimuth axis. True for SK, HKFD; not true for IWCD & WCTE
+        if "positions" in data_dict:
+            data_dict["positions"][..., 0] *= -1
+        # New azimuth angle is -(azimuth-pi) if > 0 or -(azimuth+pi) if < 0
+        if "angles" in data_dict:
+            data_dict["angles"][..., 1] += np.where(data_dict["angles"][..., 1] > 0, -np.pi, np.pi)
+            data_dict["angles"][..., 1] *= -1
+        return data_dict
+
+    def rotation180(self, data_dict):
+        """
+        Takes CNN input data and truth information and returns the data with horizontal and vertical flip of the
+        end-caps and shifting of the barrel rows by half the width. This is equivalent to a 180-degree rotation of the
+        detector about its axis. The channels of the PMTs within mPMTs also have the appropriate permutation applied.
+        """
+        # Vertical and horizontal flips of the endcaps
+        data_dict["data"][self.top_endcap] = self.rotate_image(data_dict["data"][self.top_endcap])
+        data_dict["data"][self.bottom_endcap] = self.rotate_image(data_dict["data"][self.bottom_endcap])
+        # Roll the barrel around by half the columns
+        data_dict["data"][self.barrel] = torch.roll(data_dict["data"][self.barrel], self.image_width // 2, 2)
+        # Note: Below assumes y-axis is the tank's azimuth axis. True for IWCD and WCTE, not true for SK, HKFD.
+        if "positions" in data_dict:
+            data_dict["positions"][..., (0, 1)] *= -1
+        # rotate azimuth angle by pi, keeping values in range [-pi, pi]
+        if "angles" in data_dict:
+            data_dict["angles"][..., 1] += np.where(data_dict["angles"][..., 1] > 0, -np.pi, np.pi)
+        return data_dict
+
+    def random_reflections(self, data_dict):
+        """Takes CNN input data and truth information and randomly reflects the detector about each axis."""
+        return du.apply_random_transformations([self.horizontal_reflection, self.vertical_reflection, self.rotation180], data_dict)
  
+    '''
     def front_back_reflection(self, data):
         """
         Takes CNN input data in event-display-like format and returns the data with horizontal flip of the left and
@@ -253,6 +360,7 @@ class CNNDataset(H5Dataset):
         transform_data[:, self.barrel_rows, :] = torch.roll(transform_data[:, self.barrel_rows, :], 20, 2)
 
         return transform_data
+    '''
     
     def mpmt_padding(self, data):
         """
