@@ -2,6 +2,8 @@
 Class for loading data in h5 format
 """
 
+from watchmal.utils.math import direction_from_angles
+
 # torch imports
 from torch.utils.data import Dataset
 
@@ -120,6 +122,7 @@ class H5CommonDataset(Dataset, ABC):
             "energies": self.energies[item].copy(),
             "angles": self.angles[item].copy(),
             "positions": self.positions[item].copy(),
+            "directions": direction_from_angles(self.angles[item]),
             # "event_ids": self.event_ids[item],
             # "root_files": self.root_files[item],
             "indices": item
