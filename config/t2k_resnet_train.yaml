@@ -6,6 +6,11 @@ data:
     pmt_positions_file: /scratch/fcormier/t2k/ml/image_files/skdetsim_imagefile.npy
     channel_scaling:
       time: [950, 10]
+    transforms:
+      - rotation180
+      - front_back_reflection
+      - horizontal_reflection
+      - vertical_reflection
 model:
   _target_: watchmal.model.resnet.resnet18
   num_input_channels: 2
@@ -29,19 +34,22 @@ tasks:
       train:
         split_key: train_idxs
         batch_size: 1200
-        num_workers: 6
+        num_workers: 16
         sampler:
           _target_: torch.utils.data.sampler.SubsetRandomSampler
       validation:
         split_key: val_idxs
         batch_size: 1200
-        num_workers: 6
+        num_workers: 16
         sampler:
           _target_: torch.utils.data.sampler.SubsetRandomSampler
     optimizers:
       _target_: torch.optim.Adam
       lr: 0.1
       weight_decay: 0
+    scheduler:
+      _target_: torch.optim.lr_scheduler.ExponentialLR
+      gamma: 0.8
   evaluate:
     data_loaders:
       test:

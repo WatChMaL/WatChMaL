@@ -82,8 +82,8 @@ class CNNmPMTDataset(H5Dataset):
                 self.v_flip_permutation.extend(VERTICAL_FLIP_MPMT_MAP + self.image_depth)
                 self.h_flip_permutation.extend(HORIZONTAL_FLIP_MPMT_MAP + self.image_depth)
             else:
-                self.v_flip_permutation = np.extend(self.channel_ranges[c])
-                self.h_flip_permutation = np.extend(self.channel_ranges[c])
+                self.v_flip_permutation = self.v_flip_permutation.extend(self.channel_ranges[c])
+                self.h_flip_permutation = self.h_flip_permutation.extend(self.channel_ranges[c])
             self.image_depth += channel_depth
         self.h_flip_permutation = np.array(self.h_flip_permutation)
         self.v_flip_permutation = np.array(self.v_flip_permutation)

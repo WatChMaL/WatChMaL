@@ -1,7 +1,7 @@
 data:
-  split_path: '/fast_scratch_2/fcormier/t2k/jan24_electronsOnly_5M//train_val_test_nFolds10_fold2.npz' 
+  split_path: '/fast_scratch_2/aferreira/t2k/ml/data/oct20_combine_flatE/train_val_test_nFolds3_fold0.npz' 
   dataset:
-    h5file: '/fast_scratch_2/fcormier/t2k/jan24_electronsOnly_5M/digi_combine.hy'
+    h5file: '/fast_scratch_2/aferreira/t2k/ml/data/oct20_combine_flatE/combine_combine.hy'
     _target_: watchmal.dataset.cnn.cnn_dataset.CNNDataset
     pmt_positions_file: /fast_scratch/WatChMaL/data/T2K/image_files/skdetsim_imagefile.npy
     channel_scaling:
@@ -35,7 +35,7 @@ tasks:
         sampler:
           _target_: torch.utils.data.sampler.SubsetRandomSampler
 gpu_list: 
-- 4
-- 5
+- 6
+- 7
 seed: null
 dump_path: ./outputs/
