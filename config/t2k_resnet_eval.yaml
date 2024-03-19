@@ -7,7 +7,7 @@ data:
     channel_scaling:
       time: [950, 10]
 model:
-  _target_: watchmal.model.resnet.resnet18
+  _target_: watchmal.model.resnet.resnet34
   num_input_channels: 2
   num_output_channels: 3
   stride: 1
@@ -15,7 +15,7 @@ model:
   dropout_p: 0.3
 engine:
   _target_: watchmal.engine.regression.RegressionEngine
-  truth_key: 'positions'
+  truth_key: 'directions'
 tasks:
   restore_best_state:
     name: RegressionEngine_ResNet
@@ -30,7 +30,7 @@ tasks:
     data_loaders:
       test:
         split_key: test_idxs
-        batch_size: 512
+        batch_size: 256
         num_workers: 2
         sampler:
           _target_: torch.utils.data.sampler.SubsetRandomSampler

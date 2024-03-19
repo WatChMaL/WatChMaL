@@ -1,7 +1,7 @@
 """
 Class for loading data in h5 format
 """
-
+import torch
 # torch imports
 from torch.utils.data import Dataset
 
@@ -20,6 +20,14 @@ def normalize(data, x_bounds=(-1600,1600), y_bounds=(-1600,1600), z_bounds=(-160
 
     return data
 
+def mom_from_energies(energies, labels):
+    momenta = np.ones(len(energies), dtype=np.double)*-1
+    momenta[labels == 1] = np.sqrt(np.multiply(energies[labels==1], energies[labels==1]) - np.multiply(momenta[labels==1]*0.5,momenta[labels==1]*0.5))
+    #momenta = np.sqrt(np.multiply(energies, energies) - np.multiply(momenta*0.5,momenta*0.5))
+    momenta[labels == 0] = np.sqrt(np.multiply(energies[labels==0], energies[labels==0]) - np.multiply(momenta[labels==0]*105.7,momenta[labels==0]*105.7))
+    momenta[labels == 2] = np.sqrt(np.multiply(energies[labels==2], energies[labels==2]) - np.multiply(momenta[labels==2]*139.584,momenta[labels==2]*139.584))
+    return momenta
+
 class H5CommonDataset(Dataset, ABC):
     """
     Base class for loading data from HDF5 files containing PMT hit data.
@@ -33,6 +41,7 @@ class H5CommonDataset(Dataset, ABC):
     root_files        (n_events,)     object     File name and location of the ROOT file
     labels            (n_events,)     int32      Label for event classification (gamma=0, electron=1, muon=2)
     positions         (n_events,1,3)  float32    Initial (x, y, z) position of simulated particle
+    positions         (n_events,1,3)  float32    Initial (x, y, z) unit vector direction of simulated particle
     angles            (n_events,2)    float32    Initial direction of simulated particle as (polar, azimuth) angles
     energies          (n_events,1)    float32    Initial total energy of simulated particle
     veto              (n_events,)     bool       OD veto estimate based on any Cherenkov producing particles exiting the
@@ -67,6 +76,7 @@ class H5CommonDataset(Dataset, ABC):
         # self.root_files = np.array(self.h5_file["root_files"])
         self.labels = np.array(self.h5_file["labels"])
         self.positions  = np.array(self.h5_file["positions"])
+        self.directions  = np.array(self.h5_file["directions"])
         self.angles     = np.array(self.h5_file["angles"])
         self.energies   = np.array(self.h5_file["energies"])
         self.rootfiles   = np.array(self.h5_file["root_files"])
@@ -126,17 +136,20 @@ class H5CommonDataset(Dataset, ABC):
             self.initialize()
 
         positions = np.squeeze(self.positions[item].copy(), axis=0)
-        norm_position = True
+        norm_position = False
         if norm_position == True:
             positions = normalize(positions)
+        momenta = mom_from_energies(self.energies[item].copy(), self.labels[item])
 
         #print(f'Positions in h5: {np.mean(np.abs(self.positions[item].copy()/1800),axis=0)}')
 
         data_dict = {
             "labels": self.labels[item].astype(np.int64),
             "energies": self.energies[item].copy(),
+            "momenta": momenta.astype(np.double),
             "angles": self.angles[item].copy(),
             "positions": positions,
+            "directions": np.squeeze(self.directions[item].copy(), axis=0),
             # "event_ids": self.event_ids[item],
             "root_files": self.rootfiles[item],
             "indices": item
