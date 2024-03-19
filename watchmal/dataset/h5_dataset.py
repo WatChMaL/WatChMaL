@@ -67,6 +67,7 @@ class H5CommonDataset(Dataset, ABC):
         # self.root_files = np.array(self.h5_file["root_files"])
         self.labels = np.array(self.h5_file["labels"])
         self.positions  = np.array(self.h5_file["positions"])
+        self.directions  = np.array(self.h5_file["directions"])
         self.angles     = np.array(self.h5_file["angles"])
         self.energies   = np.array(self.h5_file["energies"])
         self.rootfiles   = np.array(self.h5_file["root_files"])
@@ -126,7 +127,7 @@ class H5CommonDataset(Dataset, ABC):
             self.initialize()
 
         positions = np.squeeze(self.positions[item].copy(), axis=0)
-        norm_position = True
+        norm_position = False
         if norm_position == True:
             positions = normalize(positions)
 
@@ -136,6 +137,7 @@ class H5CommonDataset(Dataset, ABC):
             "labels": self.labels[item].astype(np.int64),
             "energies": self.energies[item].copy(),
             "angles": self.angles[item].copy(),
+            "directions": self.directions[item].copy(),
             "positions": positions,
             # "event_ids": self.event_ids[item],
             "root_files": self.rootfiles[item],
