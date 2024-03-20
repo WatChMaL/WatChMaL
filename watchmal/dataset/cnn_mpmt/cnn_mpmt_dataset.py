@@ -49,7 +49,7 @@ class CNNmPMTDataset(H5Dataset):
     """
 
     def __init__(self, h5file, mpmt_positions_file, transforms=None, use_new_mpmt_convention=False, channels=None,
-                 collapse_mpmt_channels=None, channel_scaling=None):
+                 collapse_mpmt_channels=None, channel_scaling=None, geometry_file=None):
         """
         Constructs a dataset for CNN data. Event hit data is read in from the HDF5 file and the PMT charge data is
         formatted into an event-display-like image for input to a CNN. Each pixel of the image corresponds to one mPMT
@@ -103,25 +103,6 @@ class CNNmPMTDataset(H5Dataset):
         self.scaling = channel_scaling
 
         self.image_height, self.image_width = np.max(self.mpmt_positions, axis=0) + 1
-        self.image_depth = 0
-        self.channel_ranges = {}
-        self.h_flip_permutation = []
-        self.v_flip_permutation = []
-        for c in channels:
-            channel_depth = 2 if c in collapse_mpmt_channels else 19 if c in ("charge", "time") else 1
-            self.channel_ranges[c] = range(self.image_depth, self.image_depth+channel_depth)
-            # permutation maps are needed for applying transformations to the image that affect mPMT channel ordering
-            if channel_depth == PMTS_PER_MPMT:
-                self.v_flip_permutation.extend(self.vertical_flip_mpmt_map + self.image_depth)
-                self.h_flip_permutation.extend(self.horizontal_flip_mpmt_map + self.image_depth)
-            else:
-                self.v_flip_permutation = np.extend(self.channel_ranges[c])
-                self.h_flip_permutation = np.extend(self.channel_ranges[c])
-            self.image_depth += channel_depth
-        self.h_flip_permutation = np.array(self.h_flip_permutation)
-        self.v_flip_permutation = np.array(self.v_flip_permutation)
-        self.rotate_permutation = self.h_flip_permutation[self.v_flip_permutation]
-
         # make some index expressions for different parts of the image, to use in transformations etc
         rows, row_counts = np.unique(self.mpmt_positions[:, 0], return_counts=True)  # count occurrences of each row
         cols, col_counts = np.unique(self.mpmt_positions[:, 1], return_counts=True)  # count occurrences of each column
@@ -137,16 +118,61 @@ class CNNmPMTDataset(H5Dataset):
         self.top_endcap = np.s_[..., :self.endcap_size, self.endcap_left:self.endcap_right]
         self.bottom_endcap = np.s_[..., -self.endcap_size:, self.endcap_left:self.endcap_right]
 
-    def process_data(self, hit_pmts, hit_data):
+        # encode the 3D geometry into optional extra CNN input channels
+        self.geom_data = {}
+        if geometry_file is None:
+            if not set(channels).isdisjoint({"mpmt_position", "mpmt_direction", "mpmt_exists"}):
+                raise TypeError("A geometry file must be provided if using channels that encode the geometry.")
+        else:
+            geo_file = np.load(geometry_file)
+            pmt_positions = geo_file['position']
+            pmt_directions = geo_file['orientation']
+            pmt_ids = np.arange(0, pmt_positions.shape[0])
+            central_pmt_channel = 0 if self.use_new_mpmt_convention else 18
+            self.geom_data['mpmt_position'] = self.process_data(pmt_ids, pmt_positions)[central_pmt_channel]
+            self.geom_data['mpmt_direction'] = self.process_data(pmt_ids, pmt_directions)[central_pmt_channel]
+            self.geom_data['mpmt_exists'] = self.process_data(pmt_ids, 1)[central_pmt_channel]
+            for c, (offset, scale) in list(channel_scaling.items()):
+                if c in self.geom_data:
+                    self.geom_data[c] = (self.geom_data[c] - offset)/scale
+                    self.scaling.pop(c)
+
+        # set up data ranges and permutation maps for the chosen channels
+        self.image_depth = 0
+        self.channel_ranges = {}
+        self.h_flip_permutation = []
+        self.v_flip_permutation = []
+        for c in channels:
+            channel_depth = (self.geom_data[c].shape[0] if c in self.geom_data
+                             else 2 if c in collapse_mpmt_channels
+                             else PMTS_PER_MPMT)
+            self.channel_ranges[c] = range(self.image_depth, self.image_depth+channel_depth)
+            # permutation maps are needed for applying transformations to the image that affect mPMT channel ordering
+            if channel_depth == PMTS_PER_MPMT:
+                self.v_flip_permutation.extend(self.vertical_flip_mpmt_map + self.image_depth)
+                self.h_flip_permutation.extend(self.horizontal_flip_mpmt_map + self.image_depth)
+            else:
+                self.v_flip_permutation.extend(self.channel_ranges[c])
+                self.h_flip_permutation.extend(self.channel_ranges[c])
+            self.image_depth += channel_depth
+        self.h_flip_permutation = np.array(self.h_flip_permutation)
+        self.v_flip_permutation = np.array(self.v_flip_permutation)
+        self.rotate_permutation = self.h_flip_permutation[self.v_flip_permutation]
+
+    def process_data(self, pmts, pmt_data):
         """Returns image-like event data array (channels, rows, columns) from arrays of PMT IDs and data at the PMTs."""
-        hit_mpmts = hit_pmts // PMTS_PER_MPMT
-        hit_channel = hit_pmts % PMTS_PER_MPMT
+        # Ensure the data is a 2D array with first dimension being the number of pmts
+        pmt_data = np.atleast_1d(pmt_data)
+        pmt_data = pmt_data.reshape(pmt_data.shape[0], -1)
 
-        hit_rows = self.mpmt_positions[hit_mpmts, 0]
-        hit_cols = self.mpmt_positions[hit_mpmts, 1]
+        mpmts = pmts // PMTS_PER_MPMT
+        channels = pmts % PMTS_PER_MPMT
 
-        data = np.zeros((PMTS_PER_MPMT, self.image_height, self.image_width), dtype=np.float32)
-        data[hit_channel, hit_rows, hit_cols] = hit_data
+        rows = self.mpmt_positions[mpmts, 0]
+        cols = self.mpmt_positions[mpmts, 1]
+
+        data = np.zeros((PMTS_PER_MPMT, pmt_data.shape[1], self.image_height, self.image_width), dtype=np.float32)
+        data[channels, :, rows, cols] = pmt_data
 
         # fix indexing of barrel PMTs in mPMT modules to match that of endcaps in the projection to 2D
         data[self.barrel] = data[self.barrel_mpmt_map][self.barrel]
@@ -163,15 +189,20 @@ class CNNmPMTDataset(H5Dataset):
         # Process the channels
         data = np.zeros((self.image_depth, self.image_height, self.image_width), dtype=np.float32)
         for c, r in self.channel_ranges.items():
-            channel_data = self.process_data(self.event_hit_pmts, hit_data[c])
-            if c in self.collapse_channels:
-                channel_data = collapse_channel(channel_data)
+            if c in hit_data:
+                channel_data = self.process_data(self.event_hit_pmts, hit_data[c]).squeeze()
+                if c in self.collapse_channels:
+                    channel_data = collapse_channel(channel_data)
+            elif c in self.geom_data:
+                channel_data = self.geom_data[c]
+            else:
+                raise ValueError(f"Channel '{c}' is not available.")
             data[r] = channel_data
         # Apply transformations
         data_dict["data"] = data
         for t in self.transforms:
             data_dict = t(data_dict)
-        data_dict["data"] = torch.from_numpy(data_dict["data"])
+        data_dict["data"] = torch.from_numpy(data_dict["data"].copy())
         return data_dict
 
     def horizontal_image_flip(self, data):
@@ -322,4 +353,4 @@ class CNNmPMTDataset(H5Dataset):
 
 def collapse_channel(hit_data):
     """Replaces 19 channels for the 19 PMTs within mPMT with two channels corresponding to their mean and stdev."""
-    return np.stack((np.mean(hit_data, axis=0), np.std(hit_data, axis=0)))
+    return np.stack((np.mean(hit_data, axis=-3), np.std(hit_data, axis=-3)))
