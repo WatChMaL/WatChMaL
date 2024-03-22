@@ -139,14 +139,21 @@ class CNNmPMTDataset(H5Dataset):
 
         # set up data ranges and permutation maps for the chosen channels
         self.image_depth = 0
+        # dictionary of ranges for to the slices of the CNN tensor that correspond to each given channel
         self.channel_ranges = {}
+        # permutation of channels (ie PMTs within mPMT) when flipping the image horizontally
         self.h_flip_permutation = []
+        # permutation of channels (ie PMTs within mPMT) when flipping the image vertically
         self.v_flip_permutation = []
+        # which channels are actual data channels (not fixed geometry encoding) to get transformed when flipping image
+        self.data_channels = []
         for c in channels:
             channel_depth = (self.geom_data[c].shape[0] if c in self.geom_data
                              else 2 if c in collapse_mpmt_channels
                              else PMTS_PER_MPMT)
             self.channel_ranges[c] = range(self.image_depth, self.image_depth+channel_depth)
+            if c not in self.geom_data:
+                self.data_channels.extend(self.channel_ranges[c])
             # permutation maps are needed for applying transformations to the image that affect mPMT channel ordering
             if channel_depth == PMTS_PER_MPMT:
                 self.v_flip_permutation.extend(self.vertical_flip_mpmt_map + self.image_depth)
@@ -155,6 +162,7 @@ class CNNmPMTDataset(H5Dataset):
                 self.v_flip_permutation.extend(self.channel_ranges[c])
                 self.h_flip_permutation.extend(self.channel_ranges[c])
             self.image_depth += channel_depth
+        self.data_channels = np.array(self.data_channels)
         self.h_flip_permutation = np.array(self.h_flip_permutation)
         self.v_flip_permutation = np.array(self.v_flip_permutation)
         self.rotate_permutation = self.h_flip_permutation[self.v_flip_permutation]
@@ -219,10 +227,10 @@ class CNNmPMTDataset(H5Dataset):
 
     def horizontal_reflection(self, data_dict):
         """Takes CNN input data and truth info and performs horizontal flip, permuting mPMT channels where needed."""
-        data_dict["data"] = self.horizontal_image_flip(data_dict["data"])
+        data_dict["data"][self.data_channels] = self.horizontal_image_flip(data_dict["data"])[self.data_channels]
         # If the endcaps are offset from the middle of the image, need to roll the image to keep the same offset
         offset = self.endcap_left - (self.image_width - self.endcap_right)
-        data_dict["data"] = np.roll(data_dict["data"], offset, 2)
+        data_dict["data"][self.data_channels] = np.roll(data_dict["data"][self.data_channels], offset, 2)
         # Note: Below assumes y-axis is the tank's azimuth axis. True for IWCD and WCTE, not true for SK, HKFD.
         if "positions" in data_dict:
             data_dict["positions"][..., 2] *= -1
@@ -234,7 +242,7 @@ class CNNmPMTDataset(H5Dataset):
 
     def vertical_reflection(self, data_dict):
         """Takes CNN input data and truth info and performs vertical flip, permuting mPMT channels where needed."""
-        data_dict["data"] = self.vertical_image_flip(data_dict["data"])
+        data_dict["data"][self.data_channels] = self.vertical_image_flip(data_dict["data"])[self.data_channels]
         # Note: Below assumes y-axis is the tank's azimuth axis. True for IWCD and WCTE, not true for SK, HKFD.
         if "positions" in data_dict:
             data_dict["positions"][..., 1] *= -1
@@ -251,13 +259,16 @@ class CNNmPMTDataset(H5Dataset):
         halves of the barrels and vertical flip of the end-caps. This is equivalent to reflecting the detector, swapping
         front and back. The channels of the PMTs within mPMTs also have the appropriate permutation applied.
         """
+        barrel = data_dict["data"][self.barrel]
+        top_endcap = data_dict["data"][self.top_endcap]
+        bottom_endcap = data_dict["data"][self.bottom_endcap]
         # Horizontal flip of the left and right halves of barrel, by flipping and then rolling whole barrel
         # If the endcaps are offset from the middle of the image, need to roll the barrel to keep the same offset
         roll = self.image_width//2 + self.endcap_left - (self.image_width - self.endcap_right)
-        data_dict["data"][self.barrel] = np.roll(self.horizontal_image_flip(data_dict["data"][self.barrel]), roll, 2)
+        barrel[self.data_channels] = np.roll(self.horizontal_image_flip(barrel)[self.data_channels], roll, 2)
         # Vertical flip of the top and bottom endcaps
-        data_dict["data"][self.top_endcap] = self.vertical_image_flip(data_dict["data"][self.top_endcap])
-        data_dict["data"][self.bottom_endcap] = self.vertical_image_flip(data_dict["data"][self.bottom_endcap])
+        top_endcap[self.data_channels] = self.vertical_image_flip(top_endcap)[self.data_channels]
+        bottom_endcap[self.data_channels] = self.vertical_image_flip(bottom_endcap)[self.data_channels]
         # Note: Below assumes y-axis is the tank's azimuth axis. True for IWCD and WCTE, not true for SK, HKFD.
         if "positions" in data_dict:
             data_dict["positions"][..., 0] *= -1
@@ -275,11 +286,14 @@ class CNNmPMTDataset(H5Dataset):
         end-caps and shifting of the barrel rows by half the width. This is equivalent to a 180-degree rotation of the
         detector about its axis. The channels of the PMTs within mPMTs also have the appropriate permutation applied.
         """
-        # Vertical and horizontal flips of the endcaps
-        data_dict["data"][self.top_endcap] = self.rotate_image(data_dict["data"][self.top_endcap])
-        data_dict["data"][self.bottom_endcap] = self.rotate_image(data_dict["data"][self.bottom_endcap])
+        barrel = data_dict["data"][self.barrel]
+        top_endcap = data_dict["data"][self.top_endcap]
+        bottom_endcap = data_dict["data"][self.bottom_endcap]
         # Roll the barrel around by half the columns
-        data_dict["data"][self.barrel] = np.roll(data_dict["data"][self.barrel], self.image_width // 2, 2)
+        barrel[self.data_channels] = np.roll(barrel[self.data_channels], self.image_width // 2, 2)
+        # Vertical and horizontal flips of the endcaps
+        top_endcap[self.data_channels] = self.rotate_image(top_endcap)[self.data_channels]
+        bottom_endcap[self.data_channels] = self.rotate_image(bottom_endcap)[self.data_channels]
         # Note: Below assumes y-axis is the tank's azimuth axis. True for IWCD and WCTE, not true for SK, HKFD.
         if "positions" in data_dict:
             data_dict["positions"][..., (0, 2)] *= -1
