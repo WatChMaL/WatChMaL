@@ -47,8 +47,9 @@ class RegressionEngine(ReconstructionEngine):
             # Move the data and the labels to the GPU (if using CPU this has no effect)
             model_out = self.model(self.data).reshape(self.target.shape)
             #model_out = self.model(self.data)
-            scaled_target = self.scale_values(self.target)
-            scaled_model_out = self.scale_values(model_out)
+            #Force float type
+            scaled_target = self.scale_values(self.target).float()
+            scaled_model_out = self.scale_values(model_out).float()
             self.loss = self.criterion(scaled_model_out, scaled_target)
             if False:
                 print(f'center: {self.output_center}, scale: {self.output_scale}')

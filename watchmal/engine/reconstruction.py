@@ -246,8 +246,8 @@ class ReconstructionEngine(ABC):
                 self.save_state(suffix=f'_epoch_{self.epoch+1}')
             # run scheduler every epoch
             if self.scheduler is not None:
-                print(f"SCHEDULER, LR: {self.scheduler.get_last_lr()}")
                 self.scheduler.step()
+                print(f"SCHEDULER, LR: {self.scheduler.get_last_lr()}")
         self.train_log.close()
         if self.rank == 0:
             log.info(f"Epoch {self.epoch} completed in {datetime.now() - epoch_start_time}")
@@ -332,11 +332,13 @@ class ReconstructionEngine(ABC):
                 # Add the local result to the final result
                 if self.step == 0:
                     indices = eval_data['indices']
+                    labels = eval_data['labels']
                     targets = self.target
                     eval_outputs = outputs
                     eval_metrics = metrics
                 else:
                     indices = torch.cat((indices, eval_data['indices']))
+                    labels = torch.cat((labels, eval_data['labels']))
                     targets = torch.cat((targets, self.target))
                     for k in eval_outputs.keys():
                         eval_outputs[k] = torch.cat((eval_outputs[k], outputs[k]))
@@ -354,6 +356,7 @@ class ReconstructionEngine(ABC):
         for k in eval_metrics.keys():
             eval_metrics[k] /= self.step+1
         eval_outputs["indices"] = indices.to(self.device)
+        eval_outputs["labels"] = labels.to(self.device)
         eval_outputs[self.truth_key] = targets
         # Gather results from all processes
         eval_metrics = self.get_synchronized_metrics(eval_metrics)

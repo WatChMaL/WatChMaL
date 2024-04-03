@@ -22,6 +22,14 @@ def read_fitqun_file(file_path, plotting=False, regression=False):
         discr = -e_1rnll + mu_1rnll 
         discr = discr > e_1rmom*0.2
         discr = discr.astype(int)
+
+        pi_1rnll = np.ravel(h5fw['pi_1rnll'])
+        discr_pi = mu_1rnll - pi_1rnll 
+        print(mu_1rmom)
+        discr_pi = discr_pi < mu_1rmom*0.15
+        discr_pi = discr_pi.astype(int)
+        print(f"discr pi: {np.unique(discr_pi,return_counts=True)}")
+
         temp = np.abs(labels-discr)
         print(f"fitqun avg: {1-np.sum(temp)/len(temp)}")
         if plotting:
@@ -40,11 +48,15 @@ def read_fitqun_file(file_path, plotting=False, regression=False):
         if regression:
              mu_1rpos = np.array(h5fw['mu_1rpos'])
              e_1rpos = np.array(h5fw['e_1rpos'])
-             print(e_1rpos.shape, mu_1rpos.shape)
-             return (discr, labels, fitqun_1rmom, fitqun_hash), (mu_1rpos, e_1rpos)
+             mu_1rdir = np.array(h5fw['mu_1rdir'])
+             e_1rdir = np.array(h5fw['e_1rdir'])
+             mu_1rmom = np.array(h5fw['mu_1rmom'])
+             e_1rmom = np.array(h5fw['e_1rmom'])
+             return (discr, labels, fitqun_1rmom, fitqun_hash), (mu_1rpos, e_1rpos, mu_1rdir, e_1rdir, mu_1rmom, e_1rmom)
 
         else:
-             return discr, labels, fitqun_1rmom, fitqun_hash
+             print(f"DISCR PI: {discr_pi}")
+             return discr, discr_pi, labels, fitqun_1rmom, fitqun_hash
 
 def make_fitqunlike_discr(softmax, energies, labels):
     discr = softmax[:,1]-softmax[:,0]
@@ -138,19 +150,20 @@ def plot_fitqun_comparison(plot_output, ax_e, ax_fitqun_e, ax_mu, ax_fitqun_mu, 
 
         plt.errorbar(ve_xdata, e_ml, yerr=[e_ml-e_ml_low_err, e_ml_hi_err-e_ml], color='blue', label = 'ML', linestyle='', capsize=3)
         plt.errorbar(ve_xdata, e_fitqun, yerr=[e_fitqun-e_fitqun_low_err, e_fitqun_hi_err-e_fitqun], color='red', label = 'fiTQun', linestyle='', capsize=3)
+        print(f"E FITQUN: {e_fitqun}")
         plt.xlabel(x_axis_name)
-        plt.ylabel("Electron Tagging Efficiency [%]")
+        plt.ylabel("Muon Tagging Efficiency [%]")
         plt.legend()
-        #plt.ylim(90,100)
+        plt.ylim(90,100)
         #plt.figure(e_mom_fig_fitqun.number)
         plt.savefig(plot_output + 'e_'+name+'.png', format='png')
         plt.clf()
         plt.errorbar(ve_xdata, mu_ml, yerr=[mu_ml-mu_ml_low_err, mu_ml_hi_err-mu_ml], color='blue', label = 'ML', linestyle='', capsize=3)
         plt.errorbar(ve_xdata, mu_fitqun, yerr=[mu_fitqun-mu_fitqun_low_err, mu_fitqun_hi_err-mu_fitqun], color='red', label = 'fiTQun', linestyle='', capsize=3)
         plt.xlabel(x_axis_name)
-        plt.ylabel("Muon Mis-Tagging Efficiency [%]")
+        plt.ylabel("Pi+ Mis-Tagging Efficiency [%]")
         plt.legend()
-        #plt.ylim(90,100)
+        plt.ylim(0,100)
         #plt.figure(e_mom_fig_fitqun.number)
         plt.savefig(plot_output + 'mu_'+name+'.png', format='png')
         plt.clf()
