@@ -88,6 +88,7 @@ def get_data_loader(dataset, batch_size, sampler, num_workers, is_distributed, s
         return PyGDataLoader(dataset, sampler=sampler, batch_size=batch_size, num_workers=num_workers)
     else:
         # TODO: added drop_last, should decide if we want to keep this
+        #pin_memory=True seems to fail when using CPU
         return DataLoader(dataset, sampler=sampler, batch_size=batch_size, num_workers=num_workers, drop_last=False,
                           persistent_workers=(num_workers > 0), pin_memory=True)
 
