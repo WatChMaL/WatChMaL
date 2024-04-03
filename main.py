@@ -89,6 +89,7 @@ def main_worker_function(rank, ngpus_per_node, is_distributed, config, hydra_con
         # Set up pytorch distributed processing
         torch.distributed.init_process_group('nccl', init_method='env://', world_size=ngpus_per_node, rank=rank)
     if ngpus_per_node == 0:
+        print("USING CPU")
         device = torch.device("cpu")
     else:
         # Infer rank from gpu and ngpus, rank is position in gpu list

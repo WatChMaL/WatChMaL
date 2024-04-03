@@ -1,0 +1,60 @@
+data:
+  split_path: '/fast_scratch_2/fcormier/t2k/jan28_electronsOnly_5M//train_val_test_nFolds10_fold7.np' 
+  dataset:
+    h5file: '//fast_scratch_2/fcormier/t2k/jan28_electronsOnly_5M/digi_combine.hy'
+    _target_: watchmal.dataset.cnn.cnn_dataset.CNNDataset
+    pmt_positions_file: /fast_scratch/WatChMaL/data/T2K/image_files/skdetsim_imagefile.npy
+    channel_scaling:
+      time: [950, 10]
+model:
+  _target_: watchmal.model.resnet.resnet18
+  num_input_channels: 2
+  num_output_channels: 3
+  stride: 1
+  kernelSize: 1
+  dropout_p: 0.2
+engine:
+  _target_: watchmal.engine.classification.ClassifierEngine
+  truth_key: 'labels'
+  label_set: [0,1,2]
+tasks:
+  train:
+    epochs: 10
+    val_interval: 100
+    num_val_batches: 20
+    checkpointing: false
+    loss:
+      _target_: torch.nn.CrossEntropyLoss
+    data_loaders:
+      train:
+        split_key: train_idxs
+        batch_size: 100
+        num_workers: 3
+        sampler:
+          _target_: torch.utils.data.sampler.SubsetRandomSampler
+      validation:
+        split_key: val_idxs
+        batch_size: 100
+        num_workers: 3
+        sampler:
+          _target_: torch.utils.data.sampler.SubsetRandomSampler
+    optimizers:
+      _target_: torch.optim.Adam
+      lr: 0.001
+      weight_decay: 0
+    scheduler:
+      _target_: torch.optim.lr_scheduler.ExponentialLR
+      gamma: 0.8
+  evaluate:
+    data_loaders:
+      test:
+        split_key: test_idxs
+        batch_size: 200
+        num_workers: 4
+        sampler:
+          _target_: torch.utils.data.sampler.SubsetRandomSampler
+gpu_list: 
+- 4
+- 5
+seed: null
+dump_path: ./outputs/
