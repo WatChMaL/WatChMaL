@@ -1,46 +1,46 @@
 data:
-  split_path: '/fast_scratch_2/fcormier/t2k/jan28_electronsOnly_5M//train_val_test_nFolds10_fold7.np' 
+  split_path: '/scratch/fcormier/t2k/ml/output_skdetsim/apr3_eMuPiPlus_1500MeV_2M_1/train_val_test_gt200Hits_nFolds20_fold0.npz' 
   dataset:
     h5file: '//fast_scratch_2/fcormier/t2k/jan28_electronsOnly_5M/digi_combine.hy'
     _target_: watchmal.dataset.cnn.cnn_dataset.CNNDataset
-    pmt_positions_file: /fast_scratch/WatChMaL/data/T2K/image_files/skdetsim_imagefile.npy
+    pmt_positions_file: /scratch/fcormier/t2k/ml/image_files/skdetsim_imagefile.npy
     channel_scaling:
       time: [950, 10]
 model:
   _target_: watchmal.model.resnet.resnet18
-  num_input_channels: 2
+  num_input_channels: 5
   num_output_channels: 3
   stride: 1
   kernelSize: 1
-  dropout_p: 0.2
+  dropout_p: 0.
 engine:
   _target_: watchmal.engine.classification.ClassifierEngine
   truth_key: 'labels'
   label_set: [0,1,2]
 tasks:
   train:
-    epochs: 10
+    epochs: 30
     val_interval: 100
-    num_val_batches: 20
+    num_val_batches: 4
     checkpointing: false
     loss:
       _target_: torch.nn.CrossEntropyLoss
     data_loaders:
       train:
         split_key: train_idxs
-        batch_size: 100
-        num_workers: 3
+        batch_size: 500
+        num_workers: 12
         sampler:
           _target_: torch.utils.data.sampler.SubsetRandomSampler
       validation:
         split_key: val_idxs
-        batch_size: 100
-        num_workers: 3
+        batch_size: 1000
+        num_workers: 6
         sampler:
           _target_: torch.utils.data.sampler.SubsetRandomSampler
     optimizers:
       _target_: torch.optim.Adam
-      lr: 0.001
+      lr: 0.01
       weight_decay: 0
     scheduler:
       _target_: torch.optim.lr_scheduler.ExponentialLR
@@ -49,12 +49,14 @@ tasks:
     data_loaders:
       test:
         split_key: test_idxs
-        batch_size: 200
-        num_workers: 4
+        batch_size: 2000
+        num_workers: 6
         sampler:
           _target_: torch.utils.data.sampler.SubsetRandomSampler
 gpu_list: 
-- 4
-- 5
+- 0
+- 1
+- 2
+- 3
 seed: null
 dump_path: ./outputs/
