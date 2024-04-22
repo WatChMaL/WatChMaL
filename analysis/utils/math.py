@@ -5,7 +5,7 @@ Utility functions for performing mathematical, physical, statistical, geometrica
 import numpy as np
 
 
-DEFAULT_TANK_AXIS = 1
+DEFAULT_TANK_AXIS = 2
 
 
 def towall(position, angle, tank_half_height=1810, tank_radius=1690, tank_axis=None):
