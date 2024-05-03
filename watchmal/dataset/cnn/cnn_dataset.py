@@ -14,7 +14,7 @@ import numpy as np
 import random
 
 # WatChMaL imports
-from watchmal.dataset.h5_dataset import H5Dataset
+from watchmal.dataset.h5_dataset import H5Dataset, normalize
 import watchmal.dataset.data_utils as du
 
 # Implementation of matplotlib function
