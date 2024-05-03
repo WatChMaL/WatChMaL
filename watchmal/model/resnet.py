@@ -85,7 +85,7 @@ class Bottleneck(nn.Module):
 class ResNet(nn.Module):
 
     def __init__(self, block, layers, num_input_channels, num_output_channels, stride=1, kernelSize=1, zero_init_residual=False,
-                 conv_pad_mode='zeros', dropout_p=0.1):
+                 conv_pad_mode='zeros', dropout_p=0.):
 
         super(ResNet, self).__init__()
 
@@ -143,7 +143,7 @@ class ResNet(nn.Module):
         return nn.Sequential(*layers)
 
     def forward(self, x):
-        #x = torch.nn.Dropout(p=self.dropout_p)(x)
+        x = torch.nn.Dropout(p=self.dropout_p)(x)
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)

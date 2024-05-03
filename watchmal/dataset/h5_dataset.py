@@ -146,8 +146,9 @@ class H5CommonDataset(Dataset, ABC):
         data_dict = {
             "labels": self.labels[item].astype(np.int64),
             "energies": self.energies[item].copy(),
-            "momenta": momenta.astype(np.double),
+            "momenta": momenta,
             "angles": self.angles[item].copy(),
+            "directions": self.directions[item].copy(),
             "positions": positions,
             "directions": np.squeeze(self.directions[item].copy(), axis=0),
             # "event_ids": self.event_ids[item],

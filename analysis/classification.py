@@ -38,7 +38,7 @@ def combine_softmax(softmaxes, labels, label_map=None):
 
 
 def plot_rocs(runs, signal_labels, background_labels, selection=None, ax=None, fig_size=None, x_label="", y_label="",
-              x_lim=None, y_lim=None, y_log=None, x_log=None, legend='best', mode='rejection', **plot_args):
+              x_lim=None, y_lim=None, y_log=None, x_log=None, legend='best', mode='rejection', fitqun=None, **plot_args):
     """
     Plot overlaid ROC curves of results from a number of classification runs
 
@@ -108,6 +108,8 @@ def plot_rocs(runs, signal_labels, background_labels, selection=None, ax=None, f
             raise ValueError(f"Unknown ROC curve mode '{mode}'.")
     ax.set_xlabel(x_label)
     ax.set_ylabel(y_label)
+    if fitqun is not None:
+        plt.plot(fitqun[0], fitqun[1], 'ro', label='fiTQun')
     if x_log:
         ax.set_xscale('log')
     if y_log:

@@ -14,8 +14,8 @@ import numpy as np
 import random
 
 # WatChMaL imports
-from WatChMaL.watchmal.dataset.h5_dataset import H5Dataset
-import WatChMaL.watchmal.dataset.data_utils as du
+from watchmal.dataset.h5_dataset import H5Dataset
+import watchmal.dataset.data_utils as du
 
 # Implementation of matplotlib function
 import matplotlib.pyplot as plt
@@ -32,7 +32,7 @@ class CNNDataset(H5Dataset):
     event-display-like format.
     """
 
-    def __init__(self, h5file, pmt_positions_file, use_times=True, use_charges=True, transforms=None, one_indexed=True, channel_scaling=None):
+    def __init__(self, h5file, pmt_positions_file, use_times=True, use_charges=True, use_positions=False, transforms=None, one_indexed=True, channel_scaling=None, geometry_file=None):
         """
         Constructs a dataset for CNN data. Event hit data is read in from the HDF5 file and the PMT charge and/or time
         data is formatted into an event-display-like image for input to a CNN. Each pixel of the image corresponds to
@@ -61,9 +61,14 @@ class CNNDataset(H5Dataset):
         self.pmt_positions = np.load(pmt_positions_file)#['pmt_image_positions']
         self.use_times = use_times
         self.use_charges = use_charges
+        self.use_positions= use_positions
+        print(f"USE POSITIONS: {self.use_positions}")
         self.data_size = np.max(self.pmt_positions, axis=0) + 1
         self.barrel_rows = [row for row in range(self.data_size[0]) if
                             np.count_nonzero(self.pmt_positions[:, 0] == row) == self.data_size[1]]
+        if use_positions:
+            geo_file = np.load(geometry_file, 'r')
+            self.geo_positions = geo_file["position"].astype(np.float32)
         #self.transforms = None 
         self.transforms = du.get_transformations(self, transforms)
         if self.transforms is None:
@@ -82,6 +87,11 @@ class CNNDataset(H5Dataset):
         if use_charges:
             n_channels += 1
             channels.append('time')
+        if use_positions:
+            n_channels += 3
+            channels.append('x')
+            channels.append('y')
+            channels.append('z')
         if n_channels == 0:
             raise Exception("Please set 'use_times' and/or 'use_charges' to 'True' in your data config.")
 
@@ -104,7 +114,7 @@ class CNNDataset(H5Dataset):
 
 
 
-    def process_data(self, hit_pmts, hit_times, hit_charges, double_cover = None, transforms = None):
+    def process_data(self, hit_pmts, hit_times, hit_charges, hit_positions=None, double_cover = None, transforms = None):
         """
         Returns event data from dataset associated with a specific index
 
@@ -138,21 +148,40 @@ class CNNDataset(H5Dataset):
         if self.use_times and self.use_charges:
             data[0, hit_rows, hit_cols] = hit_times
             data[1, hit_rows, hit_cols] = hit_charges
+            if self.use_positions:
+                data[2, hit_rows, hit_cols] = hit_positions[:,0]
+                data[3, hit_rows, hit_cols] = hit_positions[:,1]
+                data[4, hit_rows, hit_cols] = hit_positions[:,2]
         elif self.use_times:
             data[0, hit_rows, hit_cols] = hit_times
+            if self.use_positions:
+                data[1, hit_rows, hit_cols] = hit_positions[:,0]
+                data[2, hit_rows, hit_cols] = hit_positions[:,1]
+                data[3, hit_rows, hit_cols] = hit_positions[:,2]
         else:
             data[0, hit_rows, hit_cols] = hit_charges
+            if self.use_positions:
+                data[1, hit_rows, hit_cols] = hit_positions[:,0]
+                data[2, hit_rows, hit_cols] = hit_positions[:,1]
+                data[3, hit_rows, hit_cols] = hit_positions[:,2]
 
         return data
 
     def __getitem__(self, item):
 
         data_dict = super().__getitem__(item)
-        hit_data = {"charge": self.event_hit_charges, "time": self.event_hit_times}
+        if self.use_positions:
+            self.hit_positions = self.geo_positions[self.event_hit_pmts, :]
+            hit_data = {"charge": self.event_hit_charges, "time": self.event_hit_times, "position": self.hit_positions}
+        else:
+            hit_data = {"charge": self.event_hit_charges, "time": self.event_hit_times}
         # apply scaling to channels
         for c, (offset, scale) in self.scaling.items():
             hit_data[c] = (hit_data[c] - offset)/scale
-        processed_data = from_numpy(self.process_data(self.event_hit_pmts, hit_data["time"], hit_data["charge"]))
+        if self.use_positions:
+            processed_data = from_numpy(self.process_data(self.event_hit_pmts, hit_data["time"], hit_data["charge"], hit_positions=hit_data["position"]))
+        else:
+            processed_data = from_numpy(self.process_data(self.event_hit_pmts, hit_data["time"], hit_data["charge"]))
         #self.save_fig(processed_data[0],False)
         #processed_data, displacement = self.rotate_cylinder(Tensor.numpy(processed_data))
         #self.save_fig(processed_data[0],True, displacement = displacement)
