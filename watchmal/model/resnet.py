@@ -15,14 +15,14 @@ def conv3x3(in_planes, out_planes, stride=1, padding_mode='zeros'):
 class BasicBlock(nn.Module):
     expansion = 1
 
-    def __init__(self, inplanes, planes, stride=1, downsample=None, conv_pad_mode='zeros'):
+    def __init__(self, inplanes, planes, stride=1, downsample=None, conv_pad_mode='zeros', norm=nn.BatchNorm2d):
         super(BasicBlock, self).__init__()
         
         self.conv1 = conv3x3(inplanes, planes, stride, conv_pad_mode)
-        self.bn1 = nn.BatchNorm2d(planes)
+        self.bn1 = norm(planes)
         self.relu = nn.ReLU(inplace=True)
         self.conv2 = conv3x3(planes, planes, padding_mode=conv_pad_mode)
-        self.bn2 = nn.BatchNorm2d(planes)
+        self.bn2 = norm(planes)
         self.downsample = downsample
         self.stride = stride
 
@@ -48,15 +48,15 @@ class BasicBlock(nn.Module):
 class Bottleneck(nn.Module):
     expansion = 4
 
-    def __init__(self, inplanes, planes, stride=1, downsample=None, conv_pad_mode='zeros'):
+    def __init__(self, inplanes, planes, stride=1, downsample=None, conv_pad_mode='zeros', norm=nn.BatchNorm2d):
         super(Bottleneck, self).__init__()
         
         self.conv1 = conv1x1(inplanes, planes)
-        self.bn1 = nn.BatchNorm2d(planes)
+        self.bn1 = norm(planes)
         self.conv2 = conv3x3(planes, planes, stride, padding_mode=conv_pad_mode)
-        self.bn2 = nn.BatchNorm2d(planes)
+        self.bn2 = norm(planes)
         self.conv3 = conv1x1(planes, planes * self.expansion)
-        self.bn3 = nn.BatchNorm2d(planes * self.expansion)
+        self.bn3 = norm(planes * self.expansion)
         self.relu = nn.ReLU(inplace=True)
         self.downsample = downsample
         self.stride = stride
@@ -85,14 +85,21 @@ class Bottleneck(nn.Module):
 class ResNet(nn.Module):
 
     def __init__(self, block, layers, num_input_channels, num_output_channels, zero_init_residual=False,
-                 conv_pad_mode='zeros'):
+                 conv_pad_mode='zeros', group_norm=False, n_groups=32):
+        if group_norm:
+            class GroupNorm(nn.GroupNorm):
+                def __init__(self, num_channels):
+                    super().__init__(n_groups, num_channels)
+            self.norm = GroupNorm
+        else:
+            self.norm = nn.BatchNorm2d
 
         super(ResNet, self).__init__()
 
         self.inplanes = 64
 
         self.conv1 = nn.Conv2d(num_input_channels, 64, kernel_size=1, stride=1, padding=0, bias=False)
-        self.bn1 = nn.BatchNorm2d(64)
+        self.bn1 = self.norm(64)
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
 
@@ -107,7 +114,7 @@ class ResNet(nn.Module):
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
                 nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
-            elif isinstance(m, nn.BatchNorm2d):
+            elif isinstance(m, (nn.BatchNorm2d, nn.GroupNorm)):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
 
@@ -127,13 +134,13 @@ class ResNet(nn.Module):
         if stride != 1 or self.inplanes != planes * block.expansion:
             downsample = nn.Sequential(
                 conv1x1(self.inplanes, planes * block.expansion, stride),
-                nn.BatchNorm2d(planes * block.expansion),
+                self.norm(planes * block.expansion),
             )
         layers = []
-        layers.append(block(self.inplanes, planes, stride, downsample, conv_pad_mode))
+        layers.append(block(self.inplanes, planes, stride, downsample, conv_pad_mode, self.norm))
         self.inplanes = planes * block.expansion
         for _ in range(1, blocks):
-            layers.append(block(self.inplanes, planes, conv_pad_mode=conv_pad_mode))
+            layers.append(block(self.inplanes, planes, conv_pad_mode=conv_pad_mode, norm=self.norm))
 
         return nn.Sequential(*layers)
 

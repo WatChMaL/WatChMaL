@@ -26,8 +26,8 @@ class RegressionEngine(ReconstructionEngine):
         """
         # create the directory for saving the log and dump files
         super().__init__(truth_key, model, rank, device, dump_path)
-        self.output_center = output_center
-        self.output_scale = output_scale
+        self.output_center = torch.tensor(output_center).to(self.device)
+        self.output_scale = torch.tensor(output_scale).to(self.device)
 
     def forward(self, train=True):
         """
@@ -46,13 +46,9 @@ class RegressionEngine(ReconstructionEngine):
         with torch.set_grad_enabled(train):
             # Move the data and the labels to the GPU (if using CPU this has no effect)
             model_out = self.model(self.data).reshape(self.target.shape)
-            scaled_target = self.scale_values(self.target)
-            scaled_model_out = self.scale_values(model_out)
-            self.loss = self.criterion(scaled_model_out, scaled_target)
-            outputs = {"predicted_"+self.truth_key: model_out}
+            scaled_target = (self.target - self.output_center) / self.output_scale
+            self.loss = self.criterion(model_out, scaled_target)
+            scaled_model_out = model_out * self.output_scale + self.output_center
+            outputs = {"predicted_"+self.truth_key: scaled_model_out}
             metrics = {'loss': self.loss}
         return outputs, metrics
-
-    def scale_values(self, data):
-        scaled = (data - self.output_center) / self.output_scale
-        return scaled
