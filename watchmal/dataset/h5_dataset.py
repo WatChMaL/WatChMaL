@@ -10,7 +10,7 @@ import h5py
 import numpy as np
 from abc import ABC, abstractmethod
 
-def normalize(data, x_bounds=(-1600,1600), y_bounds=(-1600,1600), z_bounds=(-1600,1600)):
+def normalize(data, x_bounds=(-1600,1600), y_bounds=(-1600,1600), z_bounds=(-1800,1800)):
     '''
     normalizes all data to be roughly [-1,1] but not exactly
     '''

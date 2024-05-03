@@ -1,20 +1,21 @@
 data:
-  split_path: '/scratch/fcormier/t2k/ml/output_indices/jan23_electrons_forRegression_5M_1/train_val_test_gt100Hits_nFolds20_fold2.npz' 
+  split_path: '/scratch/fcormier/t2k/ml/output_skdetsim/jan23_electrons_forRegression_5M_1/train_val_test_gt200Hits_FCTEST_nFolds20_fold0.npz' 
   dataset:
     h5file: '$SLURM_TMPDIR/digi_combine.hy'
     _target_: watchmal.dataset.cnn.cnn_dataset.CNNDataset
     pmt_positions_file: /scratch/fcormier/t2k/ml/image_files/skdetsim_imagefile.npy
-    use_positions: True
+    use_positions: False
     geometry_file: /home/fcormier/t2k/ml/training/t2k_ml_training/data/geofile_skdetsim.npz
     channel_scaling:
       time: [950, 10]
+      position: [0, 1600]
 model:
   _target_: watchmal.model.resnet.resnet18
   num_input_channels: 5
   num_output_channels: 3
   stride: 1
   kernelSize: 1
-  dropout_p: 0.2
+  dropout_p: 0.
 engine:
   _target_: watchmal.engine.regression.RegressionEngine
   truth_key: 'positions'
@@ -31,13 +32,13 @@ tasks:
       train:
         split_key: train_idxs
         batch_size: 400
-        num_workers: 8
+        num_workers: 12
         sampler:
           _target_: torch.utils.data.sampler.SubsetRandomSampler
       validation:
         split_key: val_idxs
         batch_size: 500
-        num_workers: 5
+        num_workers: 8
         sampler:
           _target_: torch.utils.data.sampler.SubsetRandomSampler
     optimizers:
