@@ -38,7 +38,7 @@ def combine_softmax(softmaxes, labels, label_map=None):
 
 
 def plot_rocs(runs, signal_labels, background_labels, selection=None, ax=None, fig_size=None, x_label="", y_label="",
-              x_lim=None, y_lim=None, y_log=None, x_log=None, legend='best', mode='rejection', **plot_args):
+              x_lim=None, y_lim=None, y_log=None, x_log=None, legend='best', mode='rejection', auc_digits=3, **plot_args):
     """
     Plot overlaid ROC curves of results from a number of classification runs
 
@@ -76,6 +76,8 @@ def plot_rocs(runs, signal_labels, background_labels, selection=None, ax=None, f
         If `rejection` (default) plot rejection factor (reciprocal of the false positive rate) on the y-axis versus
         signal efficiency (true positive rate) on the x-axis. If `efficiency` plot background mis-ID rate (false
         positive rate) versus signal efficiency (true positive rate) on the x-axis.
+    auc_digits: int, optional
+        Number of decimal places (3 by default) to show for the AUC value printed in the plot label.
     plot_args: optional
         Additional arguments to pass to the `hist` plotting function. Note that these may be overridden by arguments
         defined in `runs`.
@@ -96,7 +98,7 @@ def plot_rocs(runs, signal_labels, background_labels, selection=None, ax=None, f
         fpr, tpr, _ = metrics.roc_curve(selected_signal, selected_discriminator)
         auc = metrics.auc(fpr, tpr)
         args = {**plot_args, **r.plot_args}
-        args['label'] = f"{args['label']} (AUC={auc:.4f})"
+        args['label'] = f"{args['label']} (AUC={auc:.{auc_digits}f})"
         if mode == 'rejection':
             if y_log is None:
                 y_log = True
@@ -476,7 +478,8 @@ class WatChMaLClassification(ClassificationRun, WatChMaLOutput):
         """
         Return a discriminator with appropriate scaling of softmax values from multi-class training, given the set of
         signal and background class labels. For each event, the discriminator is the sum the signal softmax values
-        normalised by the sum of signal and background softmax values.
+        normalised by the sum of signal and background softmax values. When the softmax for both signal and background
+        is equal to zero, the discriminator value is set to 0.5.
 
         Parameters
         ----------
@@ -492,7 +495,11 @@ class WatChMaLClassification(ClassificationRun, WatChMaLOutput):
         """
         signal_softmax = combine_softmax(self.softmaxes, signal_labels, self.label_map)
         background_softmax = combine_softmax(self.softmaxes, background_labels, self.label_map)
-        return signal_softmax / (signal_softmax + background_softmax)
+        total_softmax = signal_softmax + background_softmax
+        bad = total_softmax==0
+        signal_softmax[bad]=0.5
+        total_softmax[bad]=1.0
+        return signal_softmax / total_softmax
 
     @property
     def train_log_accuracy(self):
