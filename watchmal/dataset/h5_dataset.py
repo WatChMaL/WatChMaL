@@ -138,8 +138,8 @@ class H5Dataset(H5CommonDataset, ABC):
     hit_charge  (n_hits,)  float32    Charge of the digitized hit
     =============================================================
     """
-    def __init__(self, h5_path):
-        H5CommonDataset.__init__(self, h5_path)
+    def __init__(self, h5_path, use_memmap=True):
+        H5CommonDataset.__init__(self, h5_path, use_memmap)
         
     def initialize(self):
         """Creates a memmap for the digitized hit charge data."""
@@ -173,8 +173,8 @@ class H5TrueDataset(H5CommonDataset, ABC):
     ====================================================================================================================
     """
 
-    def __init__(self, h5_path, digitize_hits=True):
-        H5CommonDataset.__init__(self, h5_path)
+    def __init__(self, h5_path, digitize_hits=True, use_memmap=True):
+        H5CommonDataset.__init__(self, h5_path, use_memmap)
         self.digitize_hits = digitize_hits
 
     def initialize(self):
