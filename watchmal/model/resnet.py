@@ -88,6 +88,7 @@ class ResNet(nn.Module):
                  conv_pad_mode='zeros', dropout_p=0.):
 
         super(ResNet, self).__init__()
+        print(f"CONV PAD MODE: {conv_pad_mode}")
 
         self.inplanes = 64
         self.dropout_p = dropout_p

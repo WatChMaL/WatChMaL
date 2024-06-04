@@ -62,7 +62,6 @@ class CNNDataset(H5Dataset):
         self.use_times = use_times
         self.use_charges = use_charges
         self.use_positions= use_positions
-        print(f"USE POSITIONS: {self.use_positions}")
         self.data_size = np.max(self.pmt_positions, axis=0) + 1
         self.barrel_rows = [row for row in range(self.data_size[0]) if
                             np.count_nonzero(self.pmt_positions[:, 0] == row) == self.data_size[1]]
