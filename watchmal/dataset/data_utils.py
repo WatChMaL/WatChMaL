@@ -152,6 +152,8 @@ def apply_random_transformations(transforms, data, segmented_labels=None, counte
                     segmented_labels = transformation(segmented_labels)
     return data
 
+import os
+
 def save_fig(data,isPost, displacement=0, counter=0):
     print("SAVE FIG")
     print(data.size())
@@ -161,12 +163,62 @@ def save_fig(data,isPost, displacement=0, counter=0):
     print("2")
     cbar.ax.get_yaxis().labelpad = 15
     cbar.ax.set_ylabel("PMT Charge", rotation=270)
+    # cbar.ax.set_ylabel("PMT Time", rotation=270)
     plt.xlabel('X pixels')
     plt.ylabel('Y pixels')
+    path_fig = '/data/thoriba/t2k/plots/charge_plot/dead_CNN_80/'
+    os.makedirs(path_fig, exist_ok=True)
     if isPost:
-        plt.savefig('/home/fcormier/t2k/ml/t2k_ml_training/plots/'+str(counter)+'_post_rot_dc_img_dis'+str(displacement)+'.png')
+        plt.savefig(path_fig+str(counter)+'_post_rot_dc_img_dis'+str(displacement)+'.png')
     else:
-        plt.savefig('/home/fcormier/t2k/ml/t2k_ml_training/plots/'+str(counter)+'_pre_rot_img'+'.png')
+        plt.savefig(path_fig+str(counter)+'_pre_rot_img'+'.png')
     plt.clf()
     print("3")
 
+    # print("SAVE FIG")
+    # print(data.size())
+    # plt.imshow(data.numpy(), interpolation='none')
+    # print("1")
+    # cbar = plt.colorbar()
+    # print("2")
+    # cbar.ax.get_yaxis().labelpad = 15
+    # cbar.ax.set_ylabel("PMT Charge", rotation=270)
+    # plt.xlabel('X pixels')
+    # plt.ylabel('Y pixels')
+    # if isPost:
+    #     plt.savefig('/home/fcormier/t2k/ml/t2k_ml_training/plots/'+str(counter)+'_post_rot_dc_img_dis'+str(displacement)+'.png')
+    # else:
+    #     plt.savefig('/home/fcormier/t2k/ml/t2k_ml_training/plots/'+str(counter)+'_pre_rot_img'+'.png')
+    # plt.clf()
+    # print("3")
+
+def save_time_distn(charges, times, isPost, displacement=0, counter=0):
+    if counter > 50:
+        print("stopped. I printed a lot already")
+        return
+
+    print(f'Saving {counter}th time distribution')
+    # print("counter: ", counter)
+
+    mask = charges == 0.
+    # elements of times that correspond to zero charges
+    times_np = times[mask].flatten().numpy()
+
+    bins = 100
+    bin_width = (times_np.max() - times_np.min())/bins
+
+    plt.hist(times_np, bins=bins)
+    plt.xlabel('Time')
+    plt.ylabel('Frquency')
+    plt.title(f'PMT Time Distribution Coniditonal on Charge is 0')
+    plt.text(0.05, 0.9, f'Bin Size (specified) = {bins}\nBin Width (calculated) = {bin_width}', transform=plt.gca().transAxes, fontsize=10, verticalalignment='top')
+
+
+    path_fig = '/data/thoriba/t2k/plots/time_plot/time_hist_bin100_deadCNN2_60percent/'
+    os.makedirs(path_fig, exist_ok=True)
+
+    if isPost:
+        plt.savefig(path_fig+str(counter)+'_post_hist'+str(displacement)+'.png')
+    else:
+        plt.savefig(path_fig+str(counter)+'_pre_hist'+'.png')  
+    plt.clf()

@@ -466,3 +466,70 @@ class CNNDataset(H5Dataset):
 
         return padded_data
 
+class CNNDatasetDeadPMT(CNNDataset):
+    def __init__(self, h5file, pmt_positions_file, use_times=True, use_charges=True, use_positions=False, transforms=None, one_indexed=True, channel_scaling=None, geometry_file=None, dead_pmt_rate=None, dead_pmt_seed=None):
+        super().__init__(h5file, pmt_positions_file, use_times=use_times, use_charges=use_charges, use_positions=use_positions, transforms=transforms, one_indexed=one_indexed, channel_scaling=channel_scaling, geometry_file=geometry_file)
+        self.dead_pmt_rate = dead_pmt_rate
+        self.dead_pmt_seed = dead_pmt_seed
+    
+    def __getitem__(self, item):
+
+        data_dict = super().__getitem__(item)
+        # print("data dict start", data_dict)
+        # print("data dict end")
+        if self.use_positions:
+            self.hit_positions = self.geo_positions[self.event_hit_pmts, :]
+            hit_data = {"charge": self.event_hit_charges, "time": self.event_hit_times, "position": self.hit_positions}
+        else:
+            hit_data = {"charge": self.event_hit_charges, "time": self.event_hit_times}
+        # apply scaling to channels
+        for c, (offset, scale) in self.scaling.items():
+            if c == 'time':
+                hit_data[c] = np.maximum((hit_data[c] - offset)/scale, 0.)
+            else:
+                hit_data[c] = (hit_data[c] - offset)/scale
+        if self.use_positions:
+            processed_data = from_numpy(self.process_data(self.event_hit_pmts, hit_data["time"], hit_data["charge"], hit_positions=hit_data["position"]))
+        else:
+            processed_data = from_numpy(self.process_data(self.event_hit_pmts, hit_data["time"], hit_data["charge"]))
+        # self.save_fig(processed_data[0],False)
+        # processed_data, displacement = self.rotate_cylinder(Tensor.numpy(processed_data))
+        
+        
+        self.counter+=1
+        data_dict["data"] = processed_data
+
+        for t in self.transforms:
+            #apply each transformation only half the time
+            #Probably should be implemented in data_utils?
+            if random.getrandbits(1):
+                data_dict = t(data_dict)
+        # if self.counter <= 40:
+            # du.save_fig(data_dict["data"][1],True, counter = self.counter)
+            # du.save_time_distn(processed_data[1], processed_data[0], False, counter=self.counter)
+        processed_data = self.double_cover(data_dict["data"])
+        #processed_data = du.apply_random_transformations(self.transforms, processed_data, counter = self.counter)
+
+        return data_dict
+
+    def process_data(self, hit_pmts, hit_times, hit_charges, hit_positions=None, double_cover = None, transforms = None):
+        dead_pmt_rate = self.dead_pmt_rate # if self.dead_pmt_rate is not None else 0.8
+        hit_charges_copy = hit_charges.copy()
+        hit_times_copy = hit_times.copy()
+
+        if dead_pmt_rate is not None and dead_pmt_rate > 0:
+            # print("killing PMTs with prob: ", dead_pmt_rate)
+            np.random.seed(self.dead_pmt_seed if self.dead_pmt_seed is not None else 42)
+            zero_mask = np.random.rand(*hit_charges.shape) < dead_pmt_rate
+            # hit_charges_copy = np.zeros(*hit_charges.shape, dtype=np.float32)
+            hit_charges_copy = np.where(zero_mask, 0., hit_charges)
+            # hit_times_copy = np.zeros(*hit_charges.shape, dtype=np.float32)
+            hit_times_copy = np.where(zero_mask, 0., hit_times)
+
+        # print("before:", hit_charges)
+        # print("after: ", hit_charges_copy)
+        # print(f"L0: {np.sum(hit_charges != 0.)} -> {np.sum(hit_charges_copy != 0.)}. Change %: { round( np.sum(hit_charges_copy == 0.)/np.sum(hit_charges != 0.) , 2) }")
+        # print("h5 charge L0-norm (after):  ", np.sum(hit_charges_copy != 0.))
+        # print("h5 charge L0-norm (after - before):  ",  np.sum(hit_charges_copy != 0.) - np.sum(hit_charges != 0.))
+
+        return super().process_data(hit_pmts, hit_times_copy, hit_charges_copy, hit_positions, double_cover, transforms)
