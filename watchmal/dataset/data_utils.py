@@ -154,9 +154,11 @@ def apply_random_transformations(transforms, data, segmented_labels=None, counte
 
 import os
 
-def save_fig(data,isPost, displacement=0, counter=0):
+def save_fig(data, isPost, displacement=0, counter=0, output_path=None):
+    # print(data.size())
+    # print(data)
     print("SAVE FIG")
-    print(data.size())
+    # print(data.size())
     plt.imshow(data.numpy(), interpolation='none')
     print("1")
     cbar = plt.colorbar()
@@ -166,7 +168,9 @@ def save_fig(data,isPost, displacement=0, counter=0):
     # cbar.ax.set_ylabel("PMT Time", rotation=270)
     plt.xlabel('X pixels')
     plt.ylabel('Y pixels')
-    path_fig = '/data/thoriba/t2k/plots/charge_plot/dead_CNN_80/'
+    path_fig = '/data/thoriba/t2k/plots/charge_plot/CNN_dead_new/' if output_path is None else output_path
+
+
     os.makedirs(path_fig, exist_ok=True)
     if isPost:
         plt.savefig(path_fig+str(counter)+'_post_rot_dc_img_dis'+str(displacement)+'.png')
@@ -175,33 +179,49 @@ def save_fig(data,isPost, displacement=0, counter=0):
     plt.clf()
     print("3")
 
-    # print("SAVE FIG")
-    # print(data.size())
-    # plt.imshow(data.numpy(), interpolation='none')
-    # print("1")
-    # cbar = plt.colorbar()
-    # print("2")
-    # cbar.ax.get_yaxis().labelpad = 15
-    # cbar.ax.set_ylabel("PMT Charge", rotation=270)
-    # plt.xlabel('X pixels')
-    # plt.ylabel('Y pixels')
-    # if isPost:
-    #     plt.savefig('/home/fcormier/t2k/ml/t2k_ml_training/plots/'+str(counter)+'_post_rot_dc_img_dis'+str(displacement)+'.png')
-    # else:
-    #     plt.savefig('/home/fcormier/t2k/ml/t2k_ml_training/plots/'+str(counter)+'_pre_rot_img'+'.png')
-    # plt.clf()
-    # print("3")
+def save_fig_dead(data, isPost, dead_pmts, pmt_positions, y_label='PMT Charge', displacement=0, counter=0, output_path='/data/thoriba/t2k/plots/charge_plot/CNN_dead_default/', dead_pmt_percent=100):
+    '''
+    save_fig funciton for CNNDatasetDeadPMT
+    Saves figures with dead PMT locations if both `dead_pmts` and `pmt_positions` are provided
+    '''
+    print("Saving FIG")
+    plt.imshow(data.numpy(), interpolation='none')
+    cbar = plt.colorbar()
+    dead_color = 'black'
+    if dead_pmts is not None and pmt_positions is not None:
+        plt.scatter(pmt_positions[dead_pmts][:, 1], pmt_positions[dead_pmts][:, 0], color=dead_color, marker='s', s=1)
+    cbar.ax.get_yaxis().labelpad = 15
+    cbar.ax.set_ylabel(y_label, rotation=270)
+    # cbar.ax.set_ylabel("PMT Time", rotation=270)
+    plt.xlabel('X pixels')
+    plt.ylabel('Y pixels')
+    if dead_pmts is not None and pmt_positions is not None:
+        plt.title(f'{counter}th Event with {dead_pmt_percent} % Dead PMTs (shown in {dead_color} pixels)')
+    else:
+        plt.title(f'{counter}th Event with {dead_pmt_percent} % Dead PMTs')
+    path_fig = output_path
 
-def save_time_distn(charges, times, isPost, displacement=0, counter=0):
-    if counter > 50:
-        print("stopped. I printed a lot already")
-        return
+
+    os.makedirs(path_fig, exist_ok=True)
+    if isPost:
+        plt.savefig(path_fig+str(counter)+'_post_rot_dc_img_dis'+str(displacement)+'.png', dpi=450)
+    else:
+        plt.savefig(path_fig+str(counter)+'_pre_rot_img'+'.png', dpi=450)
+    plt.clf()
+
+    # if dead_pmts is not None:
+    #     np.savetxt(path_fig+str(counter)+'_dead_pmts.csv', dead_pmts, delimiter=',')
+
+
+def save_time_distn(charges, times, isPost, displacement=0, counter=0, output_path='/data/thoriba/t2k/plots/time_plot/CNN_dead_1/'):
 
     print(f'Saving {counter}th time distribution')
-    # print("counter: ", counter)
 
+    # print(charges)
+    # print(times)
     mask = charges == 0.
     # elements of times that correspond to zero charges
+    
     times_np = times[mask].flatten().numpy()
 
     bins = 100
@@ -214,7 +234,7 @@ def save_time_distn(charges, times, isPost, displacement=0, counter=0):
     plt.text(0.05, 0.9, f'Bin Size (specified) = {bins}\nBin Width (calculated) = {bin_width}', transform=plt.gca().transAxes, fontsize=10, verticalalignment='top')
 
 
-    path_fig = '/data/thoriba/t2k/plots/time_plot/time_hist_bin100_deadCNN2_60percent/'
+    path_fig = output_path
     os.makedirs(path_fig, exist_ok=True)
 
     if isPost:
