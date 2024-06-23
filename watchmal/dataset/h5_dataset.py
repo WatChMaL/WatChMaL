@@ -133,6 +133,8 @@ class H5CommonDataset(Dataset, ABC):
             # "root_files": self.root_files[item],
             "indices": item
         }
+        if self.labels_key is not None and self.labels_key not in data_dict:
+            data_dict[self.labels_key] = getattr(self, self.labels_key)[item].copy()
         return data_dict
 
 
