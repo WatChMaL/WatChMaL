@@ -23,6 +23,8 @@ import numpy as np
 from matplotlib.colors import LogNorm
 from matplotlib.patches import Ellipse
 
+from sklearn.preprocessing import MinMaxScaler, StandardScaler, PowerTransformer, QuantileTransformer, RobustScaler, MaxAbsScaler
+
 
 class CNNDataset(H5Dataset):
     """
@@ -681,7 +683,7 @@ class CNNDatasetDeadPMT(CNNDataset):
 
 class CNNDatasetScale(CNNDataset):
 
-    def __init__(self, h5file, pmt_positions_file, use_times=True, use_charges=True, use_positions=False, transforms=None, one_indexed=True, channel_scaling=None, geometry_file=None, dead_pmt_rate=None, dead_pmt_seed=None):
+    def __init__(self, h5file, pmt_positions_file, use_times=True, use_charges=True, use_positions=False, transforms=None, one_indexed=True, channel_scaling=None, geometry_file=None, dead_pmt_rate=None, dead_pmt_seed=None, channel_scaler=None):
         super().__init__(h5file, pmt_positions_file, use_times=use_times, use_charges=use_charges, use_positions=use_positions, transforms=transforms, one_indexed=one_indexed, channel_scaling=channel_scaling, geometry_file=geometry_file)
         self.dead_pmt_rate = dead_pmt_rate
         self.dead_pmt_seed = dead_pmt_seed if dead_pmt_seed is not None else 42
@@ -692,16 +694,23 @@ class CNNDatasetScale(CNNDataset):
         self.global_max = -np.inf
         self.count = 0
 
+        self.channel_scaler = channel_scaler
+
         self.precomputed_scaling_factors = {}
         
         self.set_dead_pmts()
-        self.set_scaling_factor()
+        # self.set_scaling_factor()
+        self.test_func()
+
+    def test_func(self):
+        
+        pass
+
     
     def set_scaling_factor(self):
         print('computing scaling factor for time')
 
-        
-
+    
         self.precomputed_scaling_factors['time'] = {}
 
 
@@ -714,20 +723,24 @@ class CNNDatasetScale(CNNDataset):
         combined = np.array([])
 
 
-        super(CNNDataset, self).__getitem__(item)
+        super(CNNDataset, self).__getitem__(55)
 
         # print('self.event_hits_index', self.event_hits_index)
 
         # print('self.event_hits_index', self.event_hits_index.shape)
 
-        random_upper = round(self.event_hits_index[0] / 2) - 1
+        random_upper = round(len(self.event_hits_index) / 2) - 1
+        print(random_upper)
 
-        random_list = np.random.choice(random_upper, 1000 , replace=False)
+        sample_size = 1000
+        random_list = np.random.choice(random_upper, sample_size, replace=False)
 
-        for item in range(5000):
+        # print(random_list)
+        # there's risk of data leak because data item getting here might not belong to same set(training, val, test can be mixed)
+        for item in random_list:
             data_dict = super(CNNDataset, self).__getitem__(item)
             
-            print('self.event_hits_index', self.event_hits_index.shape)
+            # print('self.event_hits_index', self.event_hits_index.shape)
             if self.use_positions:
                 self.hit_positions = self.geo_positions[self.event_hit_pmts, :]
                 hit_data = {"charge": self.event_hit_charges, "time": self.event_hit_times, "position": self.hit_positions}
@@ -760,6 +773,21 @@ class CNNDatasetScale(CNNDataset):
 
         self.precomputed_scaling_factors['time'] = {'mean': estimated_global_mean, 'std': estimated_global_std, 'min': global_min, 'max': global_max}
 
+        if self.channel_scaler == 'minmax':
+            self.scaler = MinMaxScaler(copy=False)
+        elif self.channel_scaler == 'standard':
+            self.scaler = StandardScaler(copy=False)
+        elif self.channel_scaler == 'robust':
+            self.scaler = RobustScaler(copy=False)
+        elif self.channel_scaler == 'power':
+            self.scaler = PowerTransformer(copy=False)
+        elif self.channel_scaler == 'quantile':
+            self.scaler = QuantileTransformer(copy=False)
+
+        self.scaler.fit(combined.reshape(-1, 1))
+
+        print(f'fitted {self.channel_scaler} scaler using {sample_size} random draws from data')
+
     def __getitem__(self, item):
 
         data_dict = super(CNNDataset, self).__getitem__(item)
@@ -773,6 +801,15 @@ class CNNDatasetScale(CNNDataset):
         for c, (offset, scale) in self.scaling.items():
             hit_data[c] = (hit_data[c] - offset)/scale
 
+        # print('--------')
+
+        # if item % 10 == 0:
+        #     print('before scaling', hit_data['time'][:10], 'shape', hit_data['time'].shape)
+        #     print('scaling...')
+        hit_data['time'] = self.scaler.transform(hit_data['time'].reshape(-1, 1)).reshape(-1,)
+        # if item % 10 == 0:
+        #     print('scaling done?')
+        #     print('after scaling', hit_data['time'][:10], 'shape', hit_data['time'].shape)
         
         if self.use_positions:
             processed_data = from_numpy(self.process_data(self.event_hit_pmts, hit_data["time"], hit_data["charge"], hit_positions=hit_data["position"]))

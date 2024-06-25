@@ -8,6 +8,7 @@ data:
       time: [950, 10]
     dead_pmt_rate: 0
     dead_pmt_seed: null
+    channel_scaler: 'robust'
 model:
   _target_: watchmal.model.resnet.resnet34
   num_input_channels: 2
@@ -34,7 +35,8 @@ tasks:
         batch_size: 300
         num_workers: 1
         sampler:
-          _target_: torch.utils.data.sampler.SubsetRandomSampler
+          # _target_: torch.utils.data.sampler.SubsetRandomSampler
+          _target_: torch.utils.data.sampler.SequentialSampler
 gpu_list: 
 - 1
 seed: null
