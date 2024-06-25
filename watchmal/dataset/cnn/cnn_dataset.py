@@ -709,26 +709,8 @@ class CNNDatasetScale(CNNDataset):
     
     def set_scaling_factor(self):
         print('computing scaling factor for time')
-
-    
-        self.precomputed_scaling_factors['time'] = {}
-
-
-        running_sum = 0
-        running_squared_sum = 0
-        global_min = np.inf
-        global_max = -np.inf
-        count_times = 0
-
         combined = np.array([])
-
-
         super(CNNDataset, self).__getitem__(55)
-
-        # print('self.event_hits_index', self.event_hits_index)
-
-        # print('self.event_hits_index', self.event_hits_index.shape)
-
         random_upper = round(len(self.event_hits_index) / 2) - 1
         print(random_upper)
 
@@ -736,6 +718,7 @@ class CNNDatasetScale(CNNDataset):
         random_list = np.random.choice(random_upper, sample_size, replace=False)
 
         # print(random_list)
+        
         # there's risk of data leak because data item getting here might not belong to same set(training, val, test can be mixed)
         for item in random_list:
             data_dict = super(CNNDataset, self).__getitem__(item)
@@ -746,33 +729,9 @@ class CNNDatasetScale(CNNDataset):
                 hit_data = {"charge": self.event_hit_charges, "time": self.event_hit_times, "position": self.hit_positions}
             else:
                 hit_data = {"charge": self.event_hit_charges, "time": self.event_hit_times}
-            
-            running_sum += np.sum(hit_data['time'])
-            running_squared_sum += np.sum(np.square(hit_data['time']))
-            global_min = min(global_min, np.min(hit_data['time']))
-            global_max = max(global_max, np.max(hit_data['time']))
-            count_times += len(hit_data['time'])
-
-
             combined = np.append(combined, hit_data['time'])
             # print(combined.shape)
-
-            # print(f'running sum for {item}th itr is {running_sum}')
         
-        estimated_global_mean = running_sum / count_times
-        print('inside sqrt', running_squared_sum / count_times - np.square(estimated_global_mean))
-        estimated_global_std= np.sqrt((running_squared_sum / count_times) - np.square(estimated_global_mean))
-
-        self.estimated_global_mean = estimated_global_mean
-        self.estimated_global_std = estimated_global_std
-
-        self.global_min = global_min
-        self.global_max = global_max
-        # print('set from local count=', count_times)
-        print(f"Global Mean: {self.estimated_global_mean}, Global Std: {self.estimated_global_std}, Global Min: {self.global_min}, Global Max: {self.global_max}")
-
-        self.precomputed_scaling_factors['time'] = {'mean': estimated_global_mean, 'std': estimated_global_std, 'min': global_min, 'max': global_max}
-
         if self.channel_scaler == 'minmax':
             self.scaler = MinMaxScaler(copy=False)
         elif self.channel_scaler == 'standard':
