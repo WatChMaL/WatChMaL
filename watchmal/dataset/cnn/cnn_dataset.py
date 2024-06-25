@@ -688,22 +688,13 @@ class CNNDatasetScale(CNNDataset):
         self.dead_pmt_rate = dead_pmt_rate
         self.dead_pmt_seed = dead_pmt_seed if dead_pmt_seed is not None else 42
 
-        self.running_sum = 0
-        self.running_squared_sum = 0
-        self.global_min = np.inf
-        self.global_max = -np.inf
-        self.count = 0
-
         self.channel_scaler = channel_scaler
 
-        self.precomputed_scaling_factors = {}
-        
         self.set_dead_pmts()
-        # self.set_scaling_factor()
-        self.test_func()
+        self.set_scaling_factor()
+        # self.test_func()
 
     def test_func(self):
-        
         pass
 
     
