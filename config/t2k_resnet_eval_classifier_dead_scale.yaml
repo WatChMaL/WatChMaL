@@ -2,11 +2,11 @@ data:
   split_path: '/data/fcormier/t2k/Public/oct20_eMuPosPion_0dwallCut_flat_1/fq_test_idx.npz'
   dataset:
     h5file: '/data/fcormier/t2k/Public/oct20_eMuPosPion_0dwallCut_flat_1/combine_combine.hy'
-    _target_: watchmal.dataset.cnn.cnn_dataset.CNNDatasetDeadPMT
+    _target_: watchmal.dataset.cnn.cnn_dataset.CNNDatasetScale
     pmt_positions_file: /data/thoriba/t2k/imagefile/skdetsim_imagefile.npy
     channel_scaling:
       time: [950, 10]
-    dead_pmt_rate: .05
+    dead_pmt_rate: 0
     dead_pmt_seed: null
 model:
   _target_: watchmal.model.resnet.resnet34
@@ -36,6 +36,6 @@ tasks:
         sampler:
           _target_: torch.utils.data.sampler.SubsetRandomSampler
 gpu_list: 
-- 0
+- 1
 seed: null
 dump_path: ./outputs/

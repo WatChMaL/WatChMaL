@@ -677,4 +677,243 @@ class CNNDatasetDeadPMT(CNNDataset):
 
         return data
     
+
+
+class CNNDatasetScale(CNNDataset):
+
+    def __init__(self, h5file, pmt_positions_file, use_times=True, use_charges=True, use_positions=False, transforms=None, one_indexed=True, channel_scaling=None, geometry_file=None, dead_pmt_rate=None, dead_pmt_seed=None):
+        super().__init__(h5file, pmt_positions_file, use_times=use_times, use_charges=use_charges, use_positions=use_positions, transforms=transforms, one_indexed=one_indexed, channel_scaling=channel_scaling, geometry_file=geometry_file)
+        self.dead_pmt_rate = dead_pmt_rate
+        self.dead_pmt_seed = dead_pmt_seed if dead_pmt_seed is not None else 42
+
+        self.running_sum = 0
+        self.running_squared_sum = 0
+        self.global_min = np.inf
+        self.global_max = -np.inf
+        self.count = 0
+
+        self.precomputed_scaling_factors = {}
+        
+        self.set_dead_pmts()
+        self.set_scaling_factor()
+    
+    def set_scaling_factor(self):
+        print('computing scaling factor for time')
+
+        
+
+        self.precomputed_scaling_factors['time'] = {}
+
+
+        running_sum = 0
+        running_squared_sum = 0
+        global_min = np.inf
+        global_max = -np.inf
+        count_times = 0
+
+        combined = np.array([])
+
+
+        super(CNNDataset, self).__getitem__(item)
+
+        # print('self.event_hits_index', self.event_hits_index)
+
+        # print('self.event_hits_index', self.event_hits_index.shape)
+
+        random_upper = round(self.event_hits_index[0] / 2) - 1
+
+        random_list = np.random.choice(random_upper, 1000 , replace=False)
+
+        for item in range(5000):
+            data_dict = super(CNNDataset, self).__getitem__(item)
+            
+            print('self.event_hits_index', self.event_hits_index.shape)
+            if self.use_positions:
+                self.hit_positions = self.geo_positions[self.event_hit_pmts, :]
+                hit_data = {"charge": self.event_hit_charges, "time": self.event_hit_times, "position": self.hit_positions}
+            else:
+                hit_data = {"charge": self.event_hit_charges, "time": self.event_hit_times}
+            
+            running_sum += np.sum(hit_data['time'])
+            running_squared_sum += np.sum(np.square(hit_data['time']))
+            global_min = min(global_min, np.min(hit_data['time']))
+            global_max = max(global_max, np.max(hit_data['time']))
+            count_times += len(hit_data['time'])
+
+
+            combined = np.append(combined, hit_data['time'])
+            # print(combined.shape)
+
+            # print(f'running sum for {item}th itr is {running_sum}')
+        
+        estimated_global_mean = running_sum / count_times
+        print('inside sqrt', running_squared_sum / count_times - np.square(estimated_global_mean))
+        estimated_global_std= np.sqrt((running_squared_sum / count_times) - np.square(estimated_global_mean))
+
+        self.estimated_global_mean = estimated_global_mean
+        self.estimated_global_std = estimated_global_std
+
+        self.global_min = global_min
+        self.global_max = global_max
+        # print('set from local count=', count_times)
+        print(f"Global Mean: {self.estimated_global_mean}, Global Std: {self.estimated_global_std}, Global Min: {self.global_min}, Global Max: {self.global_max}")
+
+        self.precomputed_scaling_factors['time'] = {'mean': estimated_global_mean, 'std': estimated_global_std, 'min': global_min, 'max': global_max}
+
+    def __getitem__(self, item):
+
+        data_dict = super(CNNDataset, self).__getitem__(item)
+
+        if self.use_positions:
+            self.hit_positions = self.geo_positions[self.event_hit_pmts, :]
+            hit_data = {"charge": self.event_hit_charges, "time": self.event_hit_times, "position": self.hit_positions}
+        else:
+            hit_data = {"charge": self.event_hit_charges, "time": self.event_hit_times}
+        # apply scaling to channels
+        for c, (offset, scale) in self.scaling.items():
+            hit_data[c] = (hit_data[c] - offset)/scale
+
+        
+        if self.use_positions:
+            processed_data = from_numpy(self.process_data(self.event_hit_pmts, hit_data["time"], hit_data["charge"], hit_positions=hit_data["position"]))
+        else:
+            processed_data = from_numpy(self.process_data(self.event_hit_pmts, hit_data["time"], hit_data["charge"]))
+        
+        if self.counter < -30:
+            du.save_fig_dead(processed_data[1], False, self.dead_pmts, self.pmt_positions, y_label='PMT Charge', counter=self.counter, output_path=f'/data/thoriba/t2k/plots/charge_plot/dead_{round(self.dead_pmt_rate*100)}_dead_seed5/', dead_pmt_percent=round(self.dead_pmt_rate*100))
+            du.save_fig_dead(processed_data[1], False, None, None, y_label='PMT Charge', counter=self.counter, output_path=f'/data/thoriba/t2k/plots/charge_plot/dead_{round(self.dead_pmt_rate*100)}_nodead_seed5/', dead_pmt_percent=round(self.dead_pmt_rate*100))
+
+        self.counter+=1
+        data_dict["data"] = processed_data
+        if False:
+            du.save_fig(processed_data[1],False, counter = self.counter)
+        for t in self.transforms:
+            #apply each transformation only half the time
+            #Probably should be implemented in data_utils?
+            if random.getrandbits(1):
+                data_dict = t(data_dict)
+        
+        processed_data = self.double_cover(data_dict["data"])
+        return data_dict
+    
+    def set_dead_pmts(self):
+        """
+        Sets array of dead PMTs using dead_pmt_rate and dead_pmt_seed if dead_pmt_rate is not None and is in (0, 1]
+        dead_pmts is an array of dead PMT IDs.
+        """
+        if self.dead_pmt_rate is not None and self.dead_pmt_rate > 0 and self.dead_pmt_rate <= 1:
+            num_dead_pmts = min(len(self.pmt_positions), int(len(self.pmt_positions) * self.dead_pmt_rate))
+            np.random.seed(self.dead_pmt_seed)
+            self.dead_pmts = np.random.choice(len(self.pmt_positions), num_dead_pmts, replace=False)
+            print(f'Dead PMTs were set with rate={self.dead_pmt_rate} with seed={self.dead_pmt_seed}. Here is dead PMT IDs')
+            print(self.dead_pmts)
+        else:
+            self.dead_pmts = np.array([], dtype=int)
+            print('No dead PMTs were set. If you intend to set dead PMTs, please make sure dedd PMT rate is in (0,1]')
+
+    def process_data(self, hit_pmts, hit_times, hit_charges, hit_positions=None, double_cover = None, transforms = None):
+        """
+        Returns event data from dataset associated with a specific index
+
+        Parameters
+        ----------
+        hit_pmts: array_like of int
+            Array of hit PMT IDs
+        hit_times: array_like of float
+            Array of PMT hit times
+        hit_charges: array_like of float
+            Array of PMT hit charges
+        
+        Returns
+        -------
+        data: ndarray
+            Array in image-like format (channels, rows, columns) for input to CNN network.
+        """
+        if self.one_indexed:
+            hit_pmts = hit_pmts-1  # SK cable numbers start at 1
+        
+        dead_pmts = self.dead_pmts # int Array of dead PMT IDs
+
+        hit_rows = self.pmt_positions[hit_pmts, 0]
+        hit_cols = self.pmt_positions[hit_pmts, 1]
+
+        hit_rows_d = self.pmt_positions[dead_pmts, 0]
+        hit_cols_d = self.pmt_positions[dead_pmts, 1]
+
+        data = np.zeros(self.data_size, dtype=np.float32)
+
+        debug_mode = 0
+
+        if self.use_times and self.use_charges:
+            if debug_mode:
+                print('----------------------------------')
+                print('dead PMT rate', round(self.dead_pmt_rate * 100, 4), '%')
+                print('Num of dead PMTs', len(dead_pmts), ' | ', round(len(dead_pmts) / len(self.pmt_positions) * 100, 4), '%', f'of {len(self.pmt_positions)} PMTs')
+                print('IDs of dead PMTs', dead_pmts)
+                print('Num of hit PMTs ', len(hit_pmts))
+                print('Num of hit charges', len(hit_charges))
+                print('Num of hit times', len(hit_times))
+                
+            data[0, hit_rows, hit_cols] = hit_times
+            data[1, hit_rows, hit_cols] = hit_charges
+
+            if debug_mode:
+                ti_pre = np.count_nonzero(data[0])
+                ch_pre = np.count_nonzero(data[1])
+                print('non-zero times in data (before)', ti_pre)
+                print('non-zero chrgs in data (before)', ch_pre)
+
+            # kill
+            data[0, hit_rows_d, hit_cols_d] = .0
+            data[1, hit_rows_d, hit_cols_d] = .0
+
+            if debug_mode:
+                RED = '\033[91m'
+                GREEN = '\033[92m'
+                RESET = '\033[0m'  # Reset to default color
+
+                ti_post = np.count_nonzero(data[0])
+                ch_post = np.count_nonzero(data[1])
+
+                print('non-zero times in data (after) ', ti_post, f'{RED}-{ti_pre - ti_post} ({round((ti_pre - ti_post)/ti_pre * 100, 4)} %) {RESET}')
+                print('non-zero chrgs in data (after) ', ch_post, f'{RED}-{ch_pre - ch_post} ({round((ch_pre - ch_post)/ch_pre * 100, 4)} %) {RESET}')
+
+            if self.use_positions:
+                data[2, hit_rows, hit_cols] = hit_positions[:,0]
+                data[3, hit_rows, hit_cols] = hit_positions[:,1]
+                data[4, hit_rows, hit_cols] = hit_positions[:,2]
+
+                data[2, hit_rows_d, hit_cols_d] = .0
+                data[3, hit_rows_d, hit_cols_d] = .0
+                data[4, hit_rows_d, hit_cols_d] = .0
+
+        elif self.use_times:
+            data[0, hit_rows, hit_cols] = hit_times
+            # kill
+            data[0, hit_rows_d, hit_cols_d] = .0
+
+            if self.use_positions:
+                data[1, hit_rows, hit_cols] = hit_positions[:,0]
+                data[2, hit_rows, hit_cols] = hit_positions[:,1]
+                data[3, hit_rows, hit_cols] = hit_positions[:,2]
+
+                data[1, hit_rows_d, hit_cols_d] = .0
+                data[2, hit_rows_d, hit_cols_d] = .0
+                data[3, hit_rows_d, hit_cols_d] = .0
+        else:
+            data[0, hit_rows, hit_cols] = hit_charges
+            # kill
+            data[0, hit_rows_d, hit_cols_d] = .0
+
+            if self.use_positions:
+                data[1, hit_rows, hit_cols] = hit_positions[:,0]
+                data[2, hit_rows, hit_cols] = hit_positions[:,1]
+                data[3, hit_rows, hit_cols] = hit_positions[:,2]
+
+                data[1, hit_rows_d, hit_cols_d] = .0
+                data[2, hit_rows_d, hit_cols_d] = .0
+                data[3, hit_rows_d, hit_cols_d] = .0
+
+        return data
+    
     
