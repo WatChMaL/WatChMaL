@@ -46,7 +46,7 @@ class ClassifierEngine(ReconstructionEngine):
         super().configure_data_loaders(data_config, loaders_config, is_distributed, seed)
         if self.label_set is not None:
             for name in loaders_config.keys():
-                self.data_loaders[name].dataset.map_labels(self.label_set)
+                self.data_loaders[name].dataset.map_labels(self.label_set, self.truth_key)
 
     def forward(self, train=True):
         """
