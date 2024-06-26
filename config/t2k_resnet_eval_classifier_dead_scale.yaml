@@ -8,7 +8,12 @@ data:
       time: [950, 10]
     dead_pmt_rate: 0
     dead_pmt_seed: null
-    channel_scaler: 'robust'
+    channel_scaler:
+      # file location for fitted scaler (for evaluation or precomputed?)
+      fitted_scaler: null
+      scaler: 'minmax'
+      sample_size: 1000
+      dataset_index_file: null
 model:
   _target_: watchmal.model.resnet.resnet34
   num_input_channels: 2

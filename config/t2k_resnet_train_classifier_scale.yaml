@@ -1,0 +1,65 @@
+data:
+  split_path: '/scratch/fcormier/t2k/ml/output_skdetsim/apr3_eMuPiPlus_1500MeV_2M_1/train_val_test_gt200Hits_nFolds20_fold0.npz' 
+  dataset:
+    h5file: '//fast_scratch_2/fcormier/t2k/jan28_electronsOnly_5M/digi_combine.hy'
+    _target_: watchmal.dataset.cnn.cnn_dataset.CNNDatasetScale
+    pmt_positions_file: /data/thoriba/t2k/imagefile/skdetsim_imagefile.npy
+    channel_scaling:
+      time: [950, 10]
+    channel_scaler:
+      # file location for fitted scaler (for evaluation or precomputed?)
+      fitted_scaler: null
+      scaler_type: 'standard'
+      sample_size: 1000
+      dataset_index_file: '/data/thoriba/t2k/indices/apr3_eMuPiPlus_1500MeV_small_1/train_val_test_gt200Hits_FCTEST_nFolds10_fold0.npz'
+model:
+  _target_: watchmal.model.resnet.resnet18
+  num_input_channels: 2
+  num_output_channels: 3
+  stride: 1
+  kernelSize: 1
+  dropout_p: 0.
+engine:
+  _target_: watchmal.engine.classification.ClassifierEngine
+  truth_key: 'labels'
+  label_set: [0,1,2]
+tasks:
+  train:
+    epochs: 30
+    val_interval: 100
+    num_val_batches: 4
+    checkpointing: false
+    loss:
+      _target_: torch.nn.CrossEntropyLoss
+    data_loaders:
+      train:
+        split_key: train_idxs
+        batch_size: 50
+        num_workers: 4
+        sampler:
+          _target_: torch.utils.data.sampler.SubsetRandomSampler
+      validation:
+        split_key: val_idxs
+        batch_size: 250
+        num_workers: 2
+        sampler:
+          _target_: torch.utils.data.sampler.SubsetRandomSampler
+    optimizers:
+      _target_: torch.optim.Adam
+      lr: 0.01
+      weight_decay: 0
+    scheduler:
+      _target_: torch.optim.lr_scheduler.ExponentialLR
+      gamma: 0.8
+  evaluate:
+    data_loaders:
+      test:
+        split_key: test_idxs
+        batch_size: 1000
+        num_workers: 2
+        sampler:
+          _target_: torch.utils.data.sampler.SubsetRandomSampler
+gpu_list: 
+- 1
+seed: null
+dump_path: ./outputs/

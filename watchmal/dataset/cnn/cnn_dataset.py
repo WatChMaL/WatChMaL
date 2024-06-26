@@ -683,7 +683,8 @@ class CNNDatasetDeadPMT(CNNDataset):
 
 class CNNDatasetScale(CNNDataset):
 
-    def __init__(self, h5file, pmt_positions_file, use_times=True, use_charges=True, use_positions=False, transforms=None, one_indexed=True, channel_scaling=None, geometry_file=None, dead_pmt_rate=None, dead_pmt_seed=None, channel_scaler=None):
+    def __init__(self, h5file, pmt_positions_file, use_times=True, use_charges=True, use_positions=False, transforms=None, one_indexed=True, channel_scaling=None, geometry_file=None,
+                 dead_pmt_rate=None, dead_pmt_seed=None, channel_scaler=None):
         super().__init__(h5file, pmt_positions_file, use_times=use_times, use_charges=use_charges, use_positions=use_positions, transforms=transforms, one_indexed=one_indexed, channel_scaling=channel_scaling, geometry_file=geometry_file)
         self.dead_pmt_rate = dead_pmt_rate
         self.dead_pmt_seed = dead_pmt_seed if dead_pmt_seed is not None else 42
@@ -699,16 +700,37 @@ class CNNDatasetScale(CNNDataset):
 
     
     def set_scaling_factor(self):
+        if self.channel_scaler is None:
+            print('No scaling is done.')
+            return
+        
+        if self.channel_scaler['fitted_scaler'] is not None:
+            print('already fitted scaler provided. will use this scaler')
+            # load the scaler 
+
         print('computing scaling factor for time')
         combined = np.array([])
         super(CNNDataset, self).__getitem__(55)
         random_upper = round(len(self.event_hits_index) / 2) - 1
         print(random_upper)
 
-        sample_size = 1000
-        random_list = np.random.choice(random_upper, sample_size, replace=False)
+        if self.channel_scaler['sample_size'] is not None:
+            sample_size = self.channel_scaler['sample_size']
+        else:
+            sample_size = 1000
 
-        # print(random_list)
+        # ensure having same sample each time
+        np.random.seed(42)
+        if self.channel_scaler['dataset_index_file'] is not None:
+            # see if possible to load the index
+            with np.load(self.channel_scaler['dataset_index_file']) as data:
+                train_idx = np.array(data['train_idxs'])
+            random_list = np.random.choice(train_idx, sample_size, replace=False)
+        else:
+            print('dataset index not provided. Treat the dataset as homogeneous (training example only, validation only or test only)')
+            random_list = np.random.choice(random_upper, sample_size, replace=False)
+        
+        print('first 10 selected events', random_list[:10])
         
         # there's risk of data leak because data item getting here might not belong to same set(training, val, test can be mixed)
         for item in random_list:
@@ -723,24 +745,26 @@ class CNNDatasetScale(CNNDataset):
             combined = np.append(combined, hit_data['time'])
             # print(combined.shape)
         
-        if self.channel_scaler == 'minmax':
+        if self.channel_scaler['scaler_type'] == 'minmax':
             self.scaler = MinMaxScaler(copy=False)
-        elif self.channel_scaler == 'standard':
+        elif self.channel_scaler['scaler_type'] == 'standard':
             self.scaler = StandardScaler(copy=False)
-        elif self.channel_scaler == 'robust':
+        elif self.channel_scaler['scaler_type'] == 'robust':
             self.scaler = RobustScaler(copy=False)
-        elif self.channel_scaler == 'power':
+        elif self.channel_scaler['scaler_type'] == 'power':
             self.scaler = PowerTransformer(copy=False)
-        elif self.channel_scaler == 'quantile':
+        elif self.channel_scaler['scaler_type'] == 'quantile':
             self.scaler = QuantileTransformer(copy=False)
 
         self.scaler.fit(combined.reshape(-1, 1))
 
-        print(f'fitted {self.channel_scaler} scaler using {sample_size} random draws from data')
+        print(f'fitted scaler using {sample_size} random draws from data')
 
     def __getitem__(self, item):
 
         data_dict = super(CNNDataset, self).__getitem__(item)
+
+        # print('getitem with item=', item)
 
         if self.use_positions:
             self.hit_positions = self.geo_positions[self.event_hit_pmts, :]
@@ -749,13 +773,14 @@ class CNNDatasetScale(CNNDataset):
             hit_data = {"charge": self.event_hit_charges, "time": self.event_hit_times}
         # apply scaling to channels
         for c, (offset, scale) in self.scaling.items():
-            hit_data[c] = (hit_data[c] - offset)/scale
+            if not c == 'time':
+                hit_data[c] = (hit_data[c] - offset)/scale
 
         # print('--------')
-
         # if item % 10 == 0:
         #     print('before scaling', hit_data['time'][:10], 'shape', hit_data['time'].shape)
         #     print('scaling...')
+        # this line is getting error. the output array is read-only.. look into this.
         hit_data['time'] = self.scaler.transform(hit_data['time'].reshape(-1, 1)).reshape(-1,)
         # if item % 10 == 0:
         #     print('scaling done?')
