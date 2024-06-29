@@ -11,7 +11,7 @@ data:
     channel_scaler:
       # file location for fitted scaler (for evaluation or precomputed?)
       fitted_scaler: null
-      scaler: 'minmax'
+      scaler_type: 'minmax'
       sample_size: 1000
       dataset_index_file: null
 model:
@@ -43,6 +43,6 @@ tasks:
           # _target_: torch.utils.data.sampler.SubsetRandomSampler
           _target_: torch.utils.data.sampler.SequentialSampler
 gpu_list: 
-- 1
+- 7
 seed: null
 dump_path: ./outputs/

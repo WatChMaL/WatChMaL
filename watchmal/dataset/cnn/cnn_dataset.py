@@ -25,6 +25,9 @@ from matplotlib.patches import Ellipse
 
 from sklearn.preprocessing import MinMaxScaler, StandardScaler, PowerTransformer, QuantileTransformer, RobustScaler, MaxAbsScaler
 
+import h5py
+import joblib
+
 
 class CNNDataset(H5Dataset):
     """
@@ -705,66 +708,40 @@ class CNNDatasetScale(CNNDataset):
             return
         
         if self.channel_scaler['fitted_scaler'] is not None:
-            print('already fitted scaler provided. will use this scaler')
-            # load the scaler 
-
-        print('computing scaling factor for time')
-        combined = np.array([])
-        super(CNNDataset, self).__getitem__(55)
-        random_upper = round(len(self.event_hits_index) / 2) - 1
-        print(random_upper)
-
-        if self.channel_scaler['sample_size'] is not None:
-            sample_size = self.channel_scaler['sample_size']
+            self.scaler = joblib.load(self.channel_scaler['fitted_scaler'])
+            print('Loaded already fitted scaler from file')
+            print(self.scaler.get_params())
         else:
-            sample_size = 1000
+            print('Fitting scaler based on training data')
+            if not self.initialized:
+                self.initialize()
 
-        # ensure having same sample each time
-        np.random.seed(42)
-        if self.channel_scaler['dataset_index_file'] is not None:
-            # see if possible to load the index
-            with np.load(self.channel_scaler['dataset_index_file']) as data:
-                train_idx = np.array(data['train_idxs'])
-            random_list = np.random.choice(train_idx, sample_size, replace=False)
-        else:
-            print('dataset index not provided. Treat the dataset as homogeneous (training example only, validation only or test only)')
-            random_list = np.random.choice(random_upper, sample_size, replace=False)
-        
-        print('first 10 selected events', random_list[:10])
-        
-        # there's risk of data leak because data item getting here might not belong to same set(training, val, test can be mixed)
-        for item in random_list:
-            data_dict = super(CNNDataset, self).__getitem__(item)
-            
-            # print('self.event_hits_index', self.event_hits_index.shape)
-            if self.use_positions:
-                self.hit_positions = self.geo_positions[self.event_hit_pmts, :]
-                hit_data = {"charge": self.event_hit_charges, "time": self.event_hit_times, "position": self.hit_positions}
-            else:
-                hit_data = {"charge": self.event_hit_charges, "time": self.event_hit_times}
-            combined = np.append(combined, hit_data['time'])
-            # print(combined.shape)
-        
-        if self.channel_scaler['scaler_type'] == 'minmax':
-            self.scaler = MinMaxScaler(copy=False)
-        elif self.channel_scaler['scaler_type'] == 'standard':
-            self.scaler = StandardScaler(copy=False)
-        elif self.channel_scaler['scaler_type'] == 'robust':
-            self.scaler = RobustScaler(copy=False)
-        elif self.channel_scaler['scaler_type'] == 'power':
-            self.scaler = PowerTransformer(copy=False)
-        elif self.channel_scaler['scaler_type'] == 'quantile':
-            self.scaler = QuantileTransformer(copy=False)
+            if self.channel_scaler['dataset_index_file'] is not None:
+                # see if possible to load the index
+                train_index = np.array(np.load(self.channel_scaler['dataset_index_file'])['train_idxs'])
 
-        self.scaler.fit(combined.reshape(-1, 1))
+            if self.channel_scaler['scaler_type'] == 'minmax':
+                self.scaler = MinMaxScaler(copy=False)
+            elif self.channel_scaler['scaler_type'] == 'standard':
+                self.scaler = StandardScaler(copy=False)
+            elif self.channel_scaler['scaler_type'] == 'robust':
+                self.scaler = RobustScaler(copy=False)
+            elif self.channel_scaler['scaler_type'] == 'power':
+                self.scaler = PowerTransformer(copy=False)
+            elif self.channel_scaler['scaler_type'] == 'quantile':
+                self.scaler = QuantileTransformer(copy=False)
 
-        print(f'fitted scaler using {sample_size} random draws from data')
+
+            print('fitting scaler', self.channel_scaler['scaler_type'])
+            # Consider using partial fit if available. Or consider taking a sample
+            # TODO: fit only with training data
+            self.scaler.fit(self.time.reshape(-1, 1))          
+            joblib.dump(self.scaler, 'scaler.joblib')
+            print('Scaler was fitted and saved')
 
     def __getitem__(self, item):
 
         data_dict = super(CNNDataset, self).__getitem__(item)
-
-        # print('getitem with item=', item)
 
         if self.use_positions:
             self.hit_positions = self.geo_positions[self.event_hit_pmts, :]
@@ -821,7 +798,7 @@ class CNNDatasetScale(CNNDataset):
             print(self.dead_pmts)
         else:
             self.dead_pmts = np.array([], dtype=int)
-            print('No dead PMTs were set. If you intend to set dead PMTs, please make sure dedd PMT rate is in (0,1]')
+            print('No dead PMTs were set. If you intend to set dead PMTs, add dead PMT rate that is in (0,1] in yaml file')
 
     def process_data(self, hit_pmts, hit_times, hit_charges, hit_positions=None, double_cover = None, transforms = None):
         """
