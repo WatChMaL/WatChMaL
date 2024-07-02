@@ -695,49 +695,127 @@ class CNNDatasetScale(CNNDataset):
         self.channel_scaler = channel_scaler
 
         self.set_dead_pmts()
-        self.set_scaling_factor()
+        self.scale_time()
         # self.test_func()
-
-    def test_func(self):
-        pass
-
     
-    def set_scaling_factor(self):
+    def get_train_mask(self):
+        debug_mode = 1
+
+        if self.channel_scaler['dataset_index_file'] is not None:
+                # see if possible to load the index
+                train_index = np.array(np.load(self.channel_scaler['dataset_index_file'])['train_idxs'])
+        else:
+            train_index = None
+            # think about this later
+                
+        if debug_mode:
+            print('train index', train_index)
+        
+        num_events = len(self.event_hits_index)
+        num_time = len(self.time)
+
+        starts = self.event_hits_index[train_index]
+        next_event_idx = np.minimum(train_index + 1, num_events - 1)
+        ends = np.where(next_event_idx == len(next_event_idx), 
+                        num_time,
+                        self.event_hits_index[next_event_idx])
+        for i in range(len(train_index)):
+            if next_event_idx[i] == train_index[i] == num_events - 1:
+                ends[i] = num_time
+        
+        mask_train = np.zeros_like(self.time, dtype=bool)
+        for start, end in zip(starts, ends):
+            mask_train[start:end] = True
+
+        if debug_mode:
+            print('train_idx.shape', train_index.shape)
+            print('next_event_idx.shape', next_event_idx.shape)
+            print('train_idx(head)', train_index[:10], train_index[10000:10010])
+            print('next idx of it ', next_event_idx[:10], next_event_idx[10000:10010])
+            print('starts (head)', starts[:20])
+            print('ends (head)  ', ends[:20])
+            print('training mask', mask_train)
+            print('training mask shape', mask_train.shape)
+            print('train mask L0', np.sum(mask_train))
+        
+        return mask_train
+        
+
+    def fit_and_save_scaler(self):
+        # set 1 to print a bunch of info for validation
+        debug_mode = 1
+
+        if self.channel_scaler['scaler_type'] == 'minmax':
+            self.scaler = MinMaxScaler()
+        elif self.channel_scaler['scaler_type'] == 'standard':
+            self.scaler = StandardScaler()
+        elif self.channel_scaler['scaler_type'] == 'robust':
+            self.scaler = RobustScaler()
+        elif self.channel_scaler['scaler_type'] == 'power':
+            self.scaler = PowerTransformer()
+        elif self.channel_scaler['scaler_type'] == 'quantile':
+            self.scaler = QuantileTransformer()
+    
+        print('Will fit sk-learn scaler based on training set. Scaler:', self.channel_scaler['scaler_type'])
+
+        print('Fitting the scaler on traing set. It will take some time..')
+        mask_train = self.get_train_mask()
+        self.scaler.fit(self.time[mask_train].reshape(-1, 1))          
+        
+        # saving the scaler object so that we can reuse it for another training and test (evaluation) dataset
+        scaler_name_str = self.channel_scaler['scaler_type']
+        joblib.dump(self.scaler, f'{scaler_name_str}_scaler.joblib')
+        print('Scaler was fitted and saved')
+
+        if debug_mode:
+            print(self.scaler.get_params())
+    
+    
+    def scale_time(self):
+        debug_mode = 1
         if self.channel_scaler is None:
             print('No scaling is done.')
             return
+
+        if not self.initialized:
+                self.initialize()
         
         if self.channel_scaler['fitted_scaler'] is not None:
             self.scaler = joblib.load(self.channel_scaler['fitted_scaler'])
             print('Loaded already fitted scaler from file')
             print(self.scaler.get_params())
         else:
-            print('Fitting scaler based on training data')
-            if not self.initialized:
-                self.initialize()
+            print('Fitting a new scaler based on training data')
+            self.fit_and_save_scaler()
+            print('Finished fitting scaler')
+        
+        if debug_mode:
+            time10_pre = self.time[:10]
+            pre_str = f"self.time shape: {self.time.shape}, dtype: {self.time.dtype}"
+        
+        if debug_mode:
+              scaler_name_str = self.channel_scaler['scaler_type']
+              output_path = '/data/thoriba/t2k/plots/scaling_test/'
+            #   du.generic_histogram(self.time, 'PMT Time [ns]', output_path, f'hit_pmt_time_pre_{scaler_name_str}', y_name = None, range=[0,2000], label=None, bins=200, doNorm=True)
+              du.generic_histogram((self.time - 400) / 1000, 'PMT Time [ns]', output_path, f'hit_pmt_time_post_400_1000', y_name = None, range=None, label=None, bins=200, doNorm=True)
 
-            if self.channel_scaler['dataset_index_file'] is not None:
-                # see if possible to load the index
-                train_index = np.array(np.load(self.channel_scaler['dataset_index_file'])['train_idxs'])
+        
+        mask_train = self.get_train_mask()
+        print('Transforming the entire self.time (regardless of train/val/test split if such split exists) based on the scaler. It will take some time..')
+        self.time = self.scaler.transform(self.time.reshape(-1, 1)).reshape(-1,)
 
-            if self.channel_scaler['scaler_type'] == 'minmax':
-                self.scaler = MinMaxScaler(copy=False)
-            elif self.channel_scaler['scaler_type'] == 'standard':
-                self.scaler = StandardScaler(copy=False)
-            elif self.channel_scaler['scaler_type'] == 'robust':
-                self.scaler = RobustScaler(copy=False)
-            elif self.channel_scaler['scaler_type'] == 'power':
-                self.scaler = PowerTransformer(copy=False)
-            elif self.channel_scaler['scaler_type'] == 'quantile':
-                self.scaler = QuantileTransformer(copy=False)
+        if debug_mode:
+            print(pre_str)
+            time10_post = self.time[:10] 
+            print('before', time10_pre)
+            print('after', time10_post)
+            print(f"self.time shape: {self.time.shape}, dtype: {self.time.dtype}")
+            du.generic_histogram(self.time, 'PMT Time [ns]', output_path, f'hit_pmt_time_post_{scaler_name_str}', y_name = None, range=None, label=None, bins=200, doNorm=True)
 
 
-            print('fitting scaler', self.channel_scaler['scaler_type'])
-            # Consider using partial fit if available. Or consider taking a sample
-            # TODO: fit only with training data
-            self.scaler.fit(self.time.reshape(-1, 1))          
-            joblib.dump(self.scaler, 'scaler.joblib')
-            print('Scaler was fitted and saved')
+        print('self.time was successfully scaled')
+
+        
 
     def __getitem__(self, item):
 

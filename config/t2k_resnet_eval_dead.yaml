@@ -19,7 +19,7 @@ model:
   dropout_p: 0.
 engine:
   _target_: watchmal.engine.regression.RegressionEngine
-  truth_key: 'directions'
+  truth_key: 'positions'
 tasks:
   restore_best_state:
     name: RegressionEngine_ResNet
@@ -41,6 +41,6 @@ tasks:
           # _target_: torch.utils.data.sampler.SequentialSampler
 
 gpu_list:
-  - 1
+  - 7
 seed: null
 dump_path: ./outputs/

@@ -242,3 +242,21 @@ def save_time_distn(charges, times, isPost, displacement=0, counter=0, output_pa
     else:
         plt.savefig(path_fig+str(counter)+'_pre_hist'+'.png')  
     plt.clf()
+
+#  plot histogram. Taken from t2k_ml
+def generic_histogram(x, x_name, output_path, output_name, y_name = None, label=None, range=None, bins=None, in_chain=False, doNorm=False):
+    fig, ax = plt.subplots()
+    alpha=1
+    if len(x) > 1:
+        alpha=0.6
+    ax.hist(x, bins=bins, range=range, label=label, alpha=alpha, histtype='stepfilled', density=doNorm)
+    ax.set_xlabel(x_name)
+    if y_name is not None and  not doNorm:
+        ax.set_ylabel(y_name)
+    elif doNorm:
+        ax.set_ylabel("Arbitrary")
+    ax.legend(loc='best')
+    if not in_chain:
+        plt.savefig(output_path+'/'+output_name+'.png', format='png', transparent=False, bbox_inches="tight")
+        plt.close()
+        plt.clf()
