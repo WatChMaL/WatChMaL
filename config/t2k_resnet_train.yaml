@@ -3,11 +3,18 @@ data:
   dataset:
     h5file: '$SLURM_TMPDIR/digi_combine.hy'
     _target_: watchmal.dataset.cnn.cnn_dataset.CNNDataset
-    pmt_positions_file: /home/fcormier/t2k/ml/t2k_ml_training/data/skdetsim_imagefile.npy
+    pmt_positions_file: /data/thoriba/t2k/imagefile/skdetsim_imagefile.npy
     use_positions: False
     geometry_file: /home/fcormier/t2k/ml/training/t2k_ml_training/data/geofile_skdetsim.npz
     channel_scaling:
       time: [400, 1000]
+    # channel_scaler:
+    #   # file location for fitted scaler (for precomputed). if chain, 
+    #   fitted_scaler: ['/home/thoriba/t2k2/t2k_ml_training/chain_scaler_1_quantile_normal.joblib', '/home/thoriba/t2k2/t2k_ml_training/chain_scaler_2_minmax.joblib']
+    #   scaler_type: 'minmax'
+    #   sample_size: 10000
+    #   dataset_index_file: '/data/thoriba/t2k/indices/apr3_eMuPiPlus_1500MeV_small_1/train_val_test_gt200Hits_FCTEST_nFolds10_fold0.npz'
+    #   transform_per_batch: True
 model:
   _target_: watchmal.model.resnet.resnet18
   num_input_channels: 2
@@ -57,6 +64,6 @@ tasks:
         sampler:
           _target_: torch.utils.data.sampler.SubsetRandomSampler
 gpu_list: 
-- 7
+- 1
 seed: null
 dump_path: ./outputs/

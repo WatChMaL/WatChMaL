@@ -179,7 +179,8 @@ def save_fig(data, isPost, displacement=0, counter=0, output_path=None):
     plt.clf()
     print("3")
 
-def save_fig_dead(data, isPost, dead_pmts, pmt_positions, y_label='PMT Charge', displacement=0, counter=0, output_path='/data/thoriba/t2k/plots/charge_plot/CNN_dead_default/', dead_pmt_percent=100):
+def save_fig_dead(data, isPost, dead_pmts, pmt_positions, y_label='PMT Charge',
+                   displacement=0, counter=0, output_path='/data/thoriba/t2k/plots/charge_plot/CNN_dead_default/', dead_pmt_percent=100):
     '''
     save_fig funciton for CNNDatasetDeadPMT
     Saves figures with dead PMT locations if both `dead_pmts` and `pmt_positions` are provided
@@ -198,15 +199,15 @@ def save_fig_dead(data, isPost, dead_pmts, pmt_positions, y_label='PMT Charge', 
     if dead_pmts is not None and pmt_positions is not None:
         plt.title(f'{counter}th Event with {dead_pmt_percent} % Dead PMTs (shown in {dead_color} pixels)')
     else:
-        plt.title(f'{counter}th Event with {dead_pmt_percent} % Dead PMTs')
+        plt.title(f'{counter}th Event with {dead_pmt_percent} % Dead PMTs.')
     path_fig = output_path
 
 
     os.makedirs(path_fig, exist_ok=True)
     if isPost:
-        plt.savefig(path_fig+str(counter)+'_post_rot_dc_img_dis'+str(displacement)+'.png', dpi=450)
+        plt.savefig(path_fig+str(counter)+'_post_img_dis'+str(displacement)+'.png', dpi=450)
     else:
-        plt.savefig(path_fig+str(counter)+'_pre_rot_img'+'.png', dpi=450)
+        plt.savefig(path_fig+str(counter)+'_pre_img'+'.png', dpi=450)
     plt.clf()
 
     # if dead_pmts is not None:

@@ -1,0 +1,69 @@
+data:
+  split_path: '/fast_scratch/fcormier/t2k/ml/skdetsim/aug30_emu_skdetsim_smallFile_2/train_val_test_nFolds5_fold0.npz' 
+  dataset:
+    h5file: '/fast_scratch/fcormier/t2k/ml/skdetsim/aug30_emu_skdetsim_smallFile_2/combine_combine.hy'
+    _target_: watchmal.dataset.cnn.cnn_dataset.CNNDataset
+    pmt_positions_file: /fast_scratch/WatChMaL/data/T2K/image_files/skdetsim_imagefile.npy
+    transforms:
+    channel_scaler:
+      # file location for fitted scaler (for precomputed)
+      fitted_scaler: '/home/thoriba/t2k2/t2k_ml_training/minmax_scaler_01_11.joblib'
+      scaler_type: 'minmax'
+      sample_size: 10000
+      dataset_index_file: '/data/thoriba/t2k/indices/apr3_eMuPiPlus_1500MeV_small_1/train_val_test_gt200Hits_FCTEST_nFolds10_fold0.npz'
+      transform_per_batch: False
+model:
+  _recursive_: false
+  _target_: watchmal.model.classifier.Classifier
+  num_classes: 2
+  feature_extractor:
+    _target_: watchmal.model.resnet.resnet34
+    num_input_channels: 2
+    num_output_channels: 3
+  classification_network:
+    _target_: watchmal.model.classifier.PassThrough
+engine:
+  _target_: watchmal.engine.engine_classifier.ClassifierEngine
+  restore_path: 0
+tasks:
+  train:
+    epochs: 10
+    report_interval: 100
+    val_interval: 100
+    num_val_batches: 32
+    checkpointing: false
+    early_stopping_patience: 3
+    restore_best_state: false
+    data_loaders:
+      train:
+        split_key: train_idxs
+        batch_size: 624
+        num_workers: 2
+        transforms:
+        sampler:
+          _target_: torch.utils.data.sampler.SubsetRandomSampler
+      validation:
+        split_key: val_idxs
+        batch_size: 1024
+        num_workers: 4
+        sampler:
+          _target_: torch.utils.data.sampler.SubsetRandomSampler
+    optimizers:
+      _target_: torch.optim.Adam
+      lr: 0.001
+      weight_decay: 0
+    scheduler:
+      _target_: torch.optim.lr_scheduler.ExponentialLR
+      gamma: 0.8
+  evaluate:
+    data_loaders:
+      test:
+        split_key: test_idxs
+        batch_size: 512
+        num_workers: 4
+        sampler:
+          _target_: torch.utils.data.sampler.SubsetRandomSampler
+gpu_list: 
+- 1
+seed: null
+dump_path: ./outputs/
