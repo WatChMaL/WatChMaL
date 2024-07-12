@@ -490,7 +490,7 @@ class CNNDatasetDeadPMT(CNNDataset):
     dead_pmts: 1d numpy array of integers. Zero-indexed.
     """
 
-    def __init__(self, h5file, pmt_positions_file, use_times=True, use_charges=True, use_positions=False, transforms=None, one_indexed=True, channel_scaling=None, geometry_file=None, dead_pmt_rate=None, dead_pmt_seed=None, dead_pmts_file=None):
+    def __init__(self, h5file, pmt_positions_file, use_times=True, use_charges=True, use_positions=False, transforms=None, one_indexed=True, channel_scaling=None, geometry_file=None, dead_pmt_rate=None, dead_pmt_seed=None, dead_pmts_file=None, use_dead_pmt_mask=False):
         """
         Constructs a dataset for CNN data. Event hit data is read in from the HDF5 file and the PMT charge and/or time
         data is formatted into an event-display-like image for input to a CNN. Each pixel of the image corresponds to
