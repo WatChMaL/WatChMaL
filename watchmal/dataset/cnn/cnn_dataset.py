@@ -486,9 +486,11 @@ class CNNDatasetDeadPMT(CNNDataset):
     """
     This class does everything done by its parent 'CNNDataset'. In addition, it sets a fixed set of PMTs as 'dead' (having 0 charge and time).
     It has three additional attributes: dead_pmt_rate, dead_pmt_seed, dead_pmts.
+
+    dead_pmts: 1d numpy array of integers. Zero-indexed.
     """
 
-    def __init__(self, h5file, pmt_positions_file, use_times=True, use_charges=True, use_positions=False, transforms=None, one_indexed=True, channel_scaling=None, geometry_file=None, dead_pmt_rate=None, dead_pmt_seed=None):
+    def __init__(self, h5file, pmt_positions_file, use_times=True, use_charges=True, use_positions=False, transforms=None, one_indexed=True, channel_scaling=None, geometry_file=None, dead_pmt_rate=None, dead_pmt_seed=None, dead_pmts_file=None):
         """
         Constructs a dataset for CNN data. Event hit data is read in from the HDF5 file and the PMT charge and/or time
         data is formatted into an event-display-like image for input to a CNN. Each pixel of the image corresponds to
@@ -512,62 +514,32 @@ class CNNDatasetDeadPMT(CNNDataset):
             Whether the PMT IDs in the H5 file are indexed starting at 1 (like SK tube numbers) or 0 (like WCSim PMT
             indexes). By default, zero-indexing is assumed.
         dead_pmt_rate: float
-            A proportion of dead PMTs to create.
+            A proportion of dead PMTs to create. Within 0 and 1.
         dead_pmt_seed: int
-            Seed value for randomness involving selection of dead PMTs
+            Seed value for randomness involving selection of dead PMTs.
         """
         super().__init__(h5file, pmt_positions_file, use_times=use_times, use_charges=use_charges, use_positions=use_positions, transforms=transforms, one_indexed=one_indexed, channel_scaling=channel_scaling, geometry_file=geometry_file)
         self.dead_pmt_rate = dead_pmt_rate
         self.dead_pmt_seed = dead_pmt_seed if dead_pmt_seed is not None else 42
+        self.dead_pmts_file = dead_pmts_file
         
         self.set_dead_pmts()
     
-    # def __getitem__(self, item):
-
-        # data_dict = super(CNNDataset, self).__getitem__(item)
-
-        # if self.use_positions:
-        #     self.hit_positions = self.geo_positions[self.event_hit_pmts, :]
-        #     hit_data = {"charge": self.event_hit_charges, "time": self.event_hit_times, "position": self.hit_positions}
-        # else:
-        #     hit_data = {"charge": self.event_hit_charges, "time": self.event_hit_times}
-        # # apply scaling to channels
-        # for c, (offset, scale) in self.scaling.items():
-        #     hit_data[c] = (hit_data[c] - offset)/scale
-
-        
-        # if self.use_positions:
-        #     processed_data = from_numpy(self.process_data(self.event_hit_pmts, hit_data["time"], hit_data["charge"], hit_positions=hit_data["position"]))
-        # else:
-        #     processed_data = from_numpy(self.process_data(self.event_hit_pmts, hit_data["time"], hit_data["charge"]))
-        
-        # if self.counter < -30:
-        #     du.save_fig_dead(processed_data[1], False, self.dead_pmts, self.pmt_positions, y_label='PMT Charge', counter=self.counter, output_path=f'/data/thoriba/t2k/plots/charge_plot/dead_{round(self.dead_pmt_rate*100)}_dead_seed5/', dead_pmt_percent=round(self.dead_pmt_rate*100))
-        #     du.save_fig_dead(processed_data[1], False, None, None, y_label='PMT Charge', counter=self.counter, output_path=f'/data/thoriba/t2k/plots/charge_plot/dead_{round(self.dead_pmt_rate*100)}_nodead_seed5/', dead_pmt_percent=round(self.dead_pmt_rate*100))
-            
-            
-        #     # du.save_time_distn(hit_data['charge'], hit_data['time'], True)
-        #     # du.save_time_distn(processed_data[1], processed_data[0], True, counter=self.counter, output_path='/data/thoriba/t2k/plots/time_distn/CNN_dead_5/')
-
-        # self.counter+=1
-        # data_dict["data"] = processed_data
-        # if False:
-        #     du.save_fig(processed_data[1],False, counter = self.counter)
-        # for t in self.transforms:
-        #     #apply each transformation only half the time
-        #     #Probably should be implemented in data_utils?
-        #     if random.getrandbits(1):
-        #         data_dict = t(data_dict)
-        
-        # processed_data = self.double_cover(data_dict["data"])
-        # return data_dict
-    
     def set_dead_pmts(self):
         """
-        Sets array of dead PMTs using dead_pmt_rate and dead_pmt_seed if dead_pmt_rate is not None and is in (0, 1]
-        dead_pmts is an array of dead PMT IDs.
+        Sets array of dead PMTs randomly or non-randomly depending on inputs from yaml.
+        For random setting, sets dead PMT ID list using dead_pmt_rate and dead_pmt_seed if dead_pmt_rate is not None and is in (0, 1]
+        For fixed selection, read it from .txt file, in which each row is ID of dead PMT.
+        Sets:
+        dead_pmts: a numpy 1-d array of integers; each element represents ID of dead PMT.
         """
-        if self.dead_pmt_rate is not None and self.dead_pmt_rate > 0 and self.dead_pmt_rate <= 1:
+        if self.dead_pmts_file is not None:
+            self.dead_pmts = np.loadtxt(self.dead_pmts_file, dtype=int)
+            if self.one_indexed:
+                self.dead_pmts = self.dead_pmts - 1
+            print(f'Dead PMTs were set non-randomly from file ({self.dead_pmts_file}). Here is dead PMT IDs (zero-indexed).')
+            print(self.dead_pmts)
+        elif self.dead_pmt_rate is not None and self.dead_pmt_rate > 0 and self.dead_pmt_rate <= 1:
             num_dead_pmts = min(len(self.pmt_positions), int(len(self.pmt_positions) * self.dead_pmt_rate))
             np.random.seed(self.dead_pmt_seed)
             self.dead_pmts = np.random.choice(len(self.pmt_positions), num_dead_pmts, replace=False)
@@ -575,7 +547,7 @@ class CNNDatasetDeadPMT(CNNDataset):
             print(self.dead_pmts)
         else:
             self.dead_pmts = np.array([], dtype=int)
-            print('No dead PMTs were set. If you intend to set dead PMTs, please make sure dedd PMT rate is in (0,1]')
+            print('No dead PMTs were set. If you intend to set dead PMTs, please provide dead_pmts_file for fixed dead PMTs or dead_pmt_rate for random selection')
 
     def process_data(self, hit_pmts, hit_times, hit_charges, hit_positions=None, double_cover = None, transforms = None):
         """
@@ -608,12 +580,14 @@ class CNNDatasetDeadPMT(CNNDataset):
 
         data = np.zeros(self.data_size, dtype=np.float32)
 
-        debug_mode = 0
+        # set True to print out some information per batch
+        debug_mode = 1
 
         if self.use_times and self.use_charges:
             if debug_mode:
                 print('----------------------------------')
-                print('dead PMT rate', round(self.dead_pmt_rate * 100, 4), '%')
+                if self.dead_pmt_rate is not None:
+                    print('dead PMT rate', round(self.dead_pmt_rate * 100, 4), '%')
                 print('Num of dead PMTs', len(dead_pmts), ' | ', round(len(dead_pmts) / len(self.pmt_positions) * 100, 4), '%', f'of {len(self.pmt_positions)} PMTs')
                 print('IDs of dead PMTs', dead_pmts)
                 print('Num of hit PMTs ', len(hit_pmts))
@@ -629,7 +603,7 @@ class CNNDatasetDeadPMT(CNNDataset):
                 print('non-zero times in data (before)', ti_pre)
                 print('non-zero chrgs in data (before)', ch_pre)
 
-            # kill
+            # kill dead PMTs according to dead PMT IDs
             data[0, hit_rows_d, hit_cols_d] = .0
             data[1, hit_rows_d, hit_cols_d] = .0
 
@@ -987,20 +961,21 @@ class CNNDatasetScale(CNNDataset):
         processed_data = self.double_cover(data_dict["data"])
         return data_dict
     
-    def set_dead_pmts(self):
-        """
-        Sets array of dead PMTs using dead_pmt_rate and dead_pmt_seed if dead_pmt_rate is not None and is in (0, 1]
-        dead_pmts is an array of dead PMT IDs.
-        """
-        if self.dead_pmt_rate is not None and self.dead_pmt_rate > 0 and self.dead_pmt_rate <= 1:
-            num_dead_pmts = min(len(self.pmt_positions), int(len(self.pmt_positions) * self.dead_pmt_rate))
-            np.random.seed(self.dead_pmt_seed)
-            self.dead_pmts = np.random.choice(len(self.pmt_positions), num_dead_pmts, replace=False)
-            print(f'Dead PMTs were set with rate={self.dead_pmt_rate} with seed={self.dead_pmt_seed}. Here is dead PMT IDs')
-            print(self.dead_pmts)
-        else:
-            self.dead_pmts = np.array([], dtype=int)
-            print('No dead PMTs were set. If you intend to set dead PMTs, add dead PMT rate that is in (0,1] in yaml file')
+    # def set_dead_pmts(self):
+    #     """
+    #     Sets array of dead PMTs using dead_pmt_rate and dead_pmt_seed if dead_pmt_rate is not None and is in (0, 1]
+    #     dead_pmts is an array of dead PMT IDs.
+    #     """
+    #     if self.dead_pmt_rate is not None and self.dead_pmt_rate > 0 and self.dead_pmt_rate <= 1:
+    #         num_dead_pmts = min(len(self.pmt_positions), int(len(self.pmt_positions) * self.dead_pmt_rate))
+    #         np.random.seed(self.dead_pmt_seed)
+            
+    #         self.dead_pmts = np.random.choice(len(self.pmt_positions), num_dead_pmts, replace=False)
+    #         print(f'Dead PMTs were set with rate={self.dead_pmt_rate} with seed={self.dead_pmt_seed}. Here is dead PMT IDs')
+    #         print(self.dead_pmts)
+    #     else:
+    #         self.dead_pmts = np.array([], dtype=int)
+    #         print('No dead PMTs were set. If you intend to set dead PMTs, add dead PMT rate that is in (0,1] in yaml file')
 
     def process_data(self, hit_pmts, hit_times, hit_charges, hit_positions=None, double_cover = None, transforms = None):
         """

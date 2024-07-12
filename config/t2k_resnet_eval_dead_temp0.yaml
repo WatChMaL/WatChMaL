@@ -16,7 +16,7 @@ model:
   num_output_channels: 1
   stride: 1
   kernelSize: 1
-  dropout_p: 0.05
+  dropout_p: 0.1
 engine:
   _target_: watchmal.engine.regression.RegressionEngine
   truth_key: 'momenta'
@@ -41,6 +41,6 @@ tasks:
           # _target_: torch.utils.data.sampler.SequentialSampler
 
 gpu_list:
-  - 7
+  - 6
 seed: null
 dump_path: ./outputs/
