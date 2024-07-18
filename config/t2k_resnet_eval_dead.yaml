@@ -16,7 +16,7 @@ model:
   num_output_channels: 1
   stride: 1
   kernelSize: 1
-  dropout_p: 0.05
+  dropout_p: 0.0
 engine:
   _target_: watchmal.engine.regression.RegressionEngine
   truth_key: 'momenta'

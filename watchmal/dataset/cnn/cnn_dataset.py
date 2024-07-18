@@ -4,6 +4,7 @@ Modified from mPMT dataset for use with single PMTs
 """
 
 # torch imports
+import os
 from torch import from_numpy, Tensor, roll, flip
 import torch
 import torchvision
@@ -27,6 +28,7 @@ from sklearn.preprocessing import MinMaxScaler, StandardScaler, PowerTransformer
 
 import h5py
 import joblib
+import re
 
 
 class CNNDataset(H5Dataset):
@@ -734,7 +736,7 @@ class CNNDatasetDeadPMT(CNNDataset):
     
 
 
-class CNNDatasetScale(CNNDataset):
+class CNNDatasetScale(CNNDatasetDeadPMT):
     """
     A dataset class for CNN models with additional scaling functionality.
     This class extends CNNDataset to include features for scaling channel data,
@@ -748,21 +750,17 @@ class CNNDatasetScale(CNNDataset):
         scaler: Scaler object or list of Scaler objects for time data transformation.
     """
     def __init__(self, h5file, pmt_positions_file, use_times=True, use_charges=True, use_positions=False, transforms=None, one_indexed=True, channel_scaling=None, geometry_file=None,
-                 dead_pmt_rate=None, dead_pmt_seed=None, channel_scaler=None):
+                 dead_pmt_rate=None, dead_pmt_seed=None, dead_pmts_file=None, use_dead_pmt_mask=False, channel_scaler=None):
         """
         Initialize the CNNDatasetScale object.
         """
-        super().__init__(h5file, pmt_positions_file, use_times=use_times, use_charges=use_charges, use_positions=use_positions, transforms=transforms, one_indexed=one_indexed, channel_scaling=channel_scaling, geometry_file=geometry_file)
-        self.dead_pmt_rate = dead_pmt_rate
-        self.dead_pmt_seed = dead_pmt_seed if dead_pmt_seed is not None else 42
+        super().__init__(h5file, pmt_positions_file, use_times=use_times, use_charges=use_charges, use_positions=use_positions, transforms=transforms,
+                         one_indexed=one_indexed, channel_scaling=channel_scaling, geometry_file=geometry_file,
+                         dead_pmt_rate=dead_pmt_rate, dead_pmt_seed=dead_pmt_seed, dead_pmts_file=None, use_dead_pmt_mask=False)
 
         self.channel_scaler = channel_scaler
-
         self.mask_train = None
-
-        self.set_dead_pmts()
         self.scale_time()
-        # self.test_func()
     
     def get_train_mask(self):
         """
@@ -785,6 +783,7 @@ class CNNDatasetScale(CNNDataset):
             return None
                 
         if debug_mode:
+            print('------- get_train_mask (start) -------------')
             print('train index', train_index)
         
         num_events = len(self.event_hits_index)
@@ -813,6 +812,7 @@ class CNNDatasetScale(CNNDataset):
             print('training mask', mask_train)
             print('training mask shape', mask_train.shape)
             print('train mask L0', np.sum(mask_train))
+            print('------- get_train_mask (end)-------------')
         
         self.mask_train = mask_train
         
@@ -829,32 +829,94 @@ class CNNDatasetScale(CNNDataset):
         # set 1 to print a bunch of info for validation
         debug_mode = 1
 
-        if self.channel_scaler['scaler_type'] == 'minmax':
-            self.scaler = MinMaxScaler(feature_range=(0.1, 1.3))
-        elif self.channel_scaler['scaler_type'] == 'standard':
-            self.scaler = StandardScaler()
-        elif self.channel_scaler['scaler_type'] == 'robust':
-            self.scaler = RobustScaler()
-        elif self.channel_scaler['scaler_type'] == 'power':
-            self.scaler = PowerTransformer()
-        elif self.channel_scaler['scaler_type'] == 'quantile_uniform':
-            self.scaler = QuantileTransformer()
-        elif self.channel_scaler['scaler_type'] == 'quantile_normal':
-            self.scaler = QuantileTransformer(output_distribution='normal')
+        self.scaler = []
+        # apply scaler in order of list. So, to do normal(minmax(X)), list should look like ['minmax', 'normal']
+        for idx, sclr in enumerate(self.channel_scaler['scaler_type']):
+            if 'minmax' in sclr:
+                if sclr == 'minmax':
+                    self.scaler.append(MinMaxScaler(feature_range=(0.1, 1.3)))
+                else:
+                    range_lo = re.findall(r'minmax_(\d+p?\d*).*', sclr)
+                    range_hi = re.findall(r'minmax_.*_(\d+p?\d*)', sclr)
+                    if len(range_lo) == 0 or len(range_hi) == 0:
+                        print('Invalid minmax scaler type. Please provide range in the format: minmax_lo_hi')
+                        print('lo and hi are numbers used for feature range. Example: minmax_0p1_1p3 for feature_range (0.1, 1.3)')
+                        print('Fit minmax with (0.1, 1.3) instead')
+                        self.scaler.append(MinMaxScaler(feature_range=(0.1, 1.3)))
+                    else:
+                        range_lo = float(range_lo[0].replace('p', '.'))
+                        range_hi = float(range_hi[0].replace('p', '.'))
+                        self.scaler.append(MinMaxScaler(feature_range=(range_lo, range_hi)))
+            elif sclr == 'standard':
+                self.scaler.append(StandardScaler())
+            elif sclr == 'robust':
+                self.scaler.append(RobustScaler())
+            elif sclr == 'power':
+                self.scaler.append(PowerTransformer())
+            elif sclr == 'quantile_uniform':
+                self.scaler.append(QuantileTransformer())
+            elif sclr == 'quantile_normal':
+                self.scaler.append(QuantileTransformer(output_distribution='normal'))
+            else:
+                print('Invalid scaler type. Please choose from: minmax, standard, robust, power, quantile_uniform, quantile_normal')
+                return
+
+            print('Will fit sk-learn scaler based on training set. Scaler:', sclr)
+
+            print('Fitting the scaler on traing set. This will take some time..')
+            if idx > 0:
+                print('-------------- Attention (fit_and_save_scaler)-------------------')
+                print('Since you want to apply more than 1 scalers in sequence, we will transform the time data based on previous scaler first before fitting this one.')
+                print('This will take some time...')
+                self.scaler[idx-1].transform(self.time.reshape(-1, 1)).reshape(-1,)
+                self.scaler_status[idx-1] = 'transformed'
+                print('Transformed the time data based on previous scaler; Returning to fit this scaler')
+                print('-----------------------------------------------------------------')
+            mask_train = self.get_train_mask()
+            self.scaler[idx].fit(self.time[mask_train].reshape(-1, 1))   
+            self.scaler_status.append('fitted')  
+
+            # saving the scaler object so that we can reuse it for another training and test (evaluation) dataset
+            scaler_name_str = self.channel_scaler['scaler_type'][idx]
+            
+            # create directory if it does not exist
+            if not os.path.exists(self.channel_scaler['scaler_output_path']):
+                os.makedirs(self.channel_scaler['scaler_output_path'])
+            joblib.dump(self.scaler[idx], f'{(self.channel_scaler["scaler_output_path"])}/{idx}_th_scaler_{scaler_name_str}.joblib')
+            print(f'{idx} th scaler was fitted and saved')
+
+            if debug_mode:
+                print('Here is scaler fitted: ', self.scaler[idx].get_params())
+        print('All scalers were fitted and saved')
+            
+
+
+        # if self.channel_scaler['scaler_type'] == 'minmax':
+        #     self.scaler = MinMaxScaler(feature_range=(0.1, 1.3))
+        # elif self.channel_scaler['scaler_type'] == 'standard':
+        #     self.scaler = StandardScaler()
+        # elif self.channel_scaler['scaler_type'] == 'robust':
+        #     self.scaler = RobustScaler()
+        # elif self.channel_scaler['scaler_type'] == 'power':
+        #     self.scaler = PowerTransformer()
+        # elif self.channel_scaler['scaler_type'] == 'quantile_uniform':
+        #     self.scaler = QuantileTransformer()
+        # elif self.channel_scaler['scaler_type'] == 'quantile_normal':
+        #     self.scaler = QuantileTransformer(output_distribution='normal')
     
-        print('Will fit sk-learn scaler based on training set. Scaler:', self.channel_scaler['scaler_type'])
+        # print('Will fit sk-learn scaler based on training set. Scaler:', self.channel_scaler['scaler_type'])
 
-        print('Fitting the scaler on traing set. This will take some time..')
-        mask_train = self.get_train_mask()
-        self.scaler.fit(self.time[mask_train].reshape(-1, 1))          
+        # print('Fitting the scaler on traing set. This will take some time..')
+        # mask_train = self.get_train_mask()
+        # self.scaler.fit(self.time[mask_train].reshape(-1, 1))          
         
-        # saving the scaler object so that we can reuse it for another training and test (evaluation) dataset
-        scaler_name_str = self.channel_scaler['scaler_type']
-        joblib.dump(self.scaler, f'/data/thoriba/t2k/indices/oct20_combine_flatE/{scaler_name_str}_scaler.joblib')
-        print('Scaler was fitted and saved')
+        # # saving the scaler object so that we can reuse it for another training and test (evaluation) dataset
+        # scaler_name_str = self.channel_scaler['scaler_type']
+        # joblib.dump(self.scaler, f'/data/thoriba/t2k/indices/oct20_combine_flatE/{scaler_name_str}_scaler.joblib')
+        # print('Scaler was fitted and saved')
 
-        if debug_mode:
-            print(self.scaler.get_params())
+        # if debug_mode:
+        #     print(self.scaler.get_params())
     
     
     def scale_time(self):
@@ -871,93 +933,101 @@ class CNNDatasetScale(CNNDataset):
         if not self.initialized:
                 self.initialize()
 
+        self.scaler_status = [] # either fitted or transformed
+
         # if scaler is provided, load the scaler, and will not re-fit the scaler(s)
         if self.channel_scaler['fitted_scaler'] is not None:
             # if type(self.channel_scaler['fitted_scaler']) == list:
             self.scaler = []
-            for scaler_joblib in self.channel_scaler['fitted_scaler']:
+            for idx, scaler_joblib in enumerate(self.channel_scaler['fitted_scaler']):
                 s = joblib.load(scaler_joblib)
                 self.scaler.append(s)
-                print('scaler loaded', s.get_params())
+                self.scaler_status.append('fitted')
+                print(f'{idx} th scaler loaded', s.get_params())
             
-            if len(self.scaler) == 1:
-                self.scaler = self.scaler[0]
+            # if len(self.scaler) == 1:
+            #     self.scaler = self.scaler[0]
+            #     self.scaler_status.append('fitted')
             # else:
             #     self.scaler = joblib.load(self.channel_scaler['fitted_scaler'])
             #     print('Loaded already fitted scaler from file')
             #     print(self.scaler.get_params())
         # fit two scalers when they are chained
-        elif self.channel_scaler['scaler_type'] == 'chain_fitting':
-            print('Hello. This is just for fitting two different scalers. Should not be used in training/validation/testing')
-            scaler_1 = QuantileTransformer(output_distribution='normal')
-            # scaler_1 = RobustScaler()
+        # elif self.channel_scaler['scaler_type'] == 'chain_fitting':
+        #     print('Hello. This is just for fitting two different scalers. Should not be used in training/validation/testing')
+        #     scaler_1 = QuantileTransformer(output_distribution='normal')
+        #     # scaler_1 = RobustScaler()
 
-            mask_train = self.get_train_mask()
+        #     mask_train = self.get_train_mask()
 
-            # scaler_1 = joblib.load('/home/thoriba/t2k2/t2k_ml_training/quantile_normal_scaler.joblib')
-            scaler_1.fit(self.time[mask_train].reshape(-1, 1))
-            # unif = np.random.uniform(low=0, high=1, size=mask_train.shape)
+        #     # scaler_1 = joblib.load('/home/thoriba/t2k2/t2k_ml_training/quantile_normal_scaler.joblib')
+        #     scaler_1.fit(self.time[mask_train].reshape(-1, 1))
+        #     # unif = np.random.uniform(low=0, high=1, size=mask_train.shape)
 
-            # mask_sample = unif * mask_train
+        #     # mask_sample = unif * mask_train
 
-            # print('sample size', np.sum(mask_sample > .8))
+        #     # print('sample size', np.sum(mask_sample > .8))
 
-            print(np.sum(mask_train))
+        #     print(np.sum(mask_train))
 
-            # post_transf_samples = scaler_1.transform(self.time[mask_sample > .8].reshape(-1, 1)).reshape(-1,)
-            post_transf_samples = scaler_1.transform(self.time[mask_train].reshape(-1, 1)).reshape(-1,)
+        #     # post_transf_samples = scaler_1.transform(self.time[mask_sample > .8].reshape(-1, 1)).reshape(-1,)
+        #     post_transf_samples = scaler_1.transform(self.time[mask_train].reshape(-1, 1)).reshape(-1,)
 
-            print('fitting 2nd one')
-            # self.time = scaler_1.transform(self.time.reshape(-1, 1)).reshape(-1,)
-            scaler_2 = MinMaxScaler(feature_range=(0.1, 1.1))
-            # fit on transformed version
-            scaler_2.fit(post_transf_samples.reshape(-1, 1))
+        #     print('fitting 2nd one')
+        #     # self.time = scaler_1.transform(self.time.reshape(-1, 1)).reshape(-1,)
+        #     scaler_2 = MinMaxScaler(feature_range=(0.1, 1.1))
+        #     # fit on transformed version
+        #     scaler_2.fit(post_transf_samples.reshape(-1, 1))
 
-            post_transf_samples = scaler_2.transform(post_transf_samples.reshape(-1, 1)).reshape(-1,)
-            sample = scaler_2.transform(self.time.reshape(-1, 1)).reshape(-1,)
+        #     post_transf_samples = scaler_2.transform(post_transf_samples.reshape(-1, 1)).reshape(-1,)
+        #     sample = scaler_2.transform(self.time.reshape(-1, 1)).reshape(-1,)
 
-            joblib.dump(scaler_1, f'chain_scaler_1_normal_flatE.joblib')
-            joblib.dump(scaler_2, f'chain_scaler_2_minmax_for_normal_flatE.joblib')
+        #     joblib.dump(scaler_1, f'chain_scaler_1_normal_flatE.joblib')
+        #     joblib.dump(scaler_2, f'chain_scaler_2_minmax_for_normal_flatE.joblib')
 
         # test for chain scaler.
-        elif self.channel_scaler['scaler_type'] == 'chain':
-            print('this is for development. not to be used for training/val/test')
-            scaler_1 = joblib.load('/home/thoriba/t2k2/t2k_ml_training/chain_scaler_1_quantile_normal.joblib')
-            scaler_2 = joblib.load('/home/thoriba/t2k2/t2k_ml_training/chain_scaler_2_minmax.joblib')
+        # elif self.channel_scaler['scaler_type'] == 'chain':
+        #     print('this is for development. not to be used for training/val/test')
+        #     scaler_1 = joblib.load('/home/thoriba/t2k2/t2k_ml_training/chain_scaler_1_quantile_normal.joblib')
+        #     scaler_2 = joblib.load('/home/thoriba/t2k2/t2k_ml_training/chain_scaler_2_minmax.joblib')
 
-            # scaler_1.transform(self.time[mask_sample > .8].reshape(-1, 1)).reshape(-1,)
-            post_transf_samples = scaler_1.transform(self.time[:100000000].reshape(-1, 1)).reshape(-1,)
-            post_transf_samples = scaler_2.transform(post_transf_samples.reshape(-1, 1)).reshape(-1,)
-            du.generic_histogram(post_transf_samples, 'PMT Time [ns]', '/data/thoriba/t2k/plots/scaling_test/', f'train_hit_pmt_time_post_minmax(normal)_', y_name = None, range=None, label=None, bins=200, doNorm=True)
+        #     # scaler_1.transform(self.time[mask_sample > .8].reshape(-1, 1)).reshape(-1,)
+        #     post_transf_samples = scaler_1.transform(self.time[:100000000].reshape(-1, 1)).reshape(-1,)
+        #     post_transf_samples = scaler_2.transform(post_transf_samples.reshape(-1, 1)).reshape(-1,)
+        #     du.generic_histogram(post_transf_samples, 'PMT Time [ns]', '/data/thoriba/t2k/plots/scaling_test/', f'train_hit_pmt_time_post_minmax(normal)_', y_name = None, range=None, label=None, bins=200, doNorm=True)
         else:
-            print('Fitting a new scaler based on training data')
+            print('Fitting new scaler(s) based on training set')
             self.fit_and_save_scaler()
-            print('Finished fitting scaler')
+            print('Finished fitting scaler(s)')
         
-        if debug_mode:
-            time10_pre = self.time[:10]
-            pre_str = f"self.time shape: {self.time.shape}, dtype: {self.time.dtype}"
+        # if debug_mode:
+        #     time10_pre = self.time[:10]
+        #     pre_str = f"self.time shape: {self.time.shape}, dtype: {self.time.dtype}"
         
-        if debug_mode:
-            scaler_name_str = self.channel_scaler['scaler_type']
-            output_path = '/data/thoriba/t2k/plots/scaling_test/'
+        # if debug_mode:
+        #     scaler_name_str = self.channel_scaler['scaler_type']
+        #     output_path = '/data/thoriba/t2k/plots/scaling_test/'
             # du.generic_histogram(self.time[mask_train], 'PMT Time [ns]', output_path, f'train_hit_pmt_time_pre_scaling', y_name = None, range=[0,2000], label=None, bins=200, doNorm=True)
 
         # apply scaling at once
         if not self.channel_scaler['transform_per_batch']:        
             print('Transforming the entire self.time (regardless of train/val/test split if such split exists) based on the scaler. This will take some time..')
-            self.time = self.scaler.transform(self.time.reshape(-1, 1)).reshape(-1,)
-            print('self.time was successfully scaled')
+            for idx, sclr in enumerate(self.scaler):
+                if self.scaler_status[idx] == 'fitted':
+                    scaler_name_str = self.channel_scaler['scaler_type'][idx]
+                    self.time = self.scaler[idx].transform(self.time.reshape(-1, 1)).reshape(-1,)
+                    self.scaler_status[idx] = 'transformed'
+                    print(f'self.time was successfully scaled with {idx}th scaler:', self.channel_scaler['scaler_type'][idx])
         else:
             print('Transform data on per batch basis')
 
-        if debug_mode:
-            print(pre_str)
-            time10_post = self.time[:10] 
-            print('before', time10_pre)
-            print('after', time10_post)
-            print(f"self.time shape: {self.time.shape}, dtype: {self.time.dtype}")
-            # du.generic_histogram(self.time[mask_train], 'PMT Time [ns]', output_path, f'train_hit_pmt_time_post_{scaler_name_str}', y_name = None, range=None, label=None, bins=200, doNorm=True)
+        # if debug_mode:
+        #     print(pre_str)
+        #     time10_post = self.time[:10] 
+        #     print('before', time10_pre)
+        #     print('after', time10_post)
+        #     print(f"self.time shape: {self.time.shape}, dtype: {self.time.dtype}")
+        #     # du.generic_histogram(self.time[mask_train], 'PMT Time [ns]', output_path, f'train_hit_pmt_time_post_{scaler_name_str}', y_name = None, range=None, label=None, bins=200, doNorm=True)
 
 
     def __getitem__(self, item):
@@ -1000,13 +1070,14 @@ class CNNDatasetScale(CNNDataset):
         #     print('before scaling', hit_data['time'][:10], 'shape', hit_data['time'].shape)
         #     print('scaling...')
         
-        if self.scaler is not None:
-            if self.channel_scaler['transform_per_batch']:
-                if isinstance(self.scaler, list):
-                    for ssc in self.scaler:
-                        hit_data['time'] = ssc.transform(hit_data['time'].reshape(-1, 1)).reshape(-1,)
-                else:
-                    hit_data['time'] = self.scaler.transform(hit_data['time'].reshape(-1, 1)).reshape(-1,)
+        # turn off
+        # if self.scaler is not None:
+        #     if self.channel_scaler['transform_per_batch']:
+        #         if isinstance(self.scaler, list):
+        #             for ssc in self.scaler:
+        #                 hit_data['time'] = ssc.transform(hit_data['time'].reshape(-1, 1)).reshape(-1,)
+        #         else:
+        #             hit_data['time'] = self.scaler.transform(hit_data['time'].reshape(-1, 1)).reshape(-1,)
         
         # if item % 10 == 0:
             # print('scaling done?')

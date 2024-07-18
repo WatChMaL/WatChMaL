@@ -8,11 +8,11 @@ data:
     geometry_file: /home/fcormier/t2k/ml/t2k_ml_training/data/geofile_skdetsim.npz
     channel_scaling:
       time: [400, 1000]
-    dead_pmt_rate: 0.03
-    dead_pmt_seed: 5
+    dead_pmts_file: /data/fcormier/Public/dead_pmts.sk4.txt
+    use_dead_pmt_mask: True
 model:
   _target_: watchmal.model.resnet.resnet34
-  num_input_channels: 2
+  num_input_channels: 3
   num_output_channels: 1
   stride: 1
   kernelSize: 1
@@ -41,6 +41,6 @@ tasks:
           # _target_: torch.utils.data.sampler.SequentialSampler
 
 gpu_list:
-  - 6
+  - 7
 seed: null
 dump_path: ./outputs/
