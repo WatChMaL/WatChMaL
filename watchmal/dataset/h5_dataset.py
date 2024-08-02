@@ -39,12 +39,14 @@ class H5CommonDataset(Dataset, ABC):
     hit_time          (n_hits,)       float32    Time of the hit
     ====================================================================================================================
     """
-    def __init__(self, h5_path):
+    def __init__(self, h5_path, use_memmap=True):
+        """Dataset from the HDF5 file in `h5_path`, using memmaps for hit arrays unless `use_memmap` is set to False"""
         self.h5_path = h5_path
         with h5py.File(self.h5_path, 'r') as h5_file:
             self.dataset_length = h5_file["labels"].shape[0]
 
         self.label_set = None
+        self.use_memmap = use_memmap
 
         self.initialized = False
 
@@ -66,18 +68,9 @@ class H5CommonDataset(Dataset, ABC):
         #     self.veto  = np.array(self.h5_file["veto"])
         #     self.veto2 = np.array(self.h5_file["veto2"])
         self.event_hits_index = np.append(self.h5_file["event_hits_index"], self.h5_file["hit_pmt"].shape[0]).astype(np.int64)
-        
-        self.hdf5_hit_pmt = self.h5_file["hit_pmt"]
-        self.hdf5_hit_time = self.h5_file["hit_time"]
 
-        self.hit_pmt = np.memmap(self.h5_path, mode="r", shape=self.hdf5_hit_pmt.shape,
-                                 offset=self.hdf5_hit_pmt.id.get_offset(),
-                                 dtype=self.hdf5_hit_pmt.dtype)
-
-        self.time = np.memmap(self.h5_path, mode="r", shape=self.hdf5_hit_time.shape,
-                              offset=self.hdf5_hit_time.id.get_offset(),
-                              dtype=self.hdf5_hit_time.dtype)
-        self.load_hits()
+        self.hit_pmt = self.load_hits("hit_pmt")
+        self.hit_time = self.load_hits("hit_time")
 
         # Set attribute so that method won't be invoked again
         self.initialized = True
@@ -105,10 +98,13 @@ class H5CommonDataset(Dataset, ABC):
             self.original_labels = self.labels
             self.labels = labels
 
-    @abstractmethod
-    def load_hits(self):
-        """Creates the arrays of memmaps containing the hit data."""
-        pass
+    def load_hits(self, h5_key):
+        """Loads data from a given key in the h5 file either into numpy arrays or memmaps"""
+        if self.use_memmap:
+            data = self.h5_file[h5_key]
+            return np.memmap(self.h5_path, mode="r", shape=data.shape, offset=data.id.get_offset(), dtype=data.dtype)
+        else:
+            return np.array(self.h5_file[h5_key])
 
     def __len__(self):
         return self.dataset_length
@@ -142,15 +138,13 @@ class H5Dataset(H5CommonDataset, ABC):
     hit_charge  (n_hits,)  float32    Charge of the digitized hit
     =============================================================
     """
-    def __init__(self, h5_path):
-        H5CommonDataset.__init__(self, h5_path)
+    def __init__(self, h5_path, use_memmap=True):
+        H5CommonDataset.__init__(self, h5_path, use_memmap)
         
-    def load_hits(self):
+    def initialize(self):
         """Creates a memmap for the digitized hit charge data."""
-        self.hdf5_hit_charge = self.h5_file["hit_charge"]
-        self.hit_charge = np.memmap(self.h5_path, mode="r", shape=self.hdf5_hit_charge.shape,
-                                    offset=self.hdf5_hit_charge.id.get_offset(),
-                                    dtype=self.hdf5_hit_charge.dtype)
+        super().initialize()
+        self.hit_charge = self.load_hits("hit_charge")
         
     def __getitem__(self, item):
         data_dict = super().__getitem__(item)
@@ -160,7 +154,7 @@ class H5Dataset(H5CommonDataset, ABC):
 
         self.event_hit_pmts = self.hit_pmt[start:stop]
         self.event_hit_charges = self.hit_charge[start:stop]
-        self.event_hit_times = self.time[start:stop]
+        self.event_hit_times = self.hit_time[start:stop]
 
         return data_dict
 
@@ -179,16 +173,14 @@ class H5TrueDataset(H5CommonDataset, ABC):
     ====================================================================================================================
     """
 
-    def __init__(self, h5_path, digitize_hits=True):
-        H5CommonDataset.__init__(self, h5_path)
+    def __init__(self, h5_path, digitize_hits=True, use_memmap=True):
+        H5CommonDataset.__init__(self, h5_path, use_memmap)
         self.digitize_hits = digitize_hits
 
-    def load_hits(self):
+    def initialize(self):
         """Creates a memmap for the true hit parent data."""
-        self.all_hit_parent = self.h5_file["hit_parent"]
-        self.hit_parent = np.memmap(self.h5_path, mode="r", shape=self.all_hit_parent.shape,
-                                    offset=self.all_hit_parent.id.get_offset(),
-                                    dtype=self.all_hit_parent.dtype)
+        super().initialize()
+        self.hit_parent = self.load_hits("hit_parent")
 
     def digitize(self, truepmts, truetimes, trueparents):
         """
@@ -212,7 +204,7 @@ class H5TrueDataset(H5CommonDataset, ABC):
         stop = self.event_hits_index[item + 1]
 
         true_pmts = self.hit_pmt[start:stop].astype(np.int16)
-        true_times = self.time[start:stop]
+        true_times = self.hit_time[start:stop]
         true_parents = self.hit_parent[start:stop]
 
         if self.digitize_hits:
