@@ -77,9 +77,9 @@ class H5CommonDataset(Dataset, ABC):
 
         # perform label mapping now that labels have been initialised
         if self.label_set is not None:
-            self.map_labels(self.label_set)
+            self.map_labels(self.label_set, self.labels_key)
 
-    def map_labels(self, label_set):
+    def map_labels(self, label_set, labels_key="labels"):
         """
         Maps the labels of the dataset into a range of integers from 0 up to N-1, where N is the number of unique labels
         in the provided label set.
@@ -89,14 +89,20 @@ class H5CommonDataset(Dataset, ABC):
         label_set: sequence of labels
             Set of all possible labels to map onto the range of integers from 0 to N-1, where N is the number of unique
             labels.
+        labels_key: string
+            Name of the key used for the labels
         """
         self.label_set = set(label_set)
+        self.labels_key = labels_key
         if self.initialized:
-            labels = np.ndarray(self.labels.shape, dtype=int)
+            try:
+                self.original_labels = getattr(self, labels_key)
+            except AttributeError:
+                self.original_labels = np.array(self.h5_file[labels_key])
+            labels = np.ndarray(self.original_labels.shape, dtype=int)
             for i, l in enumerate(self.label_set):
-                labels[self.labels == l] = i
-            self.original_labels = self.labels
-            self.labels = labels
+                labels[self.original_labels == l] = i
+            setattr(self, labels_key, labels)
 
     def load_hits(self, h5_key):
         """Loads data from a given key in the h5 file either into numpy arrays or memmaps"""
@@ -123,6 +129,8 @@ class H5CommonDataset(Dataset, ABC):
             # "root_files": self.root_files[item],
             "indices": item
         }
+        if self.labels_key is not None and self.labels_key not in data_dict:
+            data_dict[self.labels_key] = getattr(self, self.labels_key)[item].copy()
         return data_dict
 
 
