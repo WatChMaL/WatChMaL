@@ -12,9 +12,32 @@ import watchmal.dataset.data_utils as du
 
 PMTS_PER_MPMT = 19
 # maps to permute the PMTs within mPMT for various transformations, etc.
+# Old convention starts with outer ring and works inwards, with mPMT oriented with a vertical line of PMTs in the mPMT
+#           06
+#      07        05
+#  08       15      04
+#      16        14
+# 09        18        03
+#      17        13
+#   10      12      02
+#      11        01
+#           00
 BARREL_MPMT_MAP = np.array([6, 7, 8, 9, 10, 11, 0, 1, 2, 3, 4, 5, 15, 16, 17, 12, 13, 14, 18])
 VERTICAL_FLIP_MPMT_MAP = np.array([6, 5, 4, 3, 2, 1, 0, 11, 10, 9, 8, 7, 15, 14, 13, 12, 17, 16, 18])
 HORIZONTAL_FLIP_MPMT_MAP = np.array([0, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 12, 17, 16, 15, 14, 13, 18])
+# New convention starts with central PMT and works outwards, with mPMT oriented with a horizontal line of PMTs in the mPMT
+#           10
+#       11      09
+#   12    03  02    08
+
+# 13   04   00   01   07
+#
+#   14    05  06    18
+#       15      17
+#           16
+BARREL_MPMT_MAP_NEW = np.array([0, 4, 5, 6, 1, 2, 3, 13, 14, 15, 16, 17, 18, 7, 8, 9, 10, 11, 12])
+VERTICAL_FLIP_MPMT_MAP_NEW = np.array([0, 1, 6, 5, 4, 3, 2, 7, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8])
+HORIZONTAL_FLIP_MPMT_MAP_NEW = np.array([0, 4, 3, 2, 1, 6, 5, 13, 12, 11, 10, 9, 8, 7, 18, 17, 16, 15, 14])
 
 
 class CNNmPMTDataset(H5Dataset):
@@ -25,7 +48,8 @@ class CNNmPMTDataset(H5Dataset):
     with mPMTs arrange in an event-display-like format.
     """
 
-    def __init__(self, h5file, mpmt_positions_file, transforms=None, channels=None, collapse_mpmt_channels=None, channel_scaling=None, use_memmap=True):
+    def __init__(self, h5file, mpmt_positions_file, transforms=None, use_new_mpmt_convention=False, channels=None,
+                 collapse_mpmt_channels=None, channel_scaling=None, geometry_file=None, use_memmap=True):
         """
         Constructs a dataset for CNN data. Event hit data is read in from the HDF5 file and the PMT charge data is
         formatted into an event-display-like image for input to a CNN. Each pixel of the image corresponds to one mPMT
@@ -58,6 +82,15 @@ class CNNmPMTDataset(H5Dataset):
 
         super().__init__(h5file, use_memmap)
 
+        self.use_new_mpmt_convention = use_new_mpmt_convention
+        if self.use_new_mpmt_convention:
+            self.barrel_mpmt_map = BARREL_MPMT_MAP_NEW
+            self.vertical_flip_mpmt_map = VERTICAL_FLIP_MPMT_MAP_NEW
+            self.horizontal_flip_mpmt_map = HORIZONTAL_FLIP_MPMT_MAP_NEW
+        else:
+            self.barrel_mpmt_map = BARREL_MPMT_MAP
+            self.vertical_flip_mpmt_map = VERTICAL_FLIP_MPMT_MAP
+            self.horizontal_flip_mpmt_map = HORIZONTAL_FLIP_MPMT_MAP
         self.mpmt_positions = np.load(mpmt_positions_file)['mpmt_image_positions']
         self.transforms = du.get_transformations(self, transforms)
         if self.transforms is None:
@@ -72,51 +105,87 @@ class CNNmPMTDataset(H5Dataset):
         self.scaling = channel_scaling
 
         self.image_height, self.image_width = np.max(self.mpmt_positions, axis=0) + 1
+        # make some index expressions for different parts of the image, to use in transformations etc
+        rows, row_counts = np.unique(self.mpmt_positions[:, 0], return_counts=True)  # count occurrences of each row
+        cols, col_counts = np.unique(self.mpmt_positions[:, 1], return_counts=True)  # count occurrences of each column
+        # barrel rows are those where the row appears in mpmt_positions as many times as the image width
+        barrel_rows = rows[row_counts == self.image_width]
+        # endcap size is the number of rows before the first barrel row
+        self.endcap_size = np.min(barrel_rows)
+        self.barrel = np.s_[..., self.endcap_size:np.max(barrel_rows) + 1, :]
+        # endcaps are assumed to be within squares above and below the barrel
+        # endcap columns are those where the column appears in mpmt_positions more than the number of barrel rows
+        self.endcap_left = np.min(cols[col_counts > len(barrel_rows)])
+        self.endcap_right = self.endcap_left + self.endcap_size
+        self.top_endcap = np.s_[..., :self.endcap_size, self.endcap_left:self.endcap_right]
+        self.bottom_endcap = np.s_[..., -self.endcap_size:, self.endcap_left:self.endcap_right]
+
+        # encode the 3D geometry into optional extra CNN input channels
+        self.geom_data = {}
+        if geometry_file is None:
+            if not set(channels).isdisjoint({"mpmt_position", "mpmt_direction", "mpmt_exists"}):
+                raise TypeError("A geometry file must be provided if using channels that encode the geometry.")
+        else:
+            geo_file = np.load(geometry_file)
+            pmt_positions = geo_file['position']
+            pmt_directions = geo_file['orientation']
+            pmt_ids = np.arange(0, pmt_positions.shape[0])
+            central_pmt_channel = 0 if self.use_new_mpmt_convention else 18
+            self.geom_data['mpmt_position'] = self.process_data(pmt_ids, pmt_positions)[central_pmt_channel]
+            self.geom_data['mpmt_direction'] = self.process_data(pmt_ids, pmt_directions)[central_pmt_channel]
+            self.geom_data['mpmt_exists'] = self.process_data(pmt_ids, 1)[central_pmt_channel]
+            for c, (offset, scale) in list(channel_scaling.items()):
+                if c in self.geom_data:
+                    self.geom_data[c] = (self.geom_data[c] - offset)/scale
+                    self.scaling.pop(c)
+
+        # set up data ranges and permutation maps for the chosen channels
         self.image_depth = 0
+        # dictionary of ranges for to the slices of the CNN tensor that correspond to each given channel
         self.channel_ranges = {}
+        # permutation of channels (ie PMTs within mPMT) when flipping the image horizontally
         self.h_flip_permutation = []
+        # permutation of channels (ie PMTs within mPMT) when flipping the image vertically
         self.v_flip_permutation = []
+        # which channels are actual data channels (not fixed geometry encoding) to get transformed when flipping image
+        self.data_channels = []
         for c in channels:
-            channel_depth = 2 if c in collapse_mpmt_channels else 19 if c in ("charge", "time") else 1
+            channel_depth = (self.geom_data[c].shape[0] if c in self.geom_data
+                             else 2 if c in collapse_mpmt_channels
+                             else PMTS_PER_MPMT)
             self.channel_ranges[c] = range(self.image_depth, self.image_depth+channel_depth)
+            if c not in self.geom_data:
+                self.data_channels.extend(self.channel_ranges[c])
             # permutation maps are needed for applying transformations to the image that affect mPMT channel ordering
             if channel_depth == PMTS_PER_MPMT:
-                self.v_flip_permutation.extend(VERTICAL_FLIP_MPMT_MAP + self.image_depth)
-                self.h_flip_permutation.extend(HORIZONTAL_FLIP_MPMT_MAP + self.image_depth)
+                self.v_flip_permutation.extend(self.vertical_flip_mpmt_map + self.image_depth)
+                self.h_flip_permutation.extend(self.horizontal_flip_mpmt_map + self.image_depth)
             else:
-                self.v_flip_permutation = np.extend(self.channel_ranges[c])
-                self.h_flip_permutation = np.extend(self.channel_ranges[c])
+                self.v_flip_permutation.extend(self.channel_ranges[c])
+                self.h_flip_permutation.extend(self.channel_ranges[c])
             self.image_depth += channel_depth
+        self.data_channels = np.array(self.data_channels)
         self.h_flip_permutation = np.array(self.h_flip_permutation)
         self.v_flip_permutation = np.array(self.v_flip_permutation)
         self.rotate_permutation = self.h_flip_permutation[self.v_flip_permutation]
 
-        # make some index expressions for different parts of the image, to use in transformations etc
-        rows, counts = np.unique(self.mpmt_positions[:, 0], return_counts=True)  # count occurrences of each row
-        # barrel rows are those where the row appears in mpmt_positions as many times as the image width
-        barrel_rows = [row for row, count in zip(rows, counts) if count == self.image_width]
-        # endcap size is the number of rows before the first barrel row
-        self.endcap_size = min(barrel_rows)
-        self.barrel = np.s_[..., self.endcap_size:max(barrel_rows) + 1, :]
-        # endcaps are assumed to be within squares centred above and below the barrel
-        endcap_left = (self.image_width - self.endcap_size) // 2
-        endcap_right = endcap_left + self.endcap_size
-        self.top_endcap = np.s_[..., :self.endcap_size, endcap_left:endcap_right]
-        self.bottom_endcap = np.s_[..., -self.endcap_size:, endcap_left:endcap_right]
-
-    def process_data(self, hit_pmts, hit_data):
+    def process_data(self, pmts, pmt_data):
         """Returns image-like event data array (channels, rows, columns) from arrays of PMT IDs and data at the PMTs."""
-        hit_mpmts = hit_pmts // PMTS_PER_MPMT
-        hit_channel = hit_pmts % PMTS_PER_MPMT
+        # Ensure the data is a 2D array with first dimension being the number of pmts
+        pmt_data = np.atleast_1d(pmt_data)
+        pmt_data = pmt_data.reshape(pmt_data.shape[0], -1)
 
-        hit_rows = self.mpmt_positions[hit_mpmts, 0]
-        hit_cols = self.mpmt_positions[hit_mpmts, 1]
+        mpmts = pmts // PMTS_PER_MPMT
+        channels = pmts % PMTS_PER_MPMT
 
-        data = np.zeros((PMTS_PER_MPMT, self.image_height, self.image_width), dtype=np.float32)
-        data[hit_channel, hit_rows, hit_cols] = hit_data
+        rows = self.mpmt_positions[mpmts, 0]
+        cols = self.mpmt_positions[mpmts, 1]
+
+        data = np.zeros((PMTS_PER_MPMT, pmt_data.shape[1], self.image_height, self.image_width), dtype=np.float32)
+        data[channels, :, rows, cols] = pmt_data
 
         # fix indexing of barrel PMTs in mPMT modules to match that of endcaps in the projection to 2D
-        data[self.barrel] = data[BARREL_MPMT_MAP][self.barrel]
+        data[self.barrel] = data[self.barrel_mpmt_map][self.barrel]
 
         return data
 
@@ -130,15 +199,20 @@ class CNNmPMTDataset(H5Dataset):
         # Process the channels
         data = np.zeros((self.image_depth, self.image_height, self.image_width), dtype=np.float32)
         for c, r in self.channel_ranges.items():
-            channel_data = self.process_data(self.event_hit_pmts, hit_data[c])
-            if c in self.collapse_channels:
-                channel_data = collapse_channel(channel_data)
+            if c in hit_data:
+                channel_data = self.process_data(self.event_hit_pmts, hit_data[c]).squeeze()
+                if c in self.collapse_channels:
+                    channel_data = collapse_channel(channel_data)
+            elif c in self.geom_data:
+                channel_data = self.geom_data[c]
+            else:
+                raise ValueError(f"Channel '{c}' is not available.")
             data[r] = channel_data
         # Apply transformations
         data_dict["data"] = data
         for t in self.transforms:
             data_dict = t(data_dict)
-        data_dict["data"] = torch.from_numpy(data_dict["data"])
+        data_dict["data"] = torch.from_numpy(data_dict["data"].copy())
         return data_dict
 
     def horizontal_image_flip(self, data):
@@ -155,7 +229,10 @@ class CNNmPMTDataset(H5Dataset):
 
     def horizontal_reflection(self, data_dict):
         """Takes CNN input data and truth info and performs horizontal flip, permuting mPMT channels where needed."""
-        data_dict["data"] = self.horizontal_image_flip(data_dict["data"])
+        data_dict["data"][self.data_channels] = self.horizontal_image_flip(data_dict["data"])[self.data_channels]
+        # If the endcaps are offset from the middle of the image, need to roll the image to keep the same offset
+        offset = self.endcap_left - (self.image_width - self.endcap_right)
+        data_dict["data"][self.data_channels] = np.roll(data_dict["data"][self.data_channels], offset, 2)
         # Note: Below assumes y-axis is the tank's azimuth axis. True for IWCD and WCTE, not true for SK, HKFD.
         if "positions" in data_dict:
             data_dict["positions"][..., 2] *= -1
@@ -167,7 +244,7 @@ class CNNmPMTDataset(H5Dataset):
 
     def vertical_reflection(self, data_dict):
         """Takes CNN input data and truth info and performs vertical flip, permuting mPMT channels where needed."""
-        data_dict["data"] = self.vertical_image_flip(data_dict["data"])
+        data_dict["data"][self.data_channels] = self.vertical_image_flip(data_dict["data"])[self.data_channels]
         # Note: Below assumes y-axis is the tank's azimuth axis. True for IWCD and WCTE, not true for SK, HKFD.
         if "positions" in data_dict:
             data_dict["positions"][..., 1] *= -1
@@ -184,13 +261,16 @@ class CNNmPMTDataset(H5Dataset):
         halves of the barrels and vertical flip of the end-caps. This is equivalent to reflecting the detector, swapping
         front and back. The channels of the PMTs within mPMTs also have the appropriate permutation applied.
         """
-        # Horizontal flip of the left and right halves of barrel
-        left_barrel, right_barrel = np.array_split(data_dict["data"][self.barrel], 2, axis=2)
-        left_barrel[:] = self.horizontal_image_flip(left_barrel)
-        right_barrel[:] = self.horizontal_image_flip(right_barrel)
+        barrel = data_dict["data"][self.barrel]
+        top_endcap = data_dict["data"][self.top_endcap]
+        bottom_endcap = data_dict["data"][self.bottom_endcap]
+        # Horizontal flip of the left and right halves of barrel, by flipping and then rolling whole barrel
+        # If the endcaps are offset from the middle of the image, need to roll the barrel to keep the same offset
+        roll = self.image_width//2 + self.endcap_left - (self.image_width - self.endcap_right)
+        barrel[self.data_channels] = np.roll(self.horizontal_image_flip(barrel)[self.data_channels], roll, 2)
         # Vertical flip of the top and bottom endcaps
-        data_dict["data"][self.top_endcap] = self.vertical_image_flip(data_dict["data"][self.top_endcap])
-        data_dict["data"][self.bottom_endcap] = self.vertical_image_flip(data_dict["data"][self.bottom_endcap])
+        top_endcap[self.data_channels] = self.vertical_image_flip(top_endcap)[self.data_channels]
+        bottom_endcap[self.data_channels] = self.vertical_image_flip(bottom_endcap)[self.data_channels]
         # Note: Below assumes y-axis is the tank's azimuth axis. True for IWCD and WCTE, not true for SK, HKFD.
         if "positions" in data_dict:
             data_dict["positions"][..., 0] *= -1
@@ -208,11 +288,14 @@ class CNNmPMTDataset(H5Dataset):
         end-caps and shifting of the barrel rows by half the width. This is equivalent to a 180-degree rotation of the
         detector about its axis. The channels of the PMTs within mPMTs also have the appropriate permutation applied.
         """
-        # Vertical and horizontal flips of the endcaps
-        data_dict["data"][self.top_endcap] = self.rotate_image(data_dict["data"][self.top_endcap])
-        data_dict["data"][self.bottom_endcap] = self.rotate_image(data_dict["data"][self.bottom_endcap])
+        barrel = data_dict["data"][self.barrel]
+        top_endcap = data_dict["data"][self.top_endcap]
+        bottom_endcap = data_dict["data"][self.bottom_endcap]
         # Roll the barrel around by half the columns
-        data_dict["data"][self.barrel] = np.roll(data_dict["data"][self.barrel], self.image_width // 2, 2)
+        barrel[self.data_channels] = np.roll(barrel[self.data_channels], self.image_width // 2, 2)
+        # Vertical and horizontal flips of the endcaps
+        top_endcap[self.data_channels] = self.rotate_image(top_endcap)[self.data_channels]
+        bottom_endcap[self.data_channels] = self.rotate_image(bottom_endcap)[self.data_channels]
         # Note: Below assumes y-axis is the tank's azimuth axis. True for IWCD and WCTE, not true for SK, HKFD.
         if "positions" in data_dict:
             data_dict["positions"][..., (0, 2)] *= -1
@@ -237,12 +320,12 @@ class CNNmPMTDataset(H5Dataset):
         padded_data = np.pad(data_dict["data"], ((0, 0), (0, 0), (0, self.image_width//2)), mode="edge")
         # copy the left half of the barrel to the right hand side
         left_barrel = np.array_split(data_dict["data"][self.barrel], 2, axis=2)[0]
-        padded_data[:, self.endcap_size:-self.endcap_size, -self.image_width//2] = left_barrel
+        padded_data[:, self.endcap_size:-self.endcap_size, -self.image_width//2:] = left_barrel
         # copy 180-deg rotated end-caps to the appropriate place
-        endcap_copy_left = self.image_width - (self.endcap_size // 2)
-        endcap_copy_right = endcap_copy_left + self.endcap_size
-        padded_data[:, :self.endcap_size, endcap_copy_left:endcap_copy_right] = self.rotate_image(data_dict["data"][self.top_endcap])
-        padded_data[:, -self.endcap_size:, endcap_copy_left:endcap_copy_right] = self.rotate_image(data_dict["data"][self.bottom_endcap])
+        endcap_copy_left = (self.image_width // 2) + self.endcap_left
+        endcap_copy_columns = np.s_[endcap_copy_left:endcap_copy_left + self.endcap_size]
+        padded_data[:, :self.endcap_size, endcap_copy_columns] = self.rotate_image(data_dict["data"][self.top_endcap])
+        padded_data[:, -self.endcap_size:, endcap_copy_columns] = self.rotate_image(data_dict["data"][self.bottom_endcap])
         data_dict["data"] = padded_data
         return data_dict
 
@@ -271,17 +354,19 @@ class CNNmPMTDataset(H5Dataset):
         # Roll the tensor so that the first quarter is the last quarter
         quarter_barrel_width = self.image_width // 4
         data = np.roll(data_dict["data"], -quarter_barrel_width, 2)
-        # Paste the copied flipped endcaps a quarter barrel-width from the end
-        endcap_copy_left = -quarter_barrel_width - (self.endcap_size // 2)
-        endcap_copy_right = endcap_copy_left + self.endcap_size
-        data[..., :self.endcap_size, endcap_copy_left:endcap_copy_right] = top_endcap_copy
-        data[..., -self.endcap_size:, endcap_copy_left:endcap_copy_right] = bottom_endcap_copy
+        # Paste the copied flipped endcaps a quarter barrel-width past the original endcap position
+        endcap_copy_columns = np.s_[quarter_barrel_width + self.endcap_left: quarter_barrel_width + self.endcap_right]
+        data[..., :self.endcap_size, endcap_copy_columns] = top_endcap_copy
+        data[..., -self.endcap_size:, endcap_copy_columns] = bottom_endcap_copy
         # Rotate the bottom and top halves of barrel and concatenate to the top and bottom of the image
-        barrel_bottom_flipped, barrel_top_flipped = np.array_split(self.rotate_image(data[self.barrel]), 2, axis=1)
+        # If the endcaps are offset from the middle of the image, need to roll the flipped barrel to keep the same offset
+        offset = (self.image_width - self.endcap_right) - self.endcap_left
+        barrel_rolled = np.roll(data[self.barrel], offset, 2)
+        barrel_bottom_flipped, barrel_top_flipped = np.array_split(self.rotate_image(barrel_rolled), 2, axis=1)
         data_dict["data"] = np.concatenate((barrel_top_flipped, data, barrel_bottom_flipped), axis=1)
         return data_dict
 
 
 def collapse_channel(hit_data):
     """Replaces 19 channels for the 19 PMTs within mPMT with two channels corresponding to their mean and stdev."""
-    return np.stack((np.mean(hit_data, axis=0), np.std(hit_data, axis=0)))
+    return np.stack((np.mean(hit_data, axis=-3), np.std(hit_data, axis=-3)))

@@ -7,7 +7,7 @@ from watchmal.dataset.cnn_mpmt.cnn_mpmt_dataset import CNNmPMTDataset, HORIZONTA
 from matplotlib.pyplot import cm
 
 
-def channel_position_offset(channel):
+def channel_position_offset(channel, use_new_convention=False):
     """
     Calculate offset in plotting coordinates for channel of PMT within mPMT.
 
@@ -15,6 +15,9 @@ def channel_position_offset(channel):
     ----------
     channel: array_like of float
         array of channel IDs or PMT IDs
+    use_new_convention: bool
+        use newer convention for the channel mapping of PMTs in the mPMT (starts with central PMT, then middle ring then
+        outer ring) as opposed to old convention (starts with outer ring, then middle ring, then central PMT).
 
     Returns
     -------
@@ -22,13 +25,17 @@ def channel_position_offset(channel):
         Array of (y, x) coordinate offsets
     """
     channel = channel % 19
-    theta = (channel < 12)*2*np.pi*channel/12 + ((channel >= 12) & (channel < 18))*2*np.pi*(channel-12)/6
-    radius = 0.2*(channel < 18) + 0.2*(channel < 12)
+    if use_new_convention:
+        theta = (channel > 6)*2*np.pi*(19-channel)/12 + ((channel > 0) & (channel <= 6))*2*np.pi*(7-channel)/6 + np.pi/2
+        radius = 0.2*(channel > 0) + 0.2*(channel > 6)
+    else:
+        theta = (channel < 12)*2*np.pi*channel/12 + ((channel >= 12) & (channel < 18))*2*np.pi*(channel-12)/6
+        radius = 0.2*(channel < 18) + 0.2*(channel < 12)
     position = np.column_stack((radius*np.sin(theta), radius*np.cos(theta)))
     return position
 
 
-def coordinates_from_data(data):
+def coordinates_from_data(data, use_new_convention=False):
     """
     Calculate plotting coordinates for each element of CNN data, where each element of `data` contains a PMT's data.
     The actual values in `data` don't matter, it just takes the data tensor that has dimensions of
@@ -40,6 +47,9 @@ def coordinates_from_data(data):
     ----------
     data: array_like
         Array of PMT data formatted for use in CNN, i.e. with dimensions of (channel, row, column)
+    use_new_convention: bool
+        use newer convention for the channel mapping of PMTs in the mPMT (starts with central PMT, then middle ring then
+        outer ring) as opposed to old convention (starts with outer ring, then middle ring, then central PMT).
 
     Returns
     -------
@@ -49,7 +59,7 @@ def coordinates_from_data(data):
     indices = np.indices(data.shape)
     channels = indices[0].flatten()
     coordinates = indices[[2, 1]].reshape(2, -1).astype(np.float64).T
-    coordinates += channel_position_offset(channels)
+    coordinates += channel_position_offset(channels, use_new_convention)
     return coordinates
 
 
@@ -101,9 +111,10 @@ class CNNmPMTEventDisplay(CNNmPMTDataset):
             data_nan = self.apply_transform(transforms, {"data": data_nan})["data"]
         if channel is not None:
             data_nan = data_nan[self.channel_ranges[channel]]
-        coordinates = coordinates_from_data(data_nan)  # coordinates corresponding to each element of the data array
-        # also get the coordinates of the centre PMT (channel 18) where the actual mPMTs are (not nan)
-        mpmt_coordinates = coordinates[((~np.isnan(data_nan)) & (np.indices(data_nan.shape)[0] == 18)).flatten()]
+        coordinates = coordinates_from_data(data_nan, self.use_new_mpmt_convention)  # coordinates corresponding to each element of the data array
+        # also get the coordinates of the centre PMT (channel 18 or 0 depending on convention) where the actual mPMTs are (not nan)
+        channel = 0 if self.use_new_mpmt_convention else 18
+        mpmt_coordinates = coordinates[((~np.isnan(data_nan)) & (np.indices(data_nan.shape)[0] == channel)).flatten()]
         return plot_event_2d(data_nan.flatten(), coordinates, mpmt_coordinates, **kwargs)
 
     def plot_event_2d(self, event, channel=None, transforms=None, **kwargs):
@@ -271,7 +282,8 @@ class CNNmPMTEventDisplay(CNNmPMTDataset):
         pmt_directions = geo_file['orientation']
         pmt_ids = np.arange(pmt_coordinates.shape[0])
         mpmts = pmt_ids//19
-        center_pmt_ids = mpmts*19+18  # the index of the centre PMT in the same module
+        channel = 0 if self.use_new_mpmt_convention else 18
+        center_pmt_ids = mpmts * 19 + channel  # the index of the centre PMT in the same module
         pmt_offset_positions = pmt_coordinates[pmt_ids]-pmt_coordinates[center_pmt_ids]
         pmt_mpmts = pmt_ids % 19
         data_map = {
@@ -329,9 +341,9 @@ class CNNmPMTEventDisplay(CNNmPMTDataset):
                 old_h_flip_permutation = self.h_flip_permutation
                 old_v_flip_permutation = self.v_flip_permutation
                 old_rotate_permutation = self.rotate_permutation
-                self.h_flip_permutation = HORIZONTAL_FLIP_MPMT_MAP
-                self.v_flip_permutation = VERTICAL_FLIP_MPMT_MAP
-                self.rotate_permutation = HORIZONTAL_FLIP_MPMT_MAP[VERTICAL_FLIP_MPMT_MAP]
+                self.h_flip_permutation = self.horizontal_flip_mpmt_map
+                self.v_flip_permutation = self.vertical_flip_mpmt_map
+                self.rotate_permutation = self.horizontal_flip_mpmt_map[self.vertical_flip_mpmt_map]
                 data = self.process_data(pmt_ids, data_map[p])
                 fig, ax = self.plot_data_2d(data, **args)
                 self.h_flip_permutation = old_h_flip_permutation
