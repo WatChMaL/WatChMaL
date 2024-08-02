@@ -4,7 +4,6 @@ Class for training a fully supervised classifier
 
 # generic imports
 import numpy as np
-from datetime import timedelta
 from datetime import datetime
 from abc import ABC, abstractmethod
 import logging
@@ -166,6 +165,10 @@ class ReconstructionEngine(ABC):
         self.loss.backward()  # compute new gradient
         self.optimizer.step()  # step params
 
+    @abstractmethod
+    def get_targets(self, data):
+        pass
+
     def train(self, epochs=0, val_interval=20, num_val_batches=4, checkpointing=False, save_interval=None):
         """
         Train the model on the training set. The best state is always saved during training.
@@ -216,7 +219,7 @@ class ReconstructionEngine(ABC):
             for self.step, train_data in enumerate(train_loader):
                 # Train on batch
                 self.data = train_data['data'].to(self.device)
-                self.target = train_data[self.truth_key].to(self.device)
+                self.target = self.get_targets(train_data)
                 # Call forward: make a prediction & measure the average error using data = self.data
                 outputs, metrics = self.forward(True)
                 metrics = {k: v.item() for k, v in metrics.items()}
@@ -281,7 +284,7 @@ class ReconstructionEngine(ABC):
                 val_data = next(val_iter)
             # extract the event data and target from the input data dict
             self.data = val_data['data'].to(self.device)
-            self.target = val_data[self.truth_key].to(self.device)
+            self.target = self.get_targets(val_data)
             # evaluate the network
             outputs, metrics = self.forward(False)
             if val_metrics is None:
@@ -324,7 +327,7 @@ class ReconstructionEngine(ABC):
             for self.step, eval_data in enumerate(self.data_loaders["test"]):
                 # load data
                 self.data = eval_data['data'].to(self.device)
-                self.target = eval_data[self.truth_key].to(self.device)
+                self.target = self.get_targets(eval_data)
                 # Run the forward procedure and output the result
                 outputs, metrics = self.forward(train=False)
                 # Add the local result to the final result

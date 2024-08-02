@@ -28,6 +28,22 @@ class RegressionEngine(ReconstructionEngine):
         super().__init__(truth_key, model, rank, device, dump_path)
         self.output_center = torch.tensor(output_center).to(self.device)
         self.output_scale = torch.tensor(output_scale).to(self.device)
+        self.is_single_target = isinstance(self.truth_key, str)
+        self.target_lengths = []
+        self.target_offsets = []
+
+    def get_targets(self, data):
+        """Return the target values if single truth key string, or stacked target values for multiple truth keys"""
+        if self.is_single_target:
+            return data[self.truth_key].to(self.device)
+        else:
+            if not self.target_offsets:
+                offset = 0
+                for k in self.truth_key:
+                    self.target_lengths.append(data[k].shape[1] if len(data[k].shape) > 1 else 1)
+                    self.target_offsets.append(offset)
+                    offset += self.target_lengths[-1]
+            return torch.column_stack([data[k] for k in self.truth_key]).to(self.device)
 
     def forward(self, train=True):
         """
@@ -49,6 +65,10 @@ class RegressionEngine(ReconstructionEngine):
             scaled_target = (self.target - self.output_center) / self.output_scale
             self.loss = self.criterion(model_out, scaled_target)
             scaled_model_out = model_out * self.output_scale + self.output_center
-            outputs = {"predicted_"+self.truth_key: scaled_model_out}
+            if self.is_single_target:
+                outputs = {"predicted_"+self.truth_key: scaled_model_out}
+            else:
+                outputs = {"predicted_"+k: scaled_model_out[:, o:o+l]
+                           for k, o, l in zip(self.truth_key, self.target_offsets, self.target_lengths)}
             metrics = {'loss': self.loss}
         return outputs, metrics

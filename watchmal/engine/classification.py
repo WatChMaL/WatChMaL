@@ -48,6 +48,10 @@ class ClassifierEngine(ReconstructionEngine):
             for name in loaders_config.keys():
                 self.data_loaders[name].dataset.map_labels(self.label_set)
 
+    def get_targets(self, data):
+        """Return the target values"""
+        return data[self.truth_key].to(self.device)
+
     def forward(self, train=True):
         """
         Compute predictions and metrics for a batch of data.
