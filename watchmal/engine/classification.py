@@ -48,9 +48,10 @@ class ClassifierEngine(ReconstructionEngine):
             for name in loaders_config.keys():
                 self.data_loaders[name].dataset.map_labels(self.label_set)
 
-    def get_targets(self, data):
-        """Return the target values"""
-        return data[self.truth_key].to(self.device)
+    def process_data(self, data):
+        """Extract the event data and target from the input data dict"""
+        self.data = data[self.truth_key].to(self.device)
+        self.target = data[self.truth_key].to(self.device)
 
     def forward(self, train=True):
         """
@@ -73,7 +74,8 @@ class ClassifierEngine(ReconstructionEngine):
             predicted_labels = torch.argmax(model_out, dim=-1)
             self.loss = self.criterion(model_out, self.target)
             accuracy = (predicted_labels == self.target).sum() / float(predicted_labels.nelement())
-            outputs = {'softmax': softmax}
+            outputs = {self.truth_key: self.target,
+                       'softmax': softmax}
             metrics = {'loss': self.loss,
                        'accuracy': accuracy}
         return outputs, metrics

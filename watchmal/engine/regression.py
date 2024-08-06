@@ -29,21 +29,17 @@ class RegressionEngine(ReconstructionEngine):
         self.output_center = torch.tensor(output_center).to(self.device)
         self.output_scale = torch.tensor(output_scale).to(self.device)
         self.is_single_target = isinstance(self.truth_key, str)
-        self.target_lengths = []
-        self.target_offsets = []
+        self.target_sizes = None
 
-    def get_targets(self, data):
-        """Return the target values if single truth key string, or stacked target values for multiple truth keys"""
+    def process_data(self, data):
+        """Extract the event data and target from the input data dict"""
+        self.data = data['data'].to(self.device)
         if self.is_single_target:
-            return data[self.truth_key].to(self.device)
+            self.target = {self.truth_key: data[self.truth_key].to(self.device)}
         else:
-            if not self.target_offsets:
-                offset = 0
-                for k in self.truth_key:
-                    self.target_lengths.append(data[k].shape[1] if len(data[k].shape) > 1 else 1)
-                    self.target_offsets.append(offset)
-                    offset += self.target_lengths[-1]
-            return torch.column_stack([data[k] for k in self.truth_key]).to(self.device)
+            self.target = {k: data[k].to(self.device) for k in self.truth_key}
+        if self.target_sizes is None:
+            self.target_sizes = [v.shape[1] if len(v.shape) > 1 else 1 for v in self.target.values()]
 
     def forward(self, train=True):
         """
@@ -61,14 +57,13 @@ class RegressionEngine(ReconstructionEngine):
         """
         with torch.set_grad_enabled(train):
             # Move the data and the labels to the GPU (if using CPU this has no effect)
-            model_out = self.model(self.data).reshape(self.target.shape)
-            scaled_target = (self.target - self.output_center) / self.output_scale
+            stacked_targets = torch.column_stack(list(self.target.values()))
+            model_out = self.model(self.data).reshape(stacked_targets.shape)
+            scaled_target = (stacked_targets - self.output_center) / self.output_scale
             self.loss = self.criterion(model_out, scaled_target)
             scaled_model_out = model_out * self.output_scale + self.output_center
-            if self.is_single_target:
-                outputs = {"predicted_"+self.truth_key: scaled_model_out}
-            else:
-                outputs = {"predicted_"+k: scaled_model_out[:, o:o+l]
-                           for k, o, l in zip(self.truth_key, self.target_offsets, self.target_lengths)}
+            # Outputs include the target dictionary plus corresponding elements for each prediction
+            predictions = torch.split(scaled_model_out, self.target_sizes, dim=1)
+            outputs = self.target | {"predicted_"+k: v for k, v in zip(self.target.keys(), predictions)}
             metrics = {'loss': self.loss}
         return outputs, metrics
