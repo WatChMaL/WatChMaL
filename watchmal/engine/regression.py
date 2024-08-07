@@ -38,6 +38,7 @@ class RegressionEngine(ReconstructionEngine):
             self.scale = {t: torch.tensor(target_scale_factor.get(t, 1)).to(self.device) for t in target_key}
         else:  # each target has the same scale
             self.scale = {t: torch.tensor(target_scale_factor).to(self.device) for t in target_key}
+        self.mse = torch.nn.MSELoss(reduce='mean')
 
     def process_data(self, data):
         """Extract the event data and target from the input data dict"""
@@ -73,5 +74,6 @@ class RegressionEngine(ReconstructionEngine):
             # return outputs including the unscaled target dictionary plus elements for the corresponding predictions
             outputs = self.target | {"predicted_"+t: o*self.scale[t] + self.offset[t]
                                      for t, o in zip(self.target.keys(), split_model_out)}
-            metrics = {'loss': self.loss}
+            metrics = {t+" RMS": torch.sqrt(self.mse(outputs["predicted_"+t], v)) for t, v in self.target.items()}
+            metrics['loss'] = self.loss
         return outputs, metrics
