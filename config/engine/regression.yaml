@@ -1,2 +1,2 @@
 _target_: watchmal.engine.regression.RegressionEngine
-truth_key: 'positions'
+target_key: 'positions'

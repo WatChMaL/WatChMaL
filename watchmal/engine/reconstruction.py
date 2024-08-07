@@ -23,11 +23,11 @@ log = logging.getLogger(__name__)
 
 
 class ReconstructionEngine(ABC):
-    def __init__(self, truth_key, model, rank, device, dump_path):
+    def __init__(self, target_key, model, rank, device, dump_path):
         """
         Parameters
         ==========
-        truth_key : string
+        target_key : string
             Name of the key for the target values in the dictionary returned by the dataloader
         model
             `nn.module` object that contains the full network that the engine will use in training or evaluation.
@@ -47,7 +47,7 @@ class ReconstructionEngine(ABC):
         self.rank = rank
         self.model = model
         self.device = torch.device(device)
-        self.truth_key = truth_key
+        self.target_key = target_key
 
         # Set up the parameters to save given the model type
         if isinstance(self.model, DistributedDataParallel):

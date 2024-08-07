@@ -73,7 +73,7 @@ class CNNmPMTDataset(H5Dataset):
             channels. i.e. provides the mean and the std of PMT charges and/or time in each mPMT instead of providing
             all PMT data. It can be [], ['charge'], ['time'] or ['charge', 'time']. By default, no collapsing is
             performed.
-        channel_scaling: dict of (int, int)
+        channel_scaling: dict of (float, float)
             Dictionary with keys corresponding to channels and values contain the offset and scale to use. By default,
             no scaling is applied.
 """
