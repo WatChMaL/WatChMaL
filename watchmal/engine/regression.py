@@ -1,11 +1,12 @@
 import torch
 
 from watchmal.engine.reconstruction import ReconstructionEngine
+from collections.abc import Mapping
 
 
 class RegressionEngine(ReconstructionEngine):
     """Engine for performing training or evaluation for a regression network."""
-    def __init__(self, target_key, model, rank, device, dump_path, target_scaling=None):
+    def __init__(self, target_key, model, rank, device, dump_path, target_scale_offset=0, target_scale_factor=1):
         """
         Parameters
         ==========
@@ -19,24 +20,30 @@ class RegressionEngine(ReconstructionEngine):
             The gpu that this process is running on.
         dump_path : string
             The path to store outputs in.
-        output_center : float
-            Value to subtract from target values
-        output_scale : float
-            Value to divide target values by
+        target_scale_offset : float or dict of float
+            Offset to subtract from target values when calculating the loss, or dict of offsets for each target
+        target_scale_factor : float or dict of float
+            Scale factor to divide target values by when calculating the loss, or dict of scale factors for each target
         """
         # create the directory for saving the log and dump files
         super().__init__(target_key, model, rank, device, dump_path)
-        self.output_center = torch.tensor(output_center).to(self.device)
-        self.output_scale = torch.tensor(output_scale).to(self.device)
         if isinstance(self.target_key, str):
             self.target_key = [self.target_key]
         self.target_sizes = None
+        if isinstance(target_scale_offset, Mapping):  # each target has its own offset
+            self.offset = {t: torch.tensor(target_scale_offset.get(t, 0)).to(self.device) for t in target_key}
+        else:  # each target has the same offset
+            self.offset = {t: torch.tensor(target_scale_offset).to(self.device) for t in target_key}
+        if isinstance(target_scale_factor, Mapping):  # each target has its own scale
+            self.scale = {t: torch.tensor(target_scale_factor.get(t, 1)).to(self.device) for t in target_key}
+        else:  # each target has the same scale
+            self.scale = {t: torch.tensor(target_scale_factor).to(self.device) for t in target_key}
 
     def process_data(self, data):
         """Extract the event data and target from the input data dict"""
         self.data = data['data'].to(self.device)
-        self.target = {k: data[k].to(self.device) for k in self.target_key}
-        # First time we get data, determine the target sizes and set related things
+        self.target = {t: data[t].to(self.device) for t in self.target_key}
+        # First time we get data, determine the target sizes
         if self.target_sizes is None:
             self.target_sizes = [v.shape[1] if len(v.shape) > 1 else 1 for v in self.target.values()]
 
@@ -55,14 +62,16 @@ class RegressionEngine(ReconstructionEngine):
             Dictionary containing loss and predicted values
         """
         with torch.set_grad_enabled(train):
-            # Move the data and the labels to the GPU (if using CPU this has no effect)
-            stacked_targets = torch.column_stack(list(self.target.values()))
-            model_out = self.model(self.data).reshape(stacked_targets.shape)
-            scaled_target = (stacked_targets - self.output_center) / self.output_scale
-            self.loss = self.criterion(model_out, scaled_target)
-            scaled_model_out = model_out * self.output_scale + self.output_center
-            # Outputs include the target dictionary plus corresponding elements for each prediction
-            predictions = torch.split(scaled_model_out, self.target_sizes, dim=1)
-            outputs = self.target | {"predicted_"+k: v for k, v in zip(self.target.keys(), predictions)}
+            # scale and stack the targets for calculating the loss
+            target = torch.column_stack([(v - self.offset[t]) / self.scale[t] for t, v in self.target.items()])
+            # evaluate the model on the data and reshape output to match the target
+            model_out = self.model(self.data).reshape(target.shape)
+            # calculate the loss
+            self.loss = self.criterion(model_out, target)
+            # split the output for each target
+            split_model_out = torch.split(model_out, self.target_sizes, dim=1)
+            # return outputs including the unscaled target dictionary plus elements for the corresponding predictions
+            outputs = self.target | {"predicted_"+t: o*self.scale[t] + self.offset[t]
+                                     for t, o in zip(self.target.keys(), split_model_out)}
             metrics = {'loss': self.loss}
         return outputs, metrics
