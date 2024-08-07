@@ -3,6 +3,20 @@ import torch
 from watchmal.engine.reconstruction import ReconstructionEngine
 from collections.abc import Mapping
 
+# define some useful metrics for different regression targets
+metric_functions = {
+    'positions':  # mean 3D position error
+        lambda x, y: torch.mean(torch.linalg.vector_norm(x-y, dim=1)),
+    'directions':  # mean angle between directions
+        lambda x, y: torch.mean(torch.arccos(torch.clamp(torch.sum(x*y, dim=-1)
+                                                         / torch.linalg.vector_norm(x, dim=-1), -1, 1))),
+    'angles':  # mean angle between directions
+        lambda x, y: torch.mean(torch.arccos(torch.cos(x[:, 0])*torch.cos(y[:, 0])
+                                             + torch.sin(x[:, 0])*torch.sin(y[:, 0])*torch.cos(x[:, 1]-y[:, 1]))),
+    'energies':  # mean fractional error
+        lambda x, y: torch.mean((x - y) / y),
+}
+
 
 class RegressionEngine(ReconstructionEngine):
     """Engine for performing training or evaluation for a regression network."""
@@ -38,7 +52,6 @@ class RegressionEngine(ReconstructionEngine):
             self.scale = {t: torch.tensor(target_scale_factor.get(t, 1)).to(self.device) for t in target_key}
         else:  # each target has the same scale
             self.scale = {t: torch.tensor(target_scale_factor).to(self.device) for t in target_key}
-        self.mse = torch.nn.MSELoss(reduce='mean')
 
     def process_data(self, data):
         """Extract the event data and target from the input data dict"""
@@ -74,6 +87,7 @@ class RegressionEngine(ReconstructionEngine):
             # return outputs including the unscaled target dictionary plus elements for the corresponding predictions
             outputs = self.target | {"predicted_"+t: o*self.scale[t] + self.offset[t]
                                      for t, o in zip(self.target.keys(), split_model_out)}
-            metrics = {t+" RMS": torch.sqrt(self.mse(outputs["predicted_"+t], v)) for t, v in self.target.items()}
+            metrics = {t+" error": metric_functions[t](outputs["predicted_"+t], v)
+                       for t, v in self.target.items() if t in metric_functions}
             metrics['loss'] = self.loss
         return outputs, metrics
