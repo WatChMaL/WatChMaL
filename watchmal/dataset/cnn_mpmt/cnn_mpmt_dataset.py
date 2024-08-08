@@ -139,7 +139,7 @@ class CNNmPMTDataset(H5Dataset):
             self.geom_data['mpmt_direction'] = self.process_data(pmt_ids, pmt_directions)[central_pmt_channel]
             self.geom_data['mpmt_exists'] = self.process_data(pmt_ids, 1)[central_pmt_channel]
             for c, v in self.geom_data.items():
-                self.geom_data[c] = (v - self.scale_offset.pop(c, default=0))/self.scale_factor.pop(c, default=1)
+                self.geom_data[c] = (v - self.scale_offset.pop(c, 0))/self.scale_factor.pop(c, 1)
 
         # set up data ranges and permutation maps for the chosen channels
         self.image_depth = 0
@@ -197,7 +197,7 @@ class CNNmPMTDataset(H5Dataset):
         hit_data = {"charge": self.event_hit_charges, "time": self.event_hit_times}
         # apply scaling to channels
         for c in hit_data:
-            hit_data[c] = (hit_data[c] - self.scale_offset.get(c, default=0))/self.scale_factor.get(c, default=1)
+            hit_data[c] = (hit_data[c] - self.scale_offset.get(c, 0))/self.scale_factor.get(c, 1)
         # Process the channels
         data = np.zeros((self.image_depth, self.image_height, self.image_width), dtype=np.float32)
         for c, r in self.channel_ranges.items():
