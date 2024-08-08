@@ -332,14 +332,15 @@ class ReconstructionEngine(ABC):
                 outputs, metrics = self.forward(False)
                 outputs['indices'] = eval_data['indices'].to(self.device)
                 # Add the local result to the final result
+                batch_size = len(outputs["indices"])
                 if self.step == 0:
                     eval_outputs = outputs
-                    eval_metrics = metrics
+                    eval_metrics = {k: m * batch_size for k, m in metrics.items()}
                 else:
                     for k in eval_outputs.keys():
                         eval_outputs[k] = torch.cat((eval_outputs[k], outputs[k]))
                     for k in eval_metrics.keys():
-                        eval_metrics[k] += metrics[k]
+                        eval_metrics[k] += metrics[k] * batch_size
                 # print the metrics at given intervals
                 if self.rank == 0 and self.step % report_interval == 0:
                     previous_step_time = step_time
@@ -350,7 +351,7 @@ class ReconstructionEngine(ABC):
                           f" Step time {average_step_time},"
                           f" Total time {step_time-start_time}")
         for k in eval_metrics.keys():
-            eval_metrics[k] /= self.step+1
+            eval_metrics[k] /= len(eval_outputs["indices"])
         # Gather results from all processes
         eval_metrics = self.get_synchronized_metrics(eval_metrics)
         eval_outputs = self.get_synchronized_outputs(eval_outputs)
