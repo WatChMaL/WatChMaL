@@ -3,5 +3,7 @@ mpmt_positions_file: /data/WatChMaL/data/IWCDshort_mPMT_image_positions.npz
 channels: ['charge', 'time']
 transforms:
   - double_cover
-channel_scaling:
-  time: [950, 10]
+channel_scale_offset:
+  time: 950
+channel_scale_factor:
+  time: 10
