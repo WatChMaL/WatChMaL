@@ -49,8 +49,7 @@ def plot_histograms(runs, quantity, selection=None, ax=None, fig_size=None, x_la
     else:
         fig = ax.get_figure()
     for r in runs:
-        if selection is None:
-            run_selection = r.selection if selection is None else selection
+        run_selection = r.selection if selection is None else selection
         data = r.get_quantity(quantity)[run_selection].flatten()
         args = {**hist_args, **r.plot_args}
         ax.hist(data, **args)
