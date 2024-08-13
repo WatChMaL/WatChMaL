@@ -18,8 +18,8 @@ class PointNetMultiPMTDataset(H5Dataset):
     dimension of the data tensor is over the mPMTs with hits in the event.
     """
 
-    def __init__(self, h5file, geometry_file, use_orientations=False, transforms=None, max_points=None):
-        super().__init__(h5file)
+    def __init__(self, h5file, geometry_file, use_orientations=False, transforms=None, max_points=None, use_memmap=True):
+        super().__init__(h5file, use_memmap)
         geo_file = np.load(geometry_file, 'r')
         geo_positions = torch.from_numpy(geo_file["position"]).float()
         geo_orientations = torch.from_numpy(geo_file["orientation"]).float()
