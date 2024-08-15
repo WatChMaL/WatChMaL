@@ -6,24 +6,29 @@ data:
     pmt_positions_file: /data/thoriba/t2k/imagefile/skdetsim_imagefile.npy
     use_positions: False
     geometry_file: /home/fcormier/t2k/ml/training/t2k_ml_training/data/geofile_skdetsim.npz
+    channel_scaling:
+      time: [400, 1000]
+    dead_pmts_file: /data/fcormier/Public/dead_pmts.sk4.txt
+    use_dead_pmt_mask: True
+    use_hit_mask: True
     channel_scaler:
-      fitted_scaler: null # set None to fit a new scaler, if provided, only this and transform_per_batch will be used.
-      scaler_type: ['robust']  # must be a list; even if you have only one thing. 
+      fitted_scaler: ['/data/thoriba/t2k/indices/apr3_eMuPiPlus_1500MeV_small_1/chain_scaler_1_quantile_normal.joblib'] # set None to fit a new scaler, if provided, only this and transform_per_batch will be used.
+      scaler_type: null  # must be a list; even if you have only one thing. 
       sample_size: 10000  # sample size to fit the scaler
       dataset_index_file: '/data/thoriba/t2k/indices/apr3_eMuPiPlus_1500MeV_small_1/train_val_test_gt200Hits_FCTEST_nFolds10_fold0.npz'
-      transform_per_batch: False    # must be False now.
+      transform_per_batch: True   # must be False now.
       scaler_output_path: '/data/thoriba/t2k/indices/testingCNN/' # where to save the file
 model:
   _target_: watchmal.model.resnet.resnet18
-  num_input_channels: 2
-  num_output_channels: 3
+  num_input_channels: 4
+  num_output_channels: 1
   stride: 1
   kernelSize: 1
   dropout_p: 0.
-  conv_pad_mode: 'zeros'
+  # conv_pad_mode: 'zeros'
 engine:
   _target_: watchmal.engine.regression.RegressionEngine
-  truth_key: 'positions'
+  truth_key: 'momenta'
 tasks:
   train:
     epochs: 30

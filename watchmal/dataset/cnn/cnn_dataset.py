@@ -491,14 +491,19 @@ class CNNDatasetDeadPMT(CNNDataset):
     It has three additional attributes: dead_pmt_rate, dead_pmt_seed, dead_pmts.
 
     dead_pmts: 1d numpy array of integers. Zero-indexed. Set in set_dead_pmts()
+
     """
 
-    def __init__(self, h5file, pmt_positions_file, use_times=True, use_charges=True, use_positions=False, transforms=None, one_indexed=True, channel_scaling=None, geometry_file=None, dead_pmt_rate=None, dead_pmt_seed=None, dead_pmts_file=None, use_dead_pmt_mask=False):
+    def __init__(self, h5file, pmt_positions_file, use_times=True, use_charges=True, use_positions=False, transforms=None, one_indexed=True, channel_scaling=None, geometry_file=None,
+                 dead_pmt_rate=None, dead_pmt_seed=None, dead_pmts_file=None, use_dead_pmt_mask=False, use_hit_mask=False):
         """
         Constructs a dataset for CNN data. Event hit data is read in from the HDF5 file and the PMT charge and/or time
         data is formatted into an event-display-like image for input to a CNN. Each pixel of the image corresponds to
         one PMT and the channels correspond to charge and/or time at each PMT. The PMTs are placed in the image
         according to a mapping provided by the numpy array in the `pmt_positions_file`.
+
+        To set dead PMTs from list of dead PMT IDs, provide dead_pmts_file. Other dead PMT related parameters will be ignored.
+        To set dead PMTs randomly, do not provide file location, and provide dead_pmt_rate and dead_pmt_seed.
 
         Parameters
         ----------
@@ -520,6 +525,8 @@ class CNNDatasetDeadPMT(CNNDataset):
             A proportion of dead PMTs to create. Within 0 and 1.
         dead_pmt_seed: int
             Seed value for randomness involving selection of dead PMTs.
+        dead_pmts_file: string
+            Location of a txt file containing dead PMT IDs. Each row is an ID of dead PMT.
         use_dead_pmt_mask: bool
             Whether to use PMT hit times as one of the initial CNN image channels. False by default.
         """
@@ -529,7 +536,11 @@ class CNNDatasetDeadPMT(CNNDataset):
         self.dead_pmt_seed = dead_pmt_seed if dead_pmt_seed is not None else 42
         self.dead_pmts_file = dead_pmts_file
 
+        self.use_hit_mask = use_hit_mask
+
         if self.use_dead_pmt_mask:
+            self.data_size[0] = self.data_size[0] + 1
+        if self.use_hit_mask:
             self.data_size[0] = self.data_size[0] + 1
         
         print('CNNdead: data_size', self.data_size)
@@ -633,6 +644,8 @@ class CNNDatasetDeadPMT(CNNDataset):
         # set True to print out some information per batch for test / debug
         debug_mode = 0
 
+        channel = 0
+
         if self.use_times and self.use_charges:
             if debug_mode:
                 print('----------------------------------')
@@ -646,6 +659,7 @@ class CNNDatasetDeadPMT(CNNDataset):
                 
             data[0, hit_rows, hit_cols] = hit_times
             data[1, hit_rows, hit_cols] = hit_charges
+            channel += 2
 
             if debug_mode:
                 ti_pre = np.count_nonzero(data[0])
@@ -667,11 +681,19 @@ class CNNDatasetDeadPMT(CNNDataset):
                 data[3, hit_rows_d, hit_cols_d] = .0
                 data[4, hit_rows_d, hit_cols_d] = .0
 
+                channel += 3
+
             if self.use_dead_pmt_mask:
                 if self.use_positions:
                     data[5, hit_rows_d, hit_cols_d] = 1
                 else:
                     data[2, hit_rows_d, hit_cols_d] = 1
+                channel += 1
+            
+            if self.use_hit_mask:
+                data[channel, hit_rows, hit_cols] = 1
+                data[channel, hit_rows_d, hit_cols_d] = 0
+                channel += 1
             
             if debug_mode:
                 RED = '\033[91m'
@@ -690,7 +712,6 @@ class CNNDatasetDeadPMT(CNNDataset):
 
                 print('hit_cols_dead',np.sort(hit_cols_d))
                 print('idx of non-zero in mask', np.sort(np.where(data[2] == 1)[1]))
-
 
         elif self.use_times:
             data[0, hit_rows, hit_cols] = hit_times
@@ -739,7 +760,7 @@ class CNNDatasetDeadPMT(CNNDataset):
 class CNNDatasetScale(CNNDatasetDeadPMT):
     """
     A dataset class for CNN models with additional scaling functionality.
-    This class extends CNNDataset to include features for scaling channel data,
+    This class extends CNNDatasetDeadPMT to include features for scaling channel data,
     handling dead PMTs, and applying various scaling techniques to the time data.
 
     Attributes:
@@ -750,13 +771,13 @@ class CNNDatasetScale(CNNDatasetDeadPMT):
         scaler: Scaler object or list of Scaler objects for time data transformation.
     """
     def __init__(self, h5file, pmt_positions_file, use_times=True, use_charges=True, use_positions=False, transforms=None, one_indexed=True, channel_scaling=None, geometry_file=None,
-                 dead_pmt_rate=None, dead_pmt_seed=None, dead_pmts_file=None, use_dead_pmt_mask=False, channel_scaler=None):
+                 dead_pmt_rate=None, dead_pmt_seed=None, dead_pmts_file=None, use_dead_pmt_mask=False, channel_scaler=None, use_hit_mask=False):
         """
         Initialize the CNNDatasetScale object.
         """
         super().__init__(h5file, pmt_positions_file, use_times=use_times, use_charges=use_charges, use_positions=use_positions, transforms=transforms,
                          one_indexed=one_indexed, channel_scaling=channel_scaling, geometry_file=geometry_file,
-                         dead_pmt_rate=dead_pmt_rate, dead_pmt_seed=dead_pmt_seed, dead_pmts_file=None, use_dead_pmt_mask=False)
+                         dead_pmt_rate=dead_pmt_rate, dead_pmt_seed=dead_pmt_seed, dead_pmts_file=dead_pmts_file, use_dead_pmt_mask=use_dead_pmt_mask, use_hit_mask=use_hit_mask)
 
         self.channel_scaler = channel_scaler
         self.mask_train = None
@@ -832,6 +853,7 @@ class CNNDatasetScale(CNNDatasetDeadPMT):
         self.scaler = []
         # apply scaler in order of list. So, to do normal(minmax(X)), list should look like ['minmax', 'normal']
         for idx, sclr in enumerate(self.channel_scaler['scaler_type']):
+            self.scaler_status.append('')
             if 'minmax' in sclr:
                 if sclr == 'minmax':
                     self.scaler.append(MinMaxScaler(feature_range=(0.1, 1.3)))
@@ -863,18 +885,57 @@ class CNNDatasetScale(CNNDatasetDeadPMT):
 
             print('Will fit sk-learn scaler based on training set. Scaler:', sclr)
 
-            print('Fitting the scaler on traing set. This will take some time..')
+            mask_train = self.get_train_mask()
+
+            print('Fitting the scaler on training set. This will take some time..')
+            # if this scaler is second (or later) one to fit, transform the time data based on previous scaler(s)
             if idx > 0:
                 print('-------------- Attention (fit_and_save_scaler)-------------------')
                 print('Since you want to apply more than 1 scalers in sequence, we will transform the time data based on previous scaler first before fitting this one.')
                 print('This will take some time...')
-                self.scaler[idx-1].transform(self.time.reshape(-1, 1)).reshape(-1,)
-                self.scaler_status[idx-1] = 'transformed'
+                # self.time = self.scaler[idx-1].transform(self.time.reshape(-1, 1)).reshape(-1,)
+
+                print("before transformation: ", self.time[:10])
+
+                if hasattr(self.scaler[idx], 'partial_fit'):
+                    print('partial_fit available 1')
+                    # for i in range(0, len(mask_train), 10000):
+                    #     if i % 10000 == 0:
+                    #         print('iteration', i)
+                    #     time_batch = self.time[mask_train][i:i+10000].reshape(-1, 1)
+                    #     for i in range(0, idx):
+                    #         if self.scaler_status[i] == 'fitted':
+                    #             time_batch = self.scaler[i].transform(time_batch).reshape(-1,)
+                    #     self.scaler[idx].partial_fit(time_batch.reshape(-1, 1))
+                else:
+                    # has to be fitted on transformed copy of time data
+                    for i in range(0, idx):
+                        if self.scaler_status[i] == 'fitted':
+                            self.time = self.scaler[i].transform(self.time.reshape(-1, 1)).reshape(-1,)
+                            self.scaler_status[i] = 'transformed'
+
                 print('Transformed the time data based on previous scaler; Returning to fit this scaler')
+                print("after transformation: ", self.time[:10])
                 print('-----------------------------------------------------------------')
-            mask_train = self.get_train_mask()
-            self.scaler[idx].fit(self.time[mask_train].reshape(-1, 1))   
-            self.scaler_status.append('fitted')  
+            
+            if hasattr(self.scaler[idx], 'partial_fit'):
+                print('partial_fit available 2')
+                step_size = 100000
+                for i in range(0, np.sum(mask_train), step_size):
+                    if i + step_size >= len(self.time[mask_train]):
+                        # truncate
+                        time_batch = self.time[mask_train][i:len(self.time[mask_train])].reshape(-1, 1)
+                    else:
+                        time_batch = self.time[mask_train][i:i+step_size].reshape(-1, 1)
+                    if i % 2000000 == 0:
+                        print('iteration', i)
+                    for s in range(0, idx):
+                        if self.scaler_status[s] == 'fitted':
+                            time_batch = self.scaler[s].transform(time_batch).reshape(-1,)
+                    self.scaler[idx].partial_fit(time_batch.reshape(-1, 1))
+            else:
+                self.scaler[idx].fit(self.time[mask_train].reshape(-1, 1))
+            self.scaler_status[idx] = 'fitted'
 
             # saving the scaler object so that we can reuse it for another training and test (evaluation) dataset
             scaler_name_str = self.channel_scaler['scaler_type'][idx]
@@ -1064,20 +1125,16 @@ class CNNDatasetScale(CNNDatasetDeadPMT):
         # for c, (offset, scale) in self.scaling.items():
         #     hit_data[c] = (hit_data[c] - offset)/scale
 
-        # hit_data['time'] = (hit_data['time'] - 400)/1000
-        # print('--------')
-        # if item % 10 == 0:
-        #     print('before scaling', hit_data['time'][:10], 'shape', hit_data['time'].shape)
-        #     print('scaling...')
-        
-        # turn off
-        # if self.scaler is not None:
-        #     if self.channel_scaler['transform_per_batch']:
-        #         if isinstance(self.scaler, list):
-        #             for ssc in self.scaler:
-        #                 hit_data['time'] = ssc.transform(hit_data['time'].reshape(-1, 1)).reshape(-1,)
-        #         else:
-        #             hit_data['time'] = self.scaler.transform(hit_data['time'].reshape(-1, 1)).reshape(-1,)
+
+        # print('before scaling', hit_data['time'][:10], 'shape', hit_data['time'].shape)
+        if self.scaler is not None:
+            if self.channel_scaler['transform_per_batch']:
+                if isinstance(self.scaler, list):
+                    for ssc in self.scaler:
+                        hit_data['time'] = ssc.transform(hit_data['time'].reshape(-1, 1)).reshape(-1,)
+                else:
+                    hit_data['time'] = self.scaler.transform(hit_data['time'].reshape(-1, 1)).reshape(-1,)
+        # print('after  scaling', hit_data['time'][:10], 'shape', hit_data['time'].shape)
         
         # if item % 10 == 0:
             # print('scaling done?')
@@ -1124,113 +1181,113 @@ class CNNDatasetScale(CNNDatasetDeadPMT):
     #         self.dead_pmts = np.array([], dtype=int)
     #         print('No dead PMTs were set. If you intend to set dead PMTs, add dead PMT rate that is in (0,1] in yaml file')
 
-    def process_data(self, hit_pmts, hit_times, hit_charges, hit_positions=None, double_cover = None, transforms = None):
-        """
-        Returns event data from dataset associated with a specific index
+    # def process_data(self, hit_pmts, hit_times, hit_charges, hit_positions=None, double_cover = None, transforms = None):
+    #     """
+    #     Returns event data from dataset associated with a specific index
 
-        Parameters
-        ----------
-        hit_pmts: array_like of int
-            Array of hit PMT IDs
-        hit_times: array_like of float
-            Array of PMT hit times
-        hit_charges: array_like of float
-            Array of PMT hit charges
+    #     Parameters
+    #     ----------
+    #     hit_pmts: array_like of int
+    #         Array of hit PMT IDs
+    #     hit_times: array_like of float
+    #         Array of PMT hit times
+    #     hit_charges: array_like of float
+    #         Array of PMT hit charges
         
-        Returns
-        -------
-        data: ndarray
-            Array in image-like format (channels, rows, columns) for input to CNN network.
-        """
-        if self.one_indexed:
-            hit_pmts = hit_pmts-1  # SK cable numbers start at 1
+    #     Returns
+    #     -------
+    #     data: ndarray
+    #         Array in image-like format (channels, rows, columns) for input to CNN network.
+    #     """
+    #     if self.one_indexed:
+    #         hit_pmts = hit_pmts-1  # SK cable numbers start at 1
         
-        dead_pmts = self.dead_pmts # int Array of dead PMT IDs
+    #     dead_pmts = self.dead_pmts # int Array of dead PMT IDs
 
-        hit_rows = self.pmt_positions[hit_pmts, 0]
-        hit_cols = self.pmt_positions[hit_pmts, 1]
+    #     hit_rows = self.pmt_positions[hit_pmts, 0]
+    #     hit_cols = self.pmt_positions[hit_pmts, 1]
 
-        hit_rows_d = self.pmt_positions[dead_pmts, 0]
-        hit_cols_d = self.pmt_positions[dead_pmts, 1]
+    #     hit_rows_d = self.pmt_positions[dead_pmts, 0]
+    #     hit_cols_d = self.pmt_positions[dead_pmts, 1]
 
-        # for now, idea of shifting value for unhit PMTs is not used.
-        # time_of_unhit_pmts = - 10
-        # should be no dead PMTs for training. 
+    #     # for now, idea of shifting value for unhit PMTs is not used.
+    #     # time_of_unhit_pmts = - 10
+    #     # should be no dead PMTs for training. 
 
-        data = np.zeros(self.data_size, dtype=np.float32) # + time_of_unhit_pmts
+    #     data = np.zeros(self.data_size, dtype=np.float32)
 
-        debug_mode = 0
+    #     debug_mode = 0
 
-        if self.use_times and self.use_charges:
-            if debug_mode:
-                print('----------------------------------')
-                print('dead PMT rate', round(self.dead_pmt_rate * 100, 4), '%')
-                print('Num of dead PMTs', len(dead_pmts), ' | ', round(len(dead_pmts) / len(self.pmt_positions) * 100, 4), '%', f'of {len(self.pmt_positions)} PMTs')
-                print('IDs of dead PMTs', dead_pmts)
-                print('Num of hit PMTs ', len(hit_pmts))
-                print('Num of hit charges', len(hit_charges))
-                print('Num of hit times', len(hit_times))
+    #     if self.use_times and self.use_charges:
+    #         if debug_mode:
+    #             print('----------------------------------')
+    #             print('dead PMT rate', round(self.dead_pmt_rate * 100, 4), '%')
+    #             print('Num of dead PMTs', len(dead_pmts), ' | ', round(len(dead_pmts) / len(self.pmt_positions) * 100, 4), '%', f'of {len(self.pmt_positions)} PMTs')
+    #             print('IDs of dead PMTs', dead_pmts)
+    #             print('Num of hit PMTs ', len(hit_pmts))
+    #             print('Num of hit charges', len(hit_charges))
+    #             print('Num of hit times', len(hit_times))
                 
-            data[0, hit_rows, hit_cols] = hit_times
-            data[1, hit_rows, hit_cols] = hit_charges
+    #         data[0, hit_rows, hit_cols] = hit_times
+    #         data[1, hit_rows, hit_cols] = hit_charges
 
-            if debug_mode:
-                ti_pre = np.count_nonzero(data[0])
-                ch_pre = np.count_nonzero(data[1])
-                print('non-zero times in data (before)', ti_pre)
-                print('non-zero chrgs in data (before)', ch_pre)
+    #         if debug_mode:
+    #             ti_pre = np.count_nonzero(data[0])
+    #             ch_pre = np.count_nonzero(data[1])
+    #             print('non-zero times in data (before)', ti_pre)
+    #             print('non-zero chrgs in data (before)', ch_pre)
 
-            # kill
-            data[0, hit_rows_d, hit_cols_d] = .0
-            data[1, hit_rows_d, hit_cols_d] = .0
+    #         # kill
+    #         data[0, hit_rows_d, hit_cols_d] = .0
+    #         data[1, hit_rows_d, hit_cols_d] = .0
 
-            if debug_mode:
-                RED = '\033[91m'
-                GREEN = '\033[92m'
-                RESET = '\033[0m'  # Reset to default color
+    #         if debug_mode:
+    #             RED = '\033[91m'
+    #             GREEN = '\033[92m'
+    #             RESET = '\033[0m'  # Reset to default color
 
-                ti_post = np.count_nonzero(data[0])
-                ch_post = np.count_nonzero(data[1])
+    #             ti_post = np.count_nonzero(data[0])
+    #             ch_post = np.count_nonzero(data[1])
 
-                print('non-zero times in data (after) ', ti_post, f'{RED}-{ti_pre - ti_post} ({round((ti_pre - ti_post)/ti_pre * 100, 4)} %) {RESET}')
-                print('non-zero chrgs in data (after) ', ch_post, f'{RED}-{ch_pre - ch_post} ({round((ch_pre - ch_post)/ch_pre * 100, 4)} %) {RESET}')
+    #             print('non-zero times in data (after) ', ti_post, f'{RED}-{ti_pre - ti_post} ({round((ti_pre - ti_post)/ti_pre * 100, 4)} %) {RESET}')
+    #             print('non-zero chrgs in data (after) ', ch_post, f'{RED}-{ch_pre - ch_post} ({round((ch_pre - ch_post)/ch_pre * 100, 4)} %) {RESET}')
 
-            if self.use_positions:
-                data[2, hit_rows, hit_cols] = hit_positions[:,0]
-                data[3, hit_rows, hit_cols] = hit_positions[:,1]
-                data[4, hit_rows, hit_cols] = hit_positions[:,2]
+    #         if self.use_positions:
+    #             data[2, hit_rows, hit_cols] = hit_positions[:,0]
+    #             data[3, hit_rows, hit_cols] = hit_positions[:,1]
+    #             data[4, hit_rows, hit_cols] = hit_positions[:,2]
 
-                data[2, hit_rows_d, hit_cols_d] = .0
-                data[3, hit_rows_d, hit_cols_d] = .0
-                data[4, hit_rows_d, hit_cols_d] = .0
+    #             data[2, hit_rows_d, hit_cols_d] = .0
+    #             data[3, hit_rows_d, hit_cols_d] = .0
+    #             data[4, hit_rows_d, hit_cols_d] = .0
 
-        elif self.use_times:
-            data[0, hit_rows, hit_cols] = hit_times
-            # kill
-            data[0, hit_rows_d, hit_cols_d] = .0
+    #     elif self.use_times:
+    #         data[0, hit_rows, hit_cols] = hit_times
+    #         # kill
+    #         data[0, hit_rows_d, hit_cols_d] = .0
 
-            if self.use_positions:
-                data[1, hit_rows, hit_cols] = hit_positions[:,0]
-                data[2, hit_rows, hit_cols] = hit_positions[:,1]
-                data[3, hit_rows, hit_cols] = hit_positions[:,2]
+    #         if self.use_positions:
+    #             data[1, hit_rows, hit_cols] = hit_positions[:,0]
+    #             data[2, hit_rows, hit_cols] = hit_positions[:,1]
+    #             data[3, hit_rows, hit_cols] = hit_positions[:,2]
 
-                data[1, hit_rows_d, hit_cols_d] = .0
-                data[2, hit_rows_d, hit_cols_d] = .0
-                data[3, hit_rows_d, hit_cols_d] = .0
-        else:
-            data[0, hit_rows, hit_cols] = hit_charges
-            # kill
-            data[0, hit_rows_d, hit_cols_d] = .0
+    #             data[1, hit_rows_d, hit_cols_d] = .0
+    #             data[2, hit_rows_d, hit_cols_d] = .0
+    #             data[3, hit_rows_d, hit_cols_d] = .0
+    #     else:
+    #         data[0, hit_rows, hit_cols] = hit_charges
+    #         # kill
+    #         data[0, hit_rows_d, hit_cols_d] = .0
 
-            if self.use_positions:
-                data[1, hit_rows, hit_cols] = hit_positions[:,0]
-                data[2, hit_rows, hit_cols] = hit_positions[:,1]
-                data[3, hit_rows, hit_cols] = hit_positions[:,2]
+    #         if self.use_positions:
+    #             data[1, hit_rows, hit_cols] = hit_positions[:,0]
+    #             data[2, hit_rows, hit_cols] = hit_positions[:,1]
+    #             data[3, hit_rows, hit_cols] = hit_positions[:,2]
 
-                data[1, hit_rows_d, hit_cols_d] = .0
-                data[2, hit_rows_d, hit_cols_d] = .0
-                data[3, hit_rows_d, hit_cols_d] = .0
+    #             data[1, hit_rows_d, hit_cols_d] = .0
+    #             data[2, hit_rows_d, hit_cols_d] = .0
+    #             data[3, hit_rows_d, hit_cols_d] = .0
 
-        return data
+    #     return data
     
     

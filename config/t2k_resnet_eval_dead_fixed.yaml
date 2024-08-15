@@ -1,5 +1,5 @@
 data:
-  split_path: '//fast_scratch_2/fcormier/t2k/ml/data/oct20_combine_flatE/train_val_test_nFolds3_fold0.npz' 
+  split_path: '/fast_scratch_2/fcormier/t2k/ml/data/oct20_combine_flatE/train_val_test_nFolds3_fold0.npz' 
   dataset:
     h5file: '/fast_scratch_2/fcormier/t2k/ml/data/oct20_combine_flatE/combine_combine.hy'
     _target_: watchmal.dataset.cnn.cnn_dataset.CNNDatasetDeadPMT
@@ -13,13 +13,13 @@ data:
 model:
   _target_: watchmal.model.resnet.resnet34
   num_input_channels: 3
-  num_output_channels: 1
+  num_output_channels: 3
   stride: 1
   kernelSize: 1
   dropout_p: 0.0
 engine:
   _target_: watchmal.engine.regression.RegressionEngine
-  truth_key: 'momenta'
+  truth_key: 'positions'
 tasks:
   restore_best_state:
     name: RegressionEngine_ResNet
@@ -41,6 +41,6 @@ tasks:
           # _target_: torch.utils.data.sampler.SequentialSampler
 
 gpu_list:
-  - 7
+  - 3
 seed: null
 dump_path: ./outputs/

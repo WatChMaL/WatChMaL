@@ -180,13 +180,14 @@ def save_fig(data, isPost, displacement=0, counter=0, output_path=None):
     print("3")
 
 def save_fig_dead(data, isPost, dead_pmts, pmt_positions, y_label='PMT Charge',
-                   displacement=0, counter=0, output_path='/data/thoriba/t2k/plots/charge_plot/CNN_dead_default/', dead_pmt_percent=100):
+                   displacement=0, counter=0, output_path='/data/thoriba/t2k/plots/charge_plot/CNN_dead_default/', dead_pmt_percent=100,
+                   note=None, title=None):
     '''
     save_fig funciton for CNNDatasetDeadPMT
     Saves figures with dead PMT locations if both `dead_pmts` and `pmt_positions` are provided
     '''
     print("Saving FIG")
-    plt.imshow(data.numpy(), interpolation='none')
+    plt.imshow(data.numpy(), interpolation='none', norm=LogNorm())
     cbar = plt.colorbar()
     dead_color = 'black'
     if dead_pmts is not None and pmt_positions is not None:
@@ -194,17 +195,29 @@ def save_fig_dead(data, isPost, dead_pmts, pmt_positions, y_label='PMT Charge',
     cbar.ax.get_yaxis().labelpad = 15
     cbar.ax.set_ylabel(y_label, rotation=270)
     # cbar.ax.set_ylabel("PMT Time", rotation=270)
-    plt.xlabel('X pixels')
+    # plt.xlabel('X pixels')
     plt.ylabel('Y pixels')
-    if dead_pmts is not None and pmt_positions is not None:
-        plt.title(f'{counter}th Event with {dead_pmt_percent} % Dead PMTs (shown in {dead_color} pixels)')
-    else:
-        plt.title(f'{counter}th Event with {dead_pmt_percent} % Dead PMTs.')
+
+    if title is None:
+        if dead_pmt_percent > 100 or dead_pmt_percent < 0:
+            title = f'{counter}th Event'
+        elif dead_pmts is not None and pmt_positions is not None:
+            title=f'{counter}th Event with {dead_pmt_percent} % Dead PMTs (shown in {dead_color} pixels)'
+        else:
+            title=f'{counter}th Event with {dead_pmt_percent} % Dead PMTs.'
+    
+    plt.title(title)
     path_fig = output_path
+
+    if note is not None:
+        plt.text(0.5, -0.1, note, ha='center', va='center', transform=plt.gca().transAxes, fontsize=7)
+
 
 
     os.makedirs(path_fig, exist_ok=True)
-    if isPost:
+    if isPost is None:
+        plt.savefig(path_fig+str(counter)+'_img'+'.png', dpi=400)
+    elif isPost:
         plt.savefig(path_fig+str(counter)+'_post_img_dis'+str(displacement)+'.png', dpi=450)
     else:
         plt.savefig(path_fig+str(counter)+'_pre_img'+'.png', dpi=450)
@@ -212,7 +225,6 @@ def save_fig_dead(data, isPost, dead_pmts, pmt_positions, y_label='PMT Charge',
 
     # if dead_pmts is not None:
     #     np.savetxt(path_fig+str(counter)+'_dead_pmts.csv', dead_pmts, delimiter=',')
-
 
 def save_time_distn(charges, times, isPost, displacement=0, counter=0, output_path='/data/thoriba/t2k/plots/time_plot/CNN_dead_1/'):
 
@@ -245,7 +257,7 @@ def save_time_distn(charges, times, isPost, displacement=0, counter=0, output_pa
     plt.clf()
 
 #  plot histogram. Taken from t2k_ml
-def generic_histogram(x, x_name, output_path, output_name, y_name = None, label=None, range=None, bins=None, in_chain=False, doNorm=False):
+def generic_histogram(x, x_name, output_path, output_name, y_name = None, label=None, range=None, bins=None, in_chain=False, doNorm=False, title=''):
     fig, ax = plt.subplots()
     alpha=1
     if len(x) > 1:
@@ -257,6 +269,7 @@ def generic_histogram(x, x_name, output_path, output_name, y_name = None, label=
     elif doNorm:
         ax.set_ylabel("Arbitrary")
     ax.legend(loc='best')
+    ax.set_title(title)
     if not in_chain:
         plt.savefig(output_path+'/'+output_name+'.png', format='png', transparent=False, bbox_inches="tight")
         plt.close()

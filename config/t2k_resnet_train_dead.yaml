@@ -9,10 +9,11 @@ data:
     channel_scaling:
       time: [400, 1000]
     dead_pmts_file: /data/fcormier/Public/dead_pmts.sk4.txt
-    use_dead_pmt_mask: False
+    use_dead_pmt_mask: True
+    use_hit_mask: False
 model:
   _target_: watchmal.model.resnet.resnet18
-  num_input_channels: 2
+  num_input_channels: 3
   num_output_channels: 1
   stride: 1
   kernelSize: 1
