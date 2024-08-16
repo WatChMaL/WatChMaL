@@ -572,44 +572,6 @@ class CNNDatasetDeadPMT(CNNDataset):
             self.dead_pmts = np.array([], dtype=int)
             print('No dead PMTs were set. If you intend to set dead PMTs, please provide dead_pmts_file for fixed dead PMTs or dead_pmt_rate for random selection')
 
-    # def __getitem__(self, item):
-
-    #     data_dict = super(CNNDataset, self).__getitem__(item)
-    #     if self.use_positions:
-    #         self.hit_positions = self.geo_positions[self.event_hit_pmts, :]
-    #         hit_data = {"charge": self.event_hit_charges, "time": self.event_hit_times, "position": self.hit_positions}
-    #     else:
-    #         hit_data = {"charge": self.event_hit_charges, "time": self.event_hit_times}
-    #     # apply scaling to channels
-    #     for c, (offset, scale) in self.scaling.items():
-    #         hit_data[c] = (hit_data[c] - offset)/scale
-
-        
-    #     if self.use_positions:
-    #         processed_data = from_numpy(self.process_data(self.event_hit_pmts, hit_data["time"], hit_data["charge"], hit_positions=hit_data["position"]))
-    #     else:
-    #         processed_data = from_numpy(self.process_data(self.event_hit_pmts, hit_data["time"], hit_data["charge"]))
-        
-    #     if self.counter < 30:
-    #         du.save_fig_dead(processed_data[0], True,  self.dead_pmts, self.pmt_positions, y_label='PMT Time', counter=self.counter, output_path=f'/data/thoriba/t2k/plots/dead_test/time', dead_pmt_percent=-1)
-    #         du.save_fig_dead(processed_data[1], True,  self.dead_pmts, self.pmt_positions, y_label='PMT Charge', counter=self.counter, output_path=f'/data/thoriba/t2k/plots/dead_test/charge', dead_pmt_percent=-1)
-    #         du.save_fig_dead(processed_data[2], True,  self.dead_pmts, self.pmt_positions, y_label='PMT Dead (1)', counter=self.counter, output_path=f'/data/thoriba/t2k/plots/dead_test/dead_mask_withdead', dead_pmt_percent=-1)
-    #         du.save_fig_dead(processed_data[2], True,  None, None, y_label='PMT Dead (1)', counter=self.counter, output_path=f'/data/thoriba/t2k/plots/dead_test/dead_mask_withoutdead', dead_pmt_percent=-1)
-        
-
-    #     self.counter+=1
-    #     data_dict["data"] = processed_data
-        
-    #     for t in self.transforms:
-    #         #apply each transformation only half the time
-    #         #Probably should be implemented in data_utils?
-    #         if random.getrandbits(1):
-    #             data_dict = t(data_dict)
-
-    #     processed_data = self.double_cover(data_dict["data"])
-
-    #     return data_dict
-
     def process_data(self, hit_pmts, hit_times, hit_charges, hit_positions=None, double_cover = None, transforms = None):
         """
         Returns event data from dataset associated with a specific index
@@ -949,35 +911,6 @@ class CNNDatasetScale(CNNDatasetDeadPMT):
             if debug_mode:
                 print('Here is scaler fitted: ', self.scaler[idx].get_params())
         print('All scalers were fitted and saved')
-            
-
-
-        # if self.channel_scaler['scaler_type'] == 'minmax':
-        #     self.scaler = MinMaxScaler(feature_range=(0.1, 1.3))
-        # elif self.channel_scaler['scaler_type'] == 'standard':
-        #     self.scaler = StandardScaler()
-        # elif self.channel_scaler['scaler_type'] == 'robust':
-        #     self.scaler = RobustScaler()
-        # elif self.channel_scaler['scaler_type'] == 'power':
-        #     self.scaler = PowerTransformer()
-        # elif self.channel_scaler['scaler_type'] == 'quantile_uniform':
-        #     self.scaler = QuantileTransformer()
-        # elif self.channel_scaler['scaler_type'] == 'quantile_normal':
-        #     self.scaler = QuantileTransformer(output_distribution='normal')
-    
-        # print('Will fit sk-learn scaler based on training set. Scaler:', self.channel_scaler['scaler_type'])
-
-        # print('Fitting the scaler on traing set. This will take some time..')
-        # mask_train = self.get_train_mask()
-        # self.scaler.fit(self.time[mask_train].reshape(-1, 1))          
-        
-        # # saving the scaler object so that we can reuse it for another training and test (evaluation) dataset
-        # scaler_name_str = self.channel_scaler['scaler_type']
-        # joblib.dump(self.scaler, f'/data/thoriba/t2k/indices/oct20_combine_flatE/{scaler_name_str}_scaler.joblib')
-        # print('Scaler was fitted and saved')
-
-        # if debug_mode:
-        #     print(self.scaler.get_params())
     
     
     def scale_time(self):
@@ -1005,71 +938,11 @@ class CNNDatasetScale(CNNDatasetDeadPMT):
                 self.scaler.append(s)
                 self.scaler_status.append('fitted')
                 print(f'{idx} th scaler loaded', s.get_params())
-            
-            # if len(self.scaler) == 1:
-            #     self.scaler = self.scaler[0]
-            #     self.scaler_status.append('fitted')
-            # else:
-            #     self.scaler = joblib.load(self.channel_scaler['fitted_scaler'])
-            #     print('Loaded already fitted scaler from file')
-            #     print(self.scaler.get_params())
-        # fit two scalers when they are chained
-        # elif self.channel_scaler['scaler_type'] == 'chain_fitting':
-        #     print('Hello. This is just for fitting two different scalers. Should not be used in training/validation/testing')
-        #     scaler_1 = QuantileTransformer(output_distribution='normal')
-        #     # scaler_1 = RobustScaler()
-
-        #     mask_train = self.get_train_mask()
-
-        #     # scaler_1 = joblib.load('/home/thoriba/t2k2/t2k_ml_training/quantile_normal_scaler.joblib')
-        #     scaler_1.fit(self.time[mask_train].reshape(-1, 1))
-        #     # unif = np.random.uniform(low=0, high=1, size=mask_train.shape)
-
-        #     # mask_sample = unif * mask_train
-
-        #     # print('sample size', np.sum(mask_sample > .8))
-
-        #     print(np.sum(mask_train))
-
-        #     # post_transf_samples = scaler_1.transform(self.time[mask_sample > .8].reshape(-1, 1)).reshape(-1,)
-        #     post_transf_samples = scaler_1.transform(self.time[mask_train].reshape(-1, 1)).reshape(-1,)
-
-        #     print('fitting 2nd one')
-        #     # self.time = scaler_1.transform(self.time.reshape(-1, 1)).reshape(-1,)
-        #     scaler_2 = MinMaxScaler(feature_range=(0.1, 1.1))
-        #     # fit on transformed version
-        #     scaler_2.fit(post_transf_samples.reshape(-1, 1))
-
-        #     post_transf_samples = scaler_2.transform(post_transf_samples.reshape(-1, 1)).reshape(-1,)
-        #     sample = scaler_2.transform(self.time.reshape(-1, 1)).reshape(-1,)
-
-        #     joblib.dump(scaler_1, f'chain_scaler_1_normal_flatE.joblib')
-        #     joblib.dump(scaler_2, f'chain_scaler_2_minmax_for_normal_flatE.joblib')
-
-        # test for chain scaler.
-        # elif self.channel_scaler['scaler_type'] == 'chain':
-        #     print('this is for development. not to be used for training/val/test')
-        #     scaler_1 = joblib.load('/home/thoriba/t2k2/t2k_ml_training/chain_scaler_1_quantile_normal.joblib')
-        #     scaler_2 = joblib.load('/home/thoriba/t2k2/t2k_ml_training/chain_scaler_2_minmax.joblib')
-
-        #     # scaler_1.transform(self.time[mask_sample > .8].reshape(-1, 1)).reshape(-1,)
-        #     post_transf_samples = scaler_1.transform(self.time[:100000000].reshape(-1, 1)).reshape(-1,)
-        #     post_transf_samples = scaler_2.transform(post_transf_samples.reshape(-1, 1)).reshape(-1,)
-        #     du.generic_histogram(post_transf_samples, 'PMT Time [ns]', '/data/thoriba/t2k/plots/scaling_test/', f'train_hit_pmt_time_post_minmax(normal)_', y_name = None, range=None, label=None, bins=200, doNorm=True)
         else:
             print('Fitting new scaler(s) based on training set')
             self.fit_and_save_scaler()
             print('Finished fitting scaler(s)')
         
-        # if debug_mode:
-        #     time10_pre = self.time[:10]
-        #     pre_str = f"self.time shape: {self.time.shape}, dtype: {self.time.dtype}"
-        
-        # if debug_mode:
-        #     scaler_name_str = self.channel_scaler['scaler_type']
-        #     output_path = '/data/thoriba/t2k/plots/scaling_test/'
-            # du.generic_histogram(self.time[mask_train], 'PMT Time [ns]', output_path, f'train_hit_pmt_time_pre_scaling', y_name = None, range=[0,2000], label=None, bins=200, doNorm=True)
-
         # apply scaling at once
         if not self.channel_scaler['transform_per_batch']:        
             print('Transforming the entire self.time (regardless of train/val/test split if such split exists) based on the scaler. This will take some time..')
@@ -1081,15 +954,6 @@ class CNNDatasetScale(CNNDatasetDeadPMT):
                     print(f'self.time was successfully scaled with {idx}th scaler:', self.channel_scaler['scaler_type'][idx])
         else:
             print('Transform data on per batch basis')
-
-        # if debug_mode:
-        #     print(pre_str)
-        #     time10_post = self.time[:10] 
-        #     print('before', time10_pre)
-        #     print('after', time10_post)
-        #     print(f"self.time shape: {self.time.shape}, dtype: {self.time.dtype}")
-        #     # du.generic_histogram(self.time[mask_train], 'PMT Time [ns]', output_path, f'train_hit_pmt_time_post_{scaler_name_str}', y_name = None, range=None, label=None, bins=200, doNorm=True)
-
 
     def __getitem__(self, item):
         """
@@ -1110,14 +974,6 @@ class CNNDatasetScale(CNNDatasetDeadPMT):
         else:
             hit_data = {"charge": self.event_hit_charges, "time": self.event_hit_times}
         
-        # if self.counter < 30:
-        #     if self.use_positions:
-        #         processed_data_debug = from_numpy(self.process_data(self.event_hit_pmts, hit_data["time"], hit_data["charge"], hit_positions=hit_data["position"]))
-        #     else:
-        #         processed_data_debug = from_numpy(self.process_data(self.event_hit_pmts, hit_data["time"], hit_data["charge"]))
-        #     du.save_fig_dead(processed_data_debug[0], False,  None, None, y_label='PMT Time', counter=self.counter, output_path=f'/data/thoriba/t2k/plots/time_scale_pre_410_time/', dead_pmt_percent=0)
-        #     du.save_fig_dead(processed_data_debug[1], False,  None, None, y_label='PMT Charge', counter=self.counter, output_path=f'/data/thoriba/t2k/plots/time_scale_pre_410_chrg/', dead_pmt_percent=0)
-
         """
         Linear scaler (X - offset) / scale is turned off.
         """
@@ -1134,24 +990,12 @@ class CNNDatasetScale(CNNDatasetDeadPMT):
                         hit_data['time'] = ssc.transform(hit_data['time'].reshape(-1, 1)).reshape(-1,)
                 else:
                     hit_data['time'] = self.scaler.transform(hit_data['time'].reshape(-1, 1)).reshape(-1,)
-        # print('after  scaling', hit_data['time'][:10], 'shape', hit_data['time'].shape)
-        
-        # if item % 10 == 0:
-            # print('scaling done?')
-            # print('after scaling', hit_data['time'][:10], 'shape', hit_data['time'].shape)
-        
+     
         if self.use_positions:
             processed_data = from_numpy(self.process_data(self.event_hit_pmts, hit_data["time"], hit_data["charge"], hit_positions=hit_data["position"]))
         else:
             processed_data = from_numpy(self.process_data(self.event_hit_pmts, hit_data["time"], hit_data["charge"]))
         
-        # if self.counter < 30:
-        #     du.save_fig_dead(processed_data[0], True,  None, None, y_label='PMT Time', counter=self.counter, output_path=f'/data/thoriba/t2k/plots/time_scale_410_time/', dead_pmt_percent=0)
-        #     du.save_fig_dead(processed_data[1], True,  None, None, y_label='PMT Charge', counter=self.counter, output_path=f'/data/thoriba/t2k/plots/time_scale_410_chrg/', dead_pmt_percent=0)
-            
-            # du.save_fig_dead(processed_data[1], False, self.dead_pmts, self.pmt_positions, y_label='PMT Charge', counter=self.counter, output_path=f'/data/thoriba/t2k/plots/charge_plot/dead_{round(self.dead_pmt_rate*100)}_dead_seed5/', dead_pmt_percent=round(self.dead_pmt_rate*100))
-            # du.save_fig_dead(processed_data[1], False, None, None, y_label='PMT Charge', counter=self.counter, output_path=f'/data/thoriba/t2k/plots/charge_plot/dead_{round(self.dead_pmt_rate*100)}_nodead_seed5/', dead_pmt_percent=round(self.dead_pmt_rate*100))
-
         self.counter+=1
         data_dict["data"] = processed_data
         if False:
@@ -1164,130 +1008,3 @@ class CNNDatasetScale(CNNDatasetDeadPMT):
         
         processed_data = self.double_cover(data_dict["data"])
         return data_dict
-    
-    # def set_dead_pmts(self):
-    #     """
-    #     Sets array of dead PMTs using dead_pmt_rate and dead_pmt_seed if dead_pmt_rate is not None and is in (0, 1]
-    #     dead_pmts is an array of dead PMT IDs.
-    #     """
-    #     if self.dead_pmt_rate is not None and self.dead_pmt_rate > 0 and self.dead_pmt_rate <= 1:
-    #         num_dead_pmts = min(len(self.pmt_positions), int(len(self.pmt_positions) * self.dead_pmt_rate))
-    #         np.random.seed(self.dead_pmt_seed)
-            
-    #         self.dead_pmts = np.random.choice(len(self.pmt_positions), num_dead_pmts, replace=False)
-    #         print(f'Dead PMTs were set with rate={self.dead_pmt_rate} with seed={self.dead_pmt_seed}. Here is dead PMT IDs')
-    #         print(self.dead_pmts)
-    #     else:
-    #         self.dead_pmts = np.array([], dtype=int)
-    #         print('No dead PMTs were set. If you intend to set dead PMTs, add dead PMT rate that is in (0,1] in yaml file')
-
-    # def process_data(self, hit_pmts, hit_times, hit_charges, hit_positions=None, double_cover = None, transforms = None):
-    #     """
-    #     Returns event data from dataset associated with a specific index
-
-    #     Parameters
-    #     ----------
-    #     hit_pmts: array_like of int
-    #         Array of hit PMT IDs
-    #     hit_times: array_like of float
-    #         Array of PMT hit times
-    #     hit_charges: array_like of float
-    #         Array of PMT hit charges
-        
-    #     Returns
-    #     -------
-    #     data: ndarray
-    #         Array in image-like format (channels, rows, columns) for input to CNN network.
-    #     """
-    #     if self.one_indexed:
-    #         hit_pmts = hit_pmts-1  # SK cable numbers start at 1
-        
-    #     dead_pmts = self.dead_pmts # int Array of dead PMT IDs
-
-    #     hit_rows = self.pmt_positions[hit_pmts, 0]
-    #     hit_cols = self.pmt_positions[hit_pmts, 1]
-
-    #     hit_rows_d = self.pmt_positions[dead_pmts, 0]
-    #     hit_cols_d = self.pmt_positions[dead_pmts, 1]
-
-    #     # for now, idea of shifting value for unhit PMTs is not used.
-    #     # time_of_unhit_pmts = - 10
-    #     # should be no dead PMTs for training. 
-
-    #     data = np.zeros(self.data_size, dtype=np.float32)
-
-    #     debug_mode = 0
-
-    #     if self.use_times and self.use_charges:
-    #         if debug_mode:
-    #             print('----------------------------------')
-    #             print('dead PMT rate', round(self.dead_pmt_rate * 100, 4), '%')
-    #             print('Num of dead PMTs', len(dead_pmts), ' | ', round(len(dead_pmts) / len(self.pmt_positions) * 100, 4), '%', f'of {len(self.pmt_positions)} PMTs')
-    #             print('IDs of dead PMTs', dead_pmts)
-    #             print('Num of hit PMTs ', len(hit_pmts))
-    #             print('Num of hit charges', len(hit_charges))
-    #             print('Num of hit times', len(hit_times))
-                
-    #         data[0, hit_rows, hit_cols] = hit_times
-    #         data[1, hit_rows, hit_cols] = hit_charges
-
-    #         if debug_mode:
-    #             ti_pre = np.count_nonzero(data[0])
-    #             ch_pre = np.count_nonzero(data[1])
-    #             print('non-zero times in data (before)', ti_pre)
-    #             print('non-zero chrgs in data (before)', ch_pre)
-
-    #         # kill
-    #         data[0, hit_rows_d, hit_cols_d] = .0
-    #         data[1, hit_rows_d, hit_cols_d] = .0
-
-    #         if debug_mode:
-    #             RED = '\033[91m'
-    #             GREEN = '\033[92m'
-    #             RESET = '\033[0m'  # Reset to default color
-
-    #             ti_post = np.count_nonzero(data[0])
-    #             ch_post = np.count_nonzero(data[1])
-
-    #             print('non-zero times in data (after) ', ti_post, f'{RED}-{ti_pre - ti_post} ({round((ti_pre - ti_post)/ti_pre * 100, 4)} %) {RESET}')
-    #             print('non-zero chrgs in data (after) ', ch_post, f'{RED}-{ch_pre - ch_post} ({round((ch_pre - ch_post)/ch_pre * 100, 4)} %) {RESET}')
-
-    #         if self.use_positions:
-    #             data[2, hit_rows, hit_cols] = hit_positions[:,0]
-    #             data[3, hit_rows, hit_cols] = hit_positions[:,1]
-    #             data[4, hit_rows, hit_cols] = hit_positions[:,2]
-
-    #             data[2, hit_rows_d, hit_cols_d] = .0
-    #             data[3, hit_rows_d, hit_cols_d] = .0
-    #             data[4, hit_rows_d, hit_cols_d] = .0
-
-    #     elif self.use_times:
-    #         data[0, hit_rows, hit_cols] = hit_times
-    #         # kill
-    #         data[0, hit_rows_d, hit_cols_d] = .0
-
-    #         if self.use_positions:
-    #             data[1, hit_rows, hit_cols] = hit_positions[:,0]
-    #             data[2, hit_rows, hit_cols] = hit_positions[:,1]
-    #             data[3, hit_rows, hit_cols] = hit_positions[:,2]
-
-    #             data[1, hit_rows_d, hit_cols_d] = .0
-    #             data[2, hit_rows_d, hit_cols_d] = .0
-    #             data[3, hit_rows_d, hit_cols_d] = .0
-    #     else:
-    #         data[0, hit_rows, hit_cols] = hit_charges
-    #         # kill
-    #         data[0, hit_rows_d, hit_cols_d] = .0
-
-    #         if self.use_positions:
-    #             data[1, hit_rows, hit_cols] = hit_positions[:,0]
-    #             data[2, hit_rows, hit_cols] = hit_positions[:,1]
-    #             data[3, hit_rows, hit_cols] = hit_positions[:,2]
-
-    #             data[1, hit_rows_d, hit_cols_d] = .0
-    #             data[2, hit_rows_d, hit_cols_d] = .0
-    #             data[3, hit_rows_d, hit_cols_d] = .0
-
-    #     return data
-    
-    
