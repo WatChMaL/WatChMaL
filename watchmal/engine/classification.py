@@ -50,7 +50,7 @@ class ClassifierEngine(ReconstructionEngine):
 
     def process_data(self, data):
         """Extract the event data and target from the input data dict"""
-        self.data = data[self.target_key].to(self.device)
+        self.data = data['data'].to(self.device)
         self.target = data[self.target_key].to(self.device)
 
     def forward(self, train=True):
