@@ -66,6 +66,8 @@ class CNNmPMTDataset(H5Dataset):
         transforms: sequence of string
             List of random transforms to apply to data before passing to CNN for data augmentation. Each element of the
             list should be the name of a method of this class that performs the transformation
+        use_new_mpmt_convention: bool
+            Whether to use the new or old (default) convention of WCSim for how PMT channels are mapped within the mPMT.
         channels: sequence of string
             List defines the PMT data included in the image-like CNN arrays. It can be either 'charge', 'time' or both
             (default)
@@ -74,12 +76,14 @@ class CNNmPMTDataset(H5Dataset):
             channels. i.e. provides the mean and the std of PMT charges and/or time in each mPMT instead of providing
             all PMT data. It can be [], ['charge'], ['time'] or ['charge', 'time']. By default, no collapsing is
             performed.
-        channel_scale_offset: dict of float
-            Dictionary with keys corresponding to channels and values contain the offsets to subtract from that channel.
-            By default, no scaling is applied.
         channel_scale_factor: dict of float
             Dictionary with keys corresponding to channels and values contain the factors to divide that channel by.
             By default, no scaling is applied.
+        channel_scale_offset: dict of float
+            Dictionary with keys corresponding to channels and values contain the offsets to subtract from that channel.
+            By default, no scaling is applied.
+        geometry_file: string
+            Path to file defining the 3D geometry (PMT positions and orientations), required if using geometry channels.
         use_memmap: bool
             Use a memmap and load data into memory as needed (default), otherwise load entire dataset at initialisation
 """
