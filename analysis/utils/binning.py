@@ -2,7 +2,7 @@
 Utility functions for binning events in some quantity and manipulating other quantities based on the binning
 """
 import numpy as np
-from analysis.utils.math import binomial_error
+from WatChMaL.analysis.utils.math import binomial_error
 
 
 def get_binning(x, bins=None, minimum=None, maximum=None, width=None):

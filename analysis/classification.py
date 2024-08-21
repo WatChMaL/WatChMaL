@@ -6,9 +6,9 @@ from sklearn import metrics
 from omegaconf import OmegaConf
 from omegaconf.errors import OmegaConfBaseException
 
-from analysis.utils.binning import apply_binning, binned_quantiles, binned_efficiencies
-import analysis.utils.plotting as plot
-from analysis.read import WatChMaLOutput
+from WatChMaL.analysis.utils.binning import apply_binning, binned_quantiles, binned_efficiencies
+import WatChMaL.analysis.utils.plotting as plot
+from WatChMaL.analysis.read import WatChMaLOutput
 
 
 def combine_softmax(softmaxes, labels, label_map=None):

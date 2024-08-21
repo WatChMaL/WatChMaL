@@ -127,6 +127,29 @@ The `data` config group defines the data used for the job. Generally it will con
 class's options.
 The `data` config group will also configure how the data is split between training, validation and testing, for example.
 
+#### Example using `CNNDatasetDeadPMT`
+
+Using `CNNDatasetDeadPMT` allows you to "turn off" some PMTs during training and evaluation, which can be helpful for simulating the effects of dead PMTs. "Turning off" dead PMTs involves setting charge and time to 0.
+
+There are two ways to select the dead PMTs:
+
+1. Provide a text file specifying the IDs of the dead PMTs. The path to the `.txt` file is specified in `dead_pmts_file`.
+2. Randomly set the dead PMTs by providing a probability and seed value, referred to as `dead_pmt_rate` and `dead_pmt_seed`.
+
+The first method takes priority. That is, if both `dead_pmts_file` and `dead_pmt_rate`/`dead_pmt_seed` are provided, the class reads the dead PMT IDs from the file and does not generate them randomly.
+
+If `use_dead_pmt_mask` is `True`, the class adds another channel where a pixel is 1 if it corresponds to a dead PMT and 0 otherwise.
+
+**Example:** under `dataset`,
+
+```yaml
+dead_pmt_rate: 0.03      # must be in [0, 1]
+dead_pmt_seed: 5         # must be an integer
+dead_pmts_file: /data/fcormier/Public/dead_pmts.sk4.txt
+use_dead_pmt_mask: True
+```
+
+
 #### `model`
 The `model` config group defines the network architecture being used. It will generally have a `_target_` that refers to
 a class that implements a PyTorch `Module` and will set the options of that class.
@@ -143,7 +166,7 @@ classes used in the task.
 ### Configuration example
 
 A basic example of a configuration file for training and testing a ResNet CNN for classification could be
-```
+```yaml
 gpu_list:
     - 0
     - 1
@@ -184,7 +207,7 @@ indicate that the  `config/optimizers/adam.yaml` file should define the subconfi
 
 The full composed configuration for the above example could then look something like
 
-```
+```yaml
 data:
   split_path: /fast_scratch/WatChMaL/data/IWCD_mPMT_Short/index_lists/4class_e_mu_gamma_pi0/IWCD_mPMT_Short_4_class_3M_emgp0_idxs.npz
   dataset:

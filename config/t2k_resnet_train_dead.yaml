@@ -2,30 +2,26 @@ data:
   split_path: '/scratch/fcormier/t2k/ml/output_skdetsim/jan23_electrons_forRegression_5M_1/train_val_test_gt200Hits_FCTEST_nFolds20_fold0.npz' 
   dataset:
     h5file: '$SLURM_TMPDIR/digi_combine.hy'
-    _target_: watchmal.dataset.cnn.cnn_dataset.CNNDataset
+    _target_: watchmal.dataset.cnn.cnn_dataset.CNNDatasetDeadPMT
     pmt_positions_file: /data/thoriba/t2k/imagefile/skdetsim_imagefile.npy
     use_positions: False
     geometry_file: /home/fcormier/t2k/ml/training/t2k_ml_training/data/geofile_skdetsim.npz
     channel_scaling:
       time: [400, 1000]
-    # channel_scaler:
-    #   # file location for fitted scaler (for precomputed). if chain, 
-    #   fitted_scaler: ['/home/thoriba/t2k2/t2k_ml_training/chain_scaler_1_quantile_normal.joblib', '/home/thoriba/t2k2/t2k_ml_training/chain_scaler_2_minmax.joblib']
-    #   scaler_type: 'minmax'
-    #   sample_size: 10000
-    #   dataset_index_file: '/data/thoriba/t2k/indices/apr3_eMuPiPlus_1500MeV_small_1/train_val_test_gt200Hits_FCTEST_nFolds10_fold0.npz'
-    #   transform_per_batch: True
+    dead_pmts_file: /data/fcormier/Public/dead_pmts.sk4.txt
+    use_dead_pmt_mask: True
+    use_hit_mask: False
 model:
   _target_: watchmal.model.resnet.resnet18
-  num_input_channels: 2
-  num_output_channels: 3
+  num_input_channels: 3
+  num_output_channels: 1
   stride: 1
   kernelSize: 1
   dropout_p: 0.
-  conv_pad_mode: 'zeros'
+  # conv_pad_mode: 'zeros'
 engine:
   _target_: watchmal.engine.regression.RegressionEngine
-  truth_key: 'positions'
+  truth_key: 'momenta'
 tasks:
   train:
     epochs: 30
@@ -64,6 +60,6 @@ tasks:
         sampler:
           _target_: torch.utils.data.sampler.SubsetRandomSampler
 gpu_list: 
-- 1
+- 6
 seed: null
 dump_path: ./outputs/

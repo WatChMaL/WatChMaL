@@ -152,21 +152,125 @@ def apply_random_transformations(transforms, data, segmented_labels=None, counte
                     segmented_labels = transformation(segmented_labels)
     return data
 
-def save_fig(data,isPost, displacement=0, counter=0):
+import os
+
+def save_fig(data, isPost, displacement=0, counter=0, output_path=None):
+    # print(data.size())
+    # print(data)
     print("SAVE FIG")
-    print(data.size())
+    # print(data.size())
     plt.imshow(data.numpy(), interpolation='none')
     print("1")
     cbar = plt.colorbar()
     print("2")
     cbar.ax.get_yaxis().labelpad = 15
     cbar.ax.set_ylabel("PMT Charge", rotation=270)
+    # cbar.ax.set_ylabel("PMT Time", rotation=270)
     plt.xlabel('X pixels')
     plt.ylabel('Y pixels')
+    path_fig = '/data/thoriba/t2k/plots/charge_plot/CNN_dead_new/' if output_path is None else output_path
+
+
+    os.makedirs(path_fig, exist_ok=True)
     if isPost:
-        plt.savefig('/home/fcormier/t2k/ml/t2k_ml_training/plots/'+str(counter)+'_post_rot_dc_img_dis'+str(displacement)+'.png')
+        plt.savefig(path_fig+str(counter)+'_post_rot_dc_img_dis'+str(displacement)+'.png')
     else:
-        plt.savefig('/home/fcormier/t2k/ml/t2k_ml_training/plots/'+str(counter)+'_pre_rot_img'+'.png')
+        plt.savefig(path_fig+str(counter)+'_pre_rot_img'+'.png')
     plt.clf()
     print("3")
 
+def save_fig_dead(data, isPost, dead_pmts, pmt_positions, y_label='PMT Charge',
+                   displacement=0, counter=0, output_path='/data/thoriba/t2k/plots/charge_plot/CNN_dead_default/', dead_pmt_percent=100,
+                   note=None, title=None):
+    '''
+    save_fig funciton for CNNDatasetDeadPMT
+    Saves figures with dead PMT locations if both `dead_pmts` and `pmt_positions` are provided
+    '''
+    print("Saving FIG")
+    plt.imshow(data.numpy(), interpolation='none', norm=LogNorm())
+    cbar = plt.colorbar()
+    dead_color = 'black'
+    if dead_pmts is not None and pmt_positions is not None:
+        plt.scatter(pmt_positions[dead_pmts][:, 1], pmt_positions[dead_pmts][:, 0], color=dead_color, marker='s', s=1)
+    cbar.ax.get_yaxis().labelpad = 15
+    cbar.ax.set_ylabel(y_label, rotation=270)
+    # cbar.ax.set_ylabel("PMT Time", rotation=270)
+    # plt.xlabel('X pixels')
+    plt.ylabel('Y pixels')
+
+    if title is None:
+        if dead_pmt_percent > 100 or dead_pmt_percent < 0:
+            title = f'{counter}th Event'
+        elif dead_pmts is not None and pmt_positions is not None:
+            title=f'{counter}th Event with {dead_pmt_percent} % Dead PMTs (shown in {dead_color} pixels)'
+        else:
+            title=f'{counter}th Event with {dead_pmt_percent} % Dead PMTs.'
+    
+    plt.title(title)
+    path_fig = output_path
+
+    if note is not None:
+        plt.text(0.5, -0.1, note, ha='center', va='center', transform=plt.gca().transAxes, fontsize=7)
+
+
+
+    os.makedirs(path_fig, exist_ok=True)
+    if isPost is None:
+        plt.savefig(path_fig+str(counter)+'_img'+'.png', dpi=400)
+    elif isPost:
+        plt.savefig(path_fig+str(counter)+'_post_img_dis'+str(displacement)+'.png', dpi=450)
+    else:
+        plt.savefig(path_fig+str(counter)+'_pre_img'+'.png', dpi=450)
+    plt.clf()
+
+    # if dead_pmts is not None:
+    #     np.savetxt(path_fig+str(counter)+'_dead_pmts.csv', dead_pmts, delimiter=',')
+
+def save_time_distn(charges, times, isPost, displacement=0, counter=0, output_path='/data/thoriba/t2k/plots/time_plot/CNN_dead_1/'):
+
+    print(f'Saving {counter}th time distribution')
+
+    # print(charges)
+    # print(times)
+    mask = charges == 0.
+    # elements of times that correspond to zero charges
+    
+    times_np = times[mask].flatten().numpy()
+
+    bins = 100
+    bin_width = (times_np.max() - times_np.min())/bins
+
+    plt.hist(times_np, bins=bins)
+    plt.xlabel('Time')
+    plt.ylabel('Frquency')
+    plt.title(f'PMT Time Distribution Coniditonal on Charge is 0')
+    plt.text(0.05, 0.9, f'Bin Size (specified) = {bins}\nBin Width (calculated) = {bin_width}', transform=plt.gca().transAxes, fontsize=10, verticalalignment='top')
+
+
+    path_fig = output_path
+    os.makedirs(path_fig, exist_ok=True)
+
+    if isPost:
+        plt.savefig(path_fig+str(counter)+'_post_hist'+str(displacement)+'.png')
+    else:
+        plt.savefig(path_fig+str(counter)+'_pre_hist'+'.png')  
+    plt.clf()
+
+#  plot histogram. Taken from t2k_ml
+def generic_histogram(x, x_name, output_path, output_name, y_name = None, label=None, range=None, bins=None, in_chain=False, doNorm=False, title=''):
+    fig, ax = plt.subplots()
+    alpha=1
+    if len(x) > 1:
+        alpha=0.6
+    ax.hist(x, bins=bins, range=range, label=label, alpha=alpha, histtype='stepfilled', density=doNorm)
+    ax.set_xlabel(x_name)
+    if y_name is not None and  not doNorm:
+        ax.set_ylabel(y_name)
+    elif doNorm:
+        ax.set_ylabel("Arbitrary")
+    ax.legend(loc='best')
+    ax.set_title(title)
+    if not in_chain:
+        plt.savefig(output_path+'/'+output_name+'.png', format='png', transparent=False, bbox_inches="tight")
+        plt.close()
+        plt.clf()

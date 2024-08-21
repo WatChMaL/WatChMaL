@@ -4,7 +4,7 @@ import hashlib
 
 import matplotlib
 from matplotlib import pyplot as plt
-import analysis.utils.binning as bins
+import WatChMaL.analysis.utils.binning as bins
 
 
 def read_fitqun_file(file_path, plotting=False, regression=False):
@@ -48,11 +48,14 @@ def read_fitqun_file(file_path, plotting=False, regression=False):
         if regression:
              mu_1rpos = np.array(h5fw['mu_1rpos'])
              e_1rpos = np.array(h5fw['e_1rpos'])
+             pi_1rpos = np.array(h5fw['pi_1rpos'])
              mu_1rdir = np.array(h5fw['mu_1rdir'])
              e_1rdir = np.array(h5fw['e_1rdir'])
+             pi_1rdir = np.array(h5fw['pi_1rdir'])
              mu_1rmom = np.array(h5fw['mu_1rmom'])
              e_1rmom = np.array(h5fw['e_1rmom'])
-             return (discr, labels, fitqun_1rmom, fitqun_hash), (mu_1rpos, e_1rpos, mu_1rdir, e_1rdir, mu_1rmom, e_1rmom)
+             pi_1rmom = np.array(h5fw['pi_1rmom'])
+             return (discr, labels, fitqun_1rmom, fitqun_hash), (mu_1rpos, e_1rpos, pi_1rpos, mu_1rdir, e_1rdir, pi_1rdir, mu_1rmom, e_1rmom, pi_1rmom)
 
         else:
              print(f"DISCR PI: {discr_pi}")
