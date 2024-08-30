@@ -1,0 +1,41 @@
+data:
+  split_path: '/data/fcormier/t2k/Public/oct20_eMuPosPion_0dwallCut_flat_1/fq_test_idx.npz'
+  dataset:
+    h5file: '/data/fcormier/t2k/Public/oct20_eMuPosPion_0dwallCut_flat_1/combine_combine.hy'
+    _target_: watchmal.dataset.cnn.cnn_dataset.CNNDatasetDeadPMT
+    pmt_positions_file: /data/thoriba/t2k/imagefile/skdetsim_imagefile.npy
+    channel_scaling:
+      time: [950, 10]
+    dead_pmt_rate: .05
+    dead_pmt_seed: null
+model:
+  _target_: watchmal.model.resnet.resnet34
+  num_input_channels: 2
+  num_output_channels: 3
+  stride: 1
+  kernelSize: 1
+  dropout_p: 0.
+engine:
+  _target_: watchmal.engine.classification.ClassifierEngine
+  truth_key: 'labels'
+  label_set:
+  - 0
+  - 1
+  - 2
+tasks:
+  restore_best_state:
+    name: ClassifierEngine_ResNet
+  evaluate:
+    loss:
+      _target_: torch.nn.CrossEntropyLoss
+    data_loaders:
+      test:
+        split_key: test_idxs
+        batch_size: 300
+        num_workers: 1
+        sampler:
+          _target_: torch.utils.data.sampler.SubsetRandomSampler
+gpu_list: 
+- 0
+seed: null
+dump_path: ./outputs/

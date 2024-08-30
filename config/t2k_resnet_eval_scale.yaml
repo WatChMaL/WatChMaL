@@ -1,22 +1,25 @@
 data:
   split_path: '//fast_scratch_2/fcormier/t2k/ml/data/oct20_combine_flatE/train_val_test_nFolds3_fold0.npz' 
-  #split_path: '/fast_scratch_2/fcormier/t2k/stopMu/train_val_test_stopMu.npz' 
   dataset:
     h5file: '/fast_scratch_2/fcormier/t2k/ml/data/oct20_combine_flatE/combine_combine.hy'
-    #h5file: '/fast_scratch_2/fcormier/t2k/stopMu//digi_combine.hy'
-    _target_: watchmal.dataset.cnn.cnn_dataset.CNNDataset
+    _target_: watchmal.dataset.cnn.cnn_dataset.CNNDatasetScale
     pmt_positions_file: /fast_scratch/WatChMaL/data/T2K/image_files/skdetsim_imagefile.npy
     use_positions: False
     geometry_file: /home/fcormier/t2k/ml/t2k_ml_training/data/geofile_skdetsim.npz
-    channel_scaling:
-      time: [400, 1000]
-<<<<<<< HEAD
-      #time: [950, 10]
-=======
->>>>>>> origin/master
+    channel_scaler:
+      # file location for fitted scaler (for precomputed). Must be a list (surrounded by [])
+      fitted_scaler:  ['/data/thoriba/t2k/indices/jun24_muons_2GeV-2M_1/fully_contained/norm0803/0_th_scaler_quantile_normal.joblib']
+      scaler_type: null
+      sample_size: 10000
+      dataset_index_file: null
+      transform_per_batch: True
+    dead_pmts_file: /data/fcormier/Public/dead_pmts.sk4.txt
+    use_dead_pmt_mask: True
+    use_hit_mask: True
+    
 model:
   _target_: watchmal.model.resnet.resnet34
-  num_input_channels: 2
+  num_input_channels: 4
   num_output_channels: 3
   stride: 1
   kernelSize: 1
@@ -43,7 +46,8 @@ tasks:
         sampler:
           _target_: torch.utils.data.sampler.SubsetRandomSampler
           # _target_: torch.utils.data.sampler.SequentialSampler
+
 gpu_list:
-  - 6
+  - 2
 seed: null
 dump_path: ./outputs/

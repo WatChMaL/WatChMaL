@@ -1,29 +1,25 @@
 data:
   split_path: '//fast_scratch_2/fcormier/t2k/ml/data/oct20_combine_flatE/train_val_test_nFolds3_fold0.npz' 
-  #split_path: '/fast_scratch_2/fcormier/t2k/stopMu/train_val_test_stopMu.npz' 
   dataset:
     h5file: '/fast_scratch_2/fcormier/t2k/ml/data/oct20_combine_flatE/combine_combine.hy'
-    #h5file: '/fast_scratch_2/fcormier/t2k/stopMu//digi_combine.hy'
-    _target_: watchmal.dataset.cnn.cnn_dataset.CNNDataset
+    _target_: watchmal.dataset.cnn.cnn_dataset.CNNDatasetDeadPMT
     pmt_positions_file: /fast_scratch/WatChMaL/data/T2K/image_files/skdetsim_imagefile.npy
     use_positions: False
     geometry_file: /home/fcormier/t2k/ml/t2k_ml_training/data/geofile_skdetsim.npz
     channel_scaling:
       time: [400, 1000]
-<<<<<<< HEAD
-      #time: [950, 10]
-=======
->>>>>>> origin/master
+    dead_pmt_rate: 0.03
+    dead_pmt_seed: 5
 model:
   _target_: watchmal.model.resnet.resnet34
   num_input_channels: 2
-  num_output_channels: 3
+  num_output_channels: 1
   stride: 1
   kernelSize: 1
-  dropout_p: 0.
+  dropout_p: 0.0
 engine:
   _target_: watchmal.engine.regression.RegressionEngine
-  truth_key: 'positions'
+  truth_key: 'momenta'
 tasks:
   restore_best_state:
     name: RegressionEngine_ResNet
@@ -43,6 +39,7 @@ tasks:
         sampler:
           _target_: torch.utils.data.sampler.SubsetRandomSampler
           # _target_: torch.utils.data.sampler.SequentialSampler
+
 gpu_list:
   - 6
 seed: null
