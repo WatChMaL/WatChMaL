@@ -109,6 +109,9 @@ def main_worker_function(rank, ngpus_per_node, is_distributed, config, hydra_con
     engine = instantiate(config.engine, model=model, rank=rank, device=device, dump_path=config.dump_path)
     
     for task, task_config in config.tasks.items():
+        if is_distributed:
+            # Before each task, ensure GPUs are in sync to avoid e.g. loading a state before a GPU finished training
+            torch.distributed.barrier()
         with open_dict(task_config):
             # Configure data loaders
             if 'data_loaders' in task_config:

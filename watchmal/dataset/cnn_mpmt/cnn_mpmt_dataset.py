@@ -49,7 +49,8 @@ class CNNmPMTDataset(H5Dataset):
     """
 
     def __init__(self, h5file, mpmt_positions_file, transforms=None, use_new_mpmt_convention=False, channels=None,
-                 collapse_mpmt_channels=None, channel_scaling=None, geometry_file=None, use_memmap=True):
+                 collapse_mpmt_channels=None, channel_scale_factor=None, channel_scale_offset=None, geometry_file=None,
+                 use_memmap=True):
         """
         Constructs a dataset for CNN data. Event hit data is read in from the HDF5 file and the PMT charge data is
         formatted into an event-display-like image for input to a CNN. Each pixel of the image corresponds to one mPMT
@@ -65,6 +66,8 @@ class CNNmPMTDataset(H5Dataset):
         transforms: sequence of string
             List of random transforms to apply to data before passing to CNN for data augmentation. Each element of the
             list should be the name of a method of this class that performs the transformation
+        use_new_mpmt_convention: bool
+            Whether to use the new or old (default) convention of WCSim for how PMT channels are mapped within the mPMT.
         channels: sequence of string
             List defines the PMT data included in the image-like CNN arrays. It can be either 'charge', 'time' or both
             (default)
@@ -73,9 +76,14 @@ class CNNmPMTDataset(H5Dataset):
             channels. i.e. provides the mean and the std of PMT charges and/or time in each mPMT instead of providing
             all PMT data. It can be [], ['charge'], ['time'] or ['charge', 'time']. By default, no collapsing is
             performed.
-        channel_scaling: dict of (int, int)
-            Dictionary with keys corresponding to channels and values contain the offset and scale to use. By default,
-            no scaling is applied.
+        channel_scale_factor: dict of float
+            Dictionary with keys corresponding to channels and values contain the factors to divide that channel by.
+            By default, no scaling is applied.
+        channel_scale_offset: dict of float
+            Dictionary with keys corresponding to channels and values contain the offsets to subtract from that channel.
+            By default, no scaling is applied.
+        geometry_file: string
+            Path to file defining the 3D geometry (PMT positions and orientations), required if using geometry channels.
         use_memmap: bool
             Use a memmap and load data into memory as needed (default), otherwise load entire dataset at initialisation
 """
@@ -100,9 +108,12 @@ class CNNmPMTDataset(H5Dataset):
         if collapse_mpmt_channels is None:
             collapse_mpmt_channels = []
         self.collapse_channels = collapse_mpmt_channels
-        if channel_scaling is None:
-            channel_scaling = {}
-        self.scaling = channel_scaling
+        if channel_scale_offset is None:
+            channel_scale_offset = {}
+        self.scale_offset = channel_scale_offset
+        if channel_scale_factor is None:
+            channel_scale_factor = {}
+        self.scale_factor = channel_scale_factor
 
         self.image_height, self.image_width = np.max(self.mpmt_positions, axis=0) + 1
         # make some index expressions for different parts of the image, to use in transformations etc
@@ -134,10 +145,8 @@ class CNNmPMTDataset(H5Dataset):
             self.geom_data['mpmt_position'] = self.process_data(pmt_ids, pmt_positions)[central_pmt_channel]
             self.geom_data['mpmt_direction'] = self.process_data(pmt_ids, pmt_directions)[central_pmt_channel]
             self.geom_data['mpmt_exists'] = self.process_data(pmt_ids, 1)[central_pmt_channel]
-            for c, (offset, scale) in list(channel_scaling.items()):
-                if c in self.geom_data:
-                    self.geom_data[c] = (self.geom_data[c] - offset)/scale
-                    self.scaling.pop(c)
+            for c, v in self.geom_data.items():
+                self.geom_data[c] = (v - self.scale_offset.pop(c, 0))/self.scale_factor.pop(c, 1)
 
         # set up data ranges and permutation maps for the chosen channels
         self.image_depth = 0
@@ -194,8 +203,8 @@ class CNNmPMTDataset(H5Dataset):
         data_dict = super().__getitem__(item)
         hit_data = {"charge": self.event_hit_charges, "time": self.event_hit_times}
         # apply scaling to channels
-        for c, (offset, scale) in self.scaling.items():
-            hit_data[c] = (hit_data[c] - offset)/scale
+        for c in hit_data:
+            hit_data[c] = (hit_data[c] - self.scale_offset.get(c, 0))/self.scale_factor.get(c, 1)
         # Process the channels
         data = np.zeros((self.image_depth, self.image_height, self.image_width), dtype=np.float32)
         for c, r in self.channel_ranges.items():

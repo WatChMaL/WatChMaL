@@ -4,7 +4,6 @@ Class for training a fully supervised classifier
 
 # generic imports
 import numpy as np
-from datetime import timedelta
 from datetime import datetime
 from abc import ABC, abstractmethod
 import logging
@@ -24,11 +23,11 @@ log = logging.getLogger(__name__)
 
 
 class ReconstructionEngine(ABC):
-    def __init__(self, truth_key, model, rank, device, dump_path):
+    def __init__(self, target_key, model, rank, device, dump_path):
         """
         Parameters
         ==========
-        truth_key : string
+        target_key : string
             Name of the key for the target values in the dictionary returned by the dataloader
         model
             `nn.module` object that contains the full network that the engine will use in training or evaluation.
@@ -48,7 +47,7 @@ class ReconstructionEngine(ABC):
         self.rank = rank
         self.model = model
         self.device = torch.device(device)
-        self.truth_key = truth_key
+        self.target_key = target_key
 
         # Set up the parameters to save given the model type
         if isinstance(self.model, DistributedDataParallel):
@@ -157,7 +156,13 @@ class ReconstructionEngine(ABC):
         return global_metric_dict
 
     @abstractmethod
+    def process_data(self, data):
+        """Extract the event data and target from the input data dict"""
+        pass
+
+    @abstractmethod
     def forward(self, train=True):
+        """Perform the forward pass"""
         pass
 
     def backward(self):
@@ -214,11 +219,11 @@ class ReconstructionEngine(ABC):
             # local training loop for batches in a single epoch
             steps_per_epoch = len(train_loader)
             for self.step, train_data in enumerate(train_loader):
-                # Train on batch
-                self.data = train_data['data'].to(self.device)
-                self.target = train_data[self.truth_key].to(self.device)
-                # Call forward: make a prediction & measure the average error using data = self.data
+                # Prepare the data for forward pass
+                self.process_data(train_data)
+                # Call forward: make a prediction & measure the average error
                 outputs, metrics = self.forward(True)
+                # Convert torch tensors containing each metric into scalar
                 metrics = {k: v.item() for k, v in metrics.items()}
                 # Call backward: back-propagate error and update weights using loss = self.loss
                 self.backward()
@@ -280,8 +285,7 @@ class ReconstructionEngine(ABC):
                 val_iter = iter(self.data_loaders["validation"])
                 val_data = next(val_iter)
             # extract the event data and target from the input data dict
-            self.data = val_data['data'].to(self.device)
-            self.target = val_data[self.truth_key].to(self.device)
+            self.process_data(val_data)
             # evaluate the network
             outputs, metrics = self.forward(False)
             if val_metrics is None:
@@ -323,23 +327,20 @@ class ReconstructionEngine(ABC):
             steps_per_epoch = len(self.data_loaders["test"])
             for self.step, eval_data in enumerate(self.data_loaders["test"]):
                 # load data
-                self.data = eval_data['data'].to(self.device)
-                self.target = eval_data[self.truth_key].to(self.device)
+                self.process_data(eval_data)
                 # Run the forward procedure and output the result
-                outputs, metrics = self.forward(train=False)
+                outputs, metrics = self.forward(False)
+                outputs['indices'] = eval_data['indices'].to(self.device)
                 # Add the local result to the final result
+                batch_size = len(outputs["indices"])
                 if self.step == 0:
-                    indices = eval_data['indices']
-                    targets = self.target
                     eval_outputs = outputs
-                    eval_metrics = metrics
+                    eval_metrics = {k: m * batch_size for k, m in metrics.items()}
                 else:
-                    indices = torch.cat((indices, eval_data['indices']))
-                    targets = torch.cat((targets, self.target))
                     for k in eval_outputs.keys():
                         eval_outputs[k] = torch.cat((eval_outputs[k], outputs[k]))
                     for k in eval_metrics.keys():
-                        eval_metrics[k] += metrics[k]
+                        eval_metrics[k] += metrics[k] * batch_size
                 # print the metrics at given intervals
                 if self.rank == 0 and self.step % report_interval == 0:
                     previous_step_time = step_time
@@ -350,9 +351,7 @@ class ReconstructionEngine(ABC):
                           f" Step time {average_step_time},"
                           f" Total time {step_time-start_time}")
         for k in eval_metrics.keys():
-            eval_metrics[k] /= self.step+1
-        eval_outputs["indices"] = indices.to(self.device)
-        eval_outputs[self.truth_key] = targets
+            eval_metrics[k] /= len(eval_outputs["indices"])
         # Gather results from all processes
         eval_metrics = self.get_synchronized_metrics(eval_metrics)
         eval_outputs = self.get_synchronized_outputs(eval_outputs)

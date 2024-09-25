@@ -5,11 +5,11 @@ from watchmal.engine.reconstruction import ReconstructionEngine
 
 class ClassifierEngine(ReconstructionEngine):
     """Engine for performing training or evaluation for a classification network."""
-    def __init__(self, truth_key, model, rank, device, dump_path, label_set=None):
+    def __init__(self, target_key, model, rank, device, dump_path, label_set=None):
         """
         Parameters
         ==========
-        truth_key : string
+        target_key : string
             Name of the key for the target labels in the dictionary returned by the dataloader
         model
             `nn.module` object that contains the full network that the engine will use in training or evaluation.
@@ -24,7 +24,7 @@ class ClassifierEngine(ReconstructionEngine):
             0 to N).
         """
         # create the directory for saving the log and dump files
-        super().__init__(truth_key, model, rank, device, dump_path)
+        super().__init__(target_key, model, rank, device, dump_path)
         self.softmax = torch.nn.Softmax(dim=1)
         self.label_set = label_set
 
@@ -46,7 +46,12 @@ class ClassifierEngine(ReconstructionEngine):
         super().configure_data_loaders(data_config, loaders_config, is_distributed, seed)
         if self.label_set is not None:
             for name in loaders_config.keys():
-                self.data_loaders[name].dataset.map_labels(self.label_set, self.truth_key)
+                self.data_loaders[name].dataset.map_labels(self.label_set, self.target_key)
+
+    def process_data(self, data):
+        """Extract the event data and target from the input data dict"""
+        self.data = data['data'].to(self.device)
+        self.target = data[self.target_key].to(self.device)
 
     def forward(self, train=True):
         """
@@ -69,7 +74,8 @@ class ClassifierEngine(ReconstructionEngine):
             predicted_labels = torch.argmax(model_out, dim=-1)
             self.loss = self.criterion(model_out, self.target)
             accuracy = (predicted_labels == self.target).sum() / float(predicted_labels.nelement())
-            outputs = {'softmax': softmax}
+            outputs = {self.target_key: self.target,
+                       'softmax': softmax}
             metrics = {'loss': self.loss,
                        'accuracy': accuracy}
         return outputs, metrics
