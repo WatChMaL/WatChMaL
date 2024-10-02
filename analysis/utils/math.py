@@ -4,6 +4,8 @@ Utility functions for performing mathematical, physical, statistical, geometrica
 
 import numpy as np
 
+import torch
+
 
 DEFAULT_TANK_AXIS = 2
 
@@ -237,6 +239,29 @@ def decompose_along_direction(vector, direction):
     longitudinal_component = np.einsum('...i,...i', vector, direction)
     transverse_component = np.sqrt(np.maximum(total_magnitude**2-longitudinal_component**2, 0))
     return total_magnitude, longitudinal_component, transverse_component
+
+def decompose_along_direction_pytorch(vector, direction):
+    """
+    Decompose vector into longitudinal and transverse components along some direction, for pytorch tensors
+
+    Parameters
+    ----------
+    vector: np.ndarray
+        vector of (x,y,z) components or (N,3) array of N (x,y,z) vectors
+    direction: np.ndarray
+        vector of (x,y,z) components of a unit vector of a direction, or (N,3) array of (x,y,z) unit vector directions
+
+    Returns
+    -------
+    total_magnitude: np.ndarray or scalar
+        array of magnitudes of each vector, or scalar if only one vector
+    longitudinal_component: np.ndarray or scalar
+        array of component of each vector along direction, or scalar if only one vector
+    transverse_component: np.ndarray or scalar
+        array of component of each vector transverse to direction, or scalar if only one vector
+    """
+    longitudinal_component = torch.einsum('...i,...i', vector, direction)
+    return longitudinal_component
 
 
 def binomial_error(x):

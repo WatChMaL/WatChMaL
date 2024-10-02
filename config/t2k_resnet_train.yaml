@@ -1,36 +1,33 @@
 data:
-  split_path: '/scratch/fcormier/t2k/ml/output_skdetsim/jan23_electrons_forRegression_5M_1/train_val_test_gt200Hits_FCTEST_nFolds20_fold0.npz' 
+  split_path: '/scratch/fcormier/t2k/ml/output_skdetsim/jan23_electrons_forRegression_5M_1/train_val_test_gt200Hits_FC_nFolds20_fold0.npz' 
   dataset:
     h5file: '$SLURM_TMPDIR/digi_combine.hy'
-    _target_: watchmal.dataset.cnn.cnn_dataset.CNNDataset
-    pmt_positions_file: /data/thoriba/t2k/imagefile/skdetsim_imagefile.npy
+    _target_: watchmal.dataset.cnn.cnn_dataset.CNNDatasetDeadPMT
+    pmt_positions_file: /fast_scratch/WatChMaL/data/T2K/image_files/skdetsim_imagefile.npy
     use_positions: False
     geometry_file: /home/fcormier/t2k/ml/training/t2k_ml_training/data/geofile_skdetsim.npz
     channel_scaling:
       time: [400, 1000]
-    # channel_scaler:
-    #   # file location for fitted scaler (for precomputed). if chain, 
-    #   fitted_scaler: ['/home/thoriba/t2k2/t2k_ml_training/chain_scaler_1_quantile_normal.joblib', '/home/thoriba/t2k2/t2k_ml_training/chain_scaler_2_minmax.joblib']
-    #   scaler_type: 'minmax'
-    #   sample_size: 10000
-    #   dataset_index_file: '/data/thoriba/t2k/indices/apr3_eMuPiPlus_1500MeV_small_1/train_val_test_gt200Hits_FCTEST_nFolds10_fold0.npz'
-    #   transform_per_batch: True
+    change_dead_pmts: True
+    dead_pmt_var: 0.01
+    dead_pmt_rate: 0.01
+    use_hit_mask: True
 model:
   _target_: watchmal.model.resnet.resnet18
-  num_input_channels: 2
+  num_input_channels: 3
   num_output_channels: 1
   stride: 1
   kernelSize: 1
   dropout_p: 0.
-  conv_pad_mode: 'zeros'
+  conv_pad_mode: 'circular'
 engine:
   _target_: watchmal.engine.regression.RegressionEngine
   truth_key: 'momenta'
 tasks:
   train:
-    epochs: 30
-    val_interval: 50
-    num_val_batches: 5
+    epochs: 50
+    val_interval: 10
+    num_val_batches: 10
     checkpointing: false
     loss:
       _target_: torch.nn.HuberLoss
@@ -38,13 +35,13 @@ tasks:
     data_loaders:
       train:
         split_key: train_idxs
-        batch_size: 35
+        batch_size: 50
         num_workers: 2
         sampler:
           _target_: torch.utils.data.sampler.SubsetRandomSampler
       validation:
         split_key: val_idxs
-        batch_size: 150
+        batch_size: 200
         num_workers: 2
         sampler:
           _target_: torch.utils.data.sampler.SubsetRandomSampler
@@ -64,6 +61,9 @@ tasks:
         sampler:
           _target_: torch.utils.data.sampler.SubsetRandomSampler
 gpu_list: 
+- 4
+- 5
 - 6
+- 7
 seed: null
 dump_path: ./outputs/

@@ -1,7 +1,7 @@
 """
 Class for training a fully supervised classifier
 """
-
+import os
 # generic imports
 import numpy as np
 from datetime import timedelta
@@ -24,7 +24,7 @@ log = logging.getLogger(__name__)
 
 
 class ReconstructionEngine(ABC):
-    def __init__(self, truth_key, model, rank, gpu, dump_path):
+    def __init__(self, truth_key, model, rank, gpu, dump_path, eval_directory=''):
         """
         Parameters
         ==========
@@ -49,6 +49,8 @@ class ReconstructionEngine(ABC):
         self.model = model
         self.device = torch.device(gpu)
         self.truth_key = truth_key
+        self.eval_directory=eval_directory
+        self.dir = None
 
         # Set up the parameters to save given the model type
         if isinstance(self.model, DistributedDataParallel):
@@ -194,6 +196,7 @@ class ReconstructionEngine(ABC):
         # keep track of the validation loss
         self.best_validation_loss = np.inf
         # initialize the iterator over the validation set
+        self.data_loaders["validation"].dataset.batch_size = self.data_loaders["validation"].batch_size
         val_iter = iter(self.data_loaders["validation"])
         # global training loop for multiple epochs
         start_time = datetime.now()
@@ -213,8 +216,11 @@ class ReconstructionEngine(ABC):
                 train_loader.sampler.set_epoch(self.epoch)
             # local training loop for batches in a single epoch
             steps_per_epoch = len(train_loader)
+            train_loader.dataset.batch_size = train_loader.batch_size
             for self.step, train_data in enumerate(train_loader):
                 # Train on batch
+                #train_loader.dataset.set_dead_pmts(self.iteration)
+                train_data['iteration'] = torch.ones(train_data['iteration'].size())*self.iteration
                 self.data = train_data['data'].to(self.device)
                 self.target = train_data[self.truth_key].to(self.device)
                 # Call forward: make a prediction & measure the average error using data = self.data
@@ -281,8 +287,10 @@ class ReconstructionEngine(ABC):
                 val_iter = iter(self.data_loaders["validation"])
                 val_data = next(val_iter)
             # extract the event data and target from the input data dict
+            val_data['iteration'] = torch.ones(val_data['iteration'].size())*self.iteration
             self.data = val_data['data'].to(self.device)
             self.target = val_data[self.truth_key].to(self.device)
+            self.dir = val_data["directions"].to(self.device) 
             #print(torch.mean(torch.abs(self.target),dim=0))
             # evaluate the network
             outputs, metrics = self.forward(False)
@@ -314,7 +322,7 @@ class ReconstructionEngine(ABC):
 
     def evaluate(self, report_interval=20):
         """Evaluate the performance of the trained model on the test set."""
-        log.info(f"Evaluating, output to directory: {self.dump_path}")
+        log.info(f"Evaluating, output to directory: {self.dump_path + '/' + self.eval_directory +'/'}")
         # Iterate over the validation set to calculate val_loss and val_acc
         with torch.no_grad():
             # Set the model to evaluation mode
@@ -364,8 +372,14 @@ class ReconstructionEngine(ABC):
         if self.rank == 0:
             # Save overall evaluation results
             log.info("Saving Data...")
+            if not(os.path.exists(self.dump_path + '/' + self.eval_directory +'/') and os.path.isdir(self.dump_path + '/' + self.eval_directory +'/')):
+                try:
+                    os.makedirs(self.dump_path + '/' + self.eval_directory +'/')
+                except FileExistsError as error:
+                    print("Directory " + str(self.dump_path + '/' + self.eval_directory +'/') +" already exists")
             for k, v in eval_outputs.items():
-                np.save(self.dump_path + k + ".npy", v)
+                print(f"Saving eval .npy files to {self.dump_path + '/' + self.eval_directory +'/'}")
+                np.save(self.dump_path + '/' + self.eval_directory +'/' + k + ".npy", v)
             # Compute overall evaluation metrics
             for k, v in eval_metrics.items():
                 log.info(f"Average evaluation {k}: {v}")

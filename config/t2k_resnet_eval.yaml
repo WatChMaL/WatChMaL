@@ -1,29 +1,33 @@
 data:
   split_path: '//fast_scratch_2/fcormier/t2k/ml/data/oct20_combine_flatE/train_val_test_nFolds3_fold0.npz' 
+  #split_path: '/fast_scratch/fcormier//t2k/ml/training/resnet_nov7_eMuPosPions_0dwall_1M_flat_1/fq_test_idx.npz'
   #split_path: '/fast_scratch_2/fcormier/t2k/stopMu/train_val_test_stopMu.npz' 
+  #split_path: '/data/fcormier/t2k/ml/data/aug19_electrons_2GeV_2M_combine/train_val_test_gt200Hits_fullyContained_1200MeVCut_nFolds20_fold0.npz' 
   dataset:
     h5file: '/fast_scratch_2/fcormier/t2k/ml/data/oct20_combine_flatE/combine_combine.hy'
+    #h5file: '/fast_scratch/fcormier//t2k/ml/skdetsim/oct20_eMuPosPion_0dwallCut_flat_1/combine_combine.hy'
     #h5file: '/fast_scratch_2/fcormier/t2k/stopMu//digi_combine.hy'
-    _target_: watchmal.dataset.cnn.cnn_dataset.CNNDataset
+    #h5file: '/data/fcormier/t2k/ml/data/aug19_electrons_2GeV_2M_combine/multi_combine.hy'
+    _target_: watchmal.dataset.cnn.cnn_dataset.CNNDatasetDeadPMT
     pmt_positions_file: /fast_scratch/WatChMaL/data/T2K/image_files/skdetsim_imagefile.npy
     use_positions: False
     geometry_file: /home/fcormier/t2k/ml/t2k_ml_training/data/geofile_skdetsim.npz
     channel_scaling:
       time: [400, 1000]
-<<<<<<< HEAD
-      #time: [950, 10]
-=======
->>>>>>> origin/master
+    #dead_pmts_file: /data/fcormier/Public/dead_pmts.sk4.txt
+    #use_hit_mask: True
 model:
-  _target_: watchmal.model.resnet.resnet34
+  _target_: watchmal.model.resnet.resnet50
   num_input_channels: 2
-  num_output_channels: 3
+  num_output_channels: 1
   stride: 1
   kernelSize: 1
   dropout_p: 0.
+  conv_pad_mode: 'circular'
 engine:
   _target_: watchmal.engine.regression.RegressionEngine
-  truth_key: 'positions'
+  truth_key: 'momenta'
+  eval_directory: 'noDeadPMTs'
 tasks:
   restore_best_state:
     name: RegressionEngine_ResNet
@@ -38,12 +42,13 @@ tasks:
     data_loaders:
       test:
         split_key: test_idxs
-        batch_size: 300
-        num_workers: 1
+        batch_size: 180
+        num_workers: 2
         sampler:
-          _target_: torch.utils.data.sampler.SubsetRandomSampler
-          # _target_: torch.utils.data.sampler.SequentialSampler
+          #_target_: torch.utils.data.sampler.SubsetRandomSampler
+          _target_: watchmal.dataset.samplers.SubsetSequentialSampler
 gpu_list:
-  - 6
+  - 2
+  - 3
 seed: null
 dump_path: ./outputs/

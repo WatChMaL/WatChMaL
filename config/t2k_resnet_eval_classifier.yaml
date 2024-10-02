@@ -1,20 +1,22 @@
 data:
-  #split_path: '/fast_scratch_2/fcormier/t2k/stopMu/train_val_test_stopMu.npz' 
-  split_path: '/fast_scratch/fcormier//t2k/ml/training/resnet_nov7_eMuPosPions_0dwall_1M_flat_1/fq_test_idx.npz' 
+  split_path: '/fast_scratch_2/fcormier/t2k/stopMu/train_val_test_stopMu.npz' 
+  #split_path: '/fast_scratch/fcormier//t2k/ml/training/resnet_nov7_eMuPosPions_0dwall_1M_flat_1/fq_test_idx.npz' 
   dataset:
-    h5file: '/fast_scratch/fcormier//t2k/ml/skdetsim/oct20_eMuPosPion_0dwallCut_flat_1/combine_combine.hy'
-    #h5file: '/fast_scratch_2/fcormier/t2k/stopMu//digi_combine.hy'
-    _target_: watchmal.dataset.cnn.cnn_dataset.CNNDataset
+    #h5file: '/fast_scratch/fcormier//t2k/ml/skdetsim/oct20_eMuPosPion_0dwallCut_flat_1/combine_combine.hy'
+    h5file: '/fast_scratch_2/fcormier/t2k/stopMu//digi_combine.hy'
+    _target_: watchmal.dataset.cnn.cnn_dataset.CNNDatasetDeadPMT
     pmt_positions_file: /fast_scratch/WatChMaL/data/T2K/image_files/skdetsim_imagefile.npy
     channel_scaling:
       time: [400, 1000]
+    dead_pmts_file: /data/fcormier/Public/dead_pmts.sk4.txt
 model:
-  _target_: watchmal.model.resnet.resnet34
+  _target_: watchmal.model.resnet.resnet50
   num_input_channels: 2
   num_output_channels: 3
   stride: 1
   kernelSize: 1
   dropout_p: 0.
+  conv_pad_mode: 'circular'
 engine:
   _target_: watchmal.engine.classification.ClassifierEngine
   truth_key: 'labels'
@@ -31,11 +33,12 @@ tasks:
     data_loaders:
       test:
         split_key: test_idxs
-        batch_size: 300
-        num_workers: 1
+        batch_size: 150
+        num_workers: 2
         sampler:
-          _target_: torch.utils.data.sampler.SubsetRandomSampler
+          _target_: watchmal.dataset.samplers.SubsetSequentialSampler
 gpu_list: 
-- 5
+- 0
+- 1
 seed: null
 dump_path: ./outputs/

@@ -123,7 +123,7 @@ class CNNDataset(H5Dataset):
 
 
 
-    def process_data(self, hit_pmts, hit_times, hit_charges, hit_positions=None, double_cover = None, transforms = None):
+    def process_data(self, hit_pmts, hit_times, hit_charges, iteration=0, hit_positions=None, double_cover = None, transforms = None):
         """
         Returns event data from dataset associated with a specific index
 
@@ -178,6 +178,7 @@ class CNNDataset(H5Dataset):
 
     def __getitem__(self, item):
 
+
         data_dict = super().__getitem__(item)
         if self.use_positions:
             self.hit_positions = self.geo_positions[self.event_hit_pmts, :]
@@ -188,11 +189,13 @@ class CNNDataset(H5Dataset):
         for c, (offset, scale) in self.scaling.items():
             hit_data[c] = (hit_data[c] - offset)/scale
 
+        if self.counter==0:
+            print("COUNTER IS 0")
         
         if self.use_positions:
-            processed_data = from_numpy(self.process_data(self.event_hit_pmts, hit_data["time"], hit_data["charge"], hit_positions=hit_data["position"]))
+            processed_data = from_numpy(self.process_data(self.event_hit_pmts, hit_data["time"], hit_data["charge"], hit_positions=hit_data["position"], iteration=self.counter))
         else:
-            processed_data = from_numpy(self.process_data(self.event_hit_pmts, hit_data["time"], hit_data["charge"]))
+            processed_data = from_numpy(self.process_data(self.event_hit_pmts, hit_data["time"], hit_data["charge"], iteration=self.counter))
         
         # if self.counter <= 10:
         #     du.save_fig_dead(processed_data[0], True,  None, None, y_label='PMT Time', counter=self.counter, output_path=f'/data/thoriba/t2k/plots/dead_test/time_CNN/', dead_pmt_percent=-1)
@@ -218,6 +221,7 @@ class CNNDataset(H5Dataset):
         #processed_data = du.apply_random_transformations(self.transforms, processed_data, counter = self.counter)
 
 
+        #print(f"DATA SHAPE: {data_dict['data'].shape}")
         return data_dict
 
     def rotate_cylinder(self, data):
@@ -495,7 +499,7 @@ class CNNDatasetDeadPMT(CNNDataset):
     """
 
     def __init__(self, h5file, pmt_positions_file, use_times=True, use_charges=True, use_positions=False, transforms=None, one_indexed=True, channel_scaling=None, geometry_file=None,
-                 dead_pmt_rate=None, dead_pmt_seed=None, dead_pmts_file=None, use_dead_pmt_mask=False, use_hit_mask=False):
+                 dead_pmt_rate=None, dead_pmt_seed=None, dead_pmts_file=None, use_dead_pmt_mask=False, use_hit_mask=False, change_dead_pmts=False, dead_pmt_var=None):
         """
         Constructs a dataset for CNN data. Event hit data is read in from the HDF5 file and the PMT charge and/or time
         data is formatted into an event-display-like image for input to a CNN. Each pixel of the image corresponds to
@@ -529,12 +533,20 @@ class CNNDatasetDeadPMT(CNNDataset):
             Location of a txt file containing dead PMT IDs. Each row is an ID of dead PMT.
         use_dead_pmt_mask: bool
             Whether to use PMT hit times as one of the initial CNN image channels. False by default.
+        change_dead_pmts: bool
+            Whether to change which pmts are dead every batch. False by default.
+        dead_pmt_var: bool
+            Variation in percentage of dead PMTs. None by default.
         """
         super().__init__(h5file, pmt_positions_file, use_times=use_times, use_charges=use_charges, use_positions=use_positions, transforms=transforms, one_indexed=one_indexed, channel_scaling=channel_scaling, geometry_file=geometry_file)
         self.use_dead_pmt_mask = use_dead_pmt_mask
         self.dead_pmt_rate = dead_pmt_rate
         self.dead_pmt_seed = dead_pmt_seed if dead_pmt_seed is not None else 42
         self.dead_pmts_file = dead_pmts_file
+        self.change_dead_pmts=change_dead_pmts
+        self.dead_pmt_var = dead_pmt_var
+        self.iteration=0
+        self.batch_size=-1
 
         self.use_hit_mask = use_hit_mask
 
@@ -548,7 +560,7 @@ class CNNDatasetDeadPMT(CNNDataset):
         
         self.set_dead_pmts()
     
-    def set_dead_pmts(self):
+    def set_dead_pmts(self, iteration=0):
         """
         Sets array of dead PMTs randomly or non-randomly depending on inputs from yaml. Zero-indexed by default.
         For random setting, sets dead PMT ID list using dead_pmt_rate and dead_pmt_seed if dead_pmt_rate is not None and is in (0, 1]
@@ -560,19 +572,31 @@ class CNNDatasetDeadPMT(CNNDataset):
             self.dead_pmts = np.loadtxt(self.dead_pmts_file, dtype=int)
             if self.one_indexed:
                 self.dead_pmts = self.dead_pmts - 1
-            print(f'Dead PMTs were set non-randomly from file ({self.dead_pmts_file}). Here is dead PMT IDs (zero-indexed).')
-            print(self.dead_pmts)
+            if iteration < 10:
+                print(f'Dead PMTs were set non-randomly from file ({self.dead_pmts_file}). Here is dead PMT IDs (zero-indexed).')
+                print(self.dead_pmts)
         elif self.dead_pmt_rate is not None and self.dead_pmt_rate > 0 and self.dead_pmt_rate <= 1:
-            num_dead_pmts = min(len(self.pmt_positions), int(len(self.pmt_positions) * self.dead_pmt_rate))
-            np.random.seed(self.dead_pmt_seed)
+            if self.change_dead_pmts:
+                rng = np.random.default_rng()
+            if self.dead_pmt_var is not None and self.change_dead_pmts:
+                new_rate = rng.uniform(low=max(0, self.dead_pmt_rate-self.dead_pmt_var), high=min(1.0, self.dead_pmt_rate+self.dead_pmt_var))
+                num_dead_pmts = min(len(self.pmt_positions), int(len(self.pmt_positions) * new_rate))
+                if iteration < 10:
+                    print(f"New Dead PMT Rate: {new_rate}")
+            else:
+                num_dead_pmts = min(len(self.pmt_positions), int(len(self.pmt_positions) * self.dead_pmt_rate))
+            if not self.change_dead_pmts:
+                np.random.seed(self.dead_pmt_seed)
             self.dead_pmts = np.random.choice(len(self.pmt_positions), num_dead_pmts, replace=False)
-            print(f'Dead PMTs were set with rate={self.dead_pmt_rate} with seed={self.dead_pmt_seed}. Here is dead PMT IDs')
-            print(self.dead_pmts)
+            if iteration < 10:
+                print(f"Dead PMT Iteration: {iteration}")
+                print(f'Dead PMTs were set with rate={self.dead_pmt_rate} with seed={self.dead_pmt_seed}. Here is dead PMT IDs')
+                print(self.dead_pmts)
         else:
             self.dead_pmts = np.array([], dtype=int)
             print('No dead PMTs were set. If you intend to set dead PMTs, please provide dead_pmts_file for fixed dead PMTs or dead_pmt_rate for random selection')
 
-    def process_data(self, hit_pmts, hit_times, hit_charges, hit_positions=None, double_cover = None, transforms = None):
+    def process_data(self, hit_pmts, hit_times, hit_charges, iteration=0, hit_positions=None, double_cover = None, transforms = None):
         """
         Returns event data from dataset associated with a specific index
 
@@ -593,13 +617,18 @@ class CNNDatasetDeadPMT(CNNDataset):
         if self.one_indexed:
             hit_pmts = hit_pmts-1  # SK cable numbers start at 1
         
+        if self.change_dead_pmts and iteration%self.batch_size==0:
+            #print(f"SET DEAD PMTs, iteration: {iteration}, batch_size: {self.batch_size}")
+            self.set_dead_pmts(iteration)
         dead_pmts = self.dead_pmts # int array of dead PMT IDs. Zero-idxed.
 
         hit_rows = self.pmt_positions[hit_pmts, 0]
         hit_cols = self.pmt_positions[hit_pmts, 1]
 
         hit_rows_d = self.pmt_positions[dead_pmts, 0]
+        #print(f"Iteration {iteration}, Hit rows d: {len(hit_rows_d)}")
         hit_cols_d = self.pmt_positions[dead_pmts, 1]
+        #print(f"Hit cols d: {hit_cols_d}")
 
         data = np.zeros(self.data_size, dtype=np.float32)
 
@@ -967,6 +996,7 @@ class CNNDatasetScale(CNNDatasetDeadPMT):
         """
 
         data_dict = super(CNNDataset, self).__getitem__(item)
+
 
         if self.use_positions:
             self.hit_positions = self.geo_positions[self.event_hit_pmts, :]
