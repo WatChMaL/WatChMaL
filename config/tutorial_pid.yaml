@@ -1,0 +1,10 @@
+defaults:
+    - tutorial_defaults
+    - engine: classifier
+    - _self_
+data:
+  split_path: /watchmal_tutorial/split_index_list.npz
+engine:
+  label_set:
+    - 0
+    - 1
