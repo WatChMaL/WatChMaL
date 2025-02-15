@@ -1,4 +1,5 @@
 defaults:
   - cnn_mpmt
-h5_file: /watchmal_tutorial/mPMT_3m.h5
+h5file: /watchmal_tutorial/mPMT_3m.h5
 mpmt_positions_file: /watchmal_tutorial/mpmt_image_positions.npz
+geometry_file: /watchmal_tutorial/geo_mPMT_3m.npz

@@ -8,4 +8,5 @@ tasks:
   train:
     epochs: 1
 gpu_list: [] # train on CPU
-seed: 12345
+seed: null
+dump_path: './outputs/'
