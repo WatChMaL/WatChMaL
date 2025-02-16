@@ -46,6 +46,7 @@ class H5CommonDataset(Dataset, ABC):
             self.dataset_length = h5_file["labels"].shape[0]
 
         self.label_set = None
+        self.labels_key = None
         self.use_memmap = use_memmap
 
         self.initialized = False
