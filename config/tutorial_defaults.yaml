@@ -6,7 +6,7 @@ defaults:
     - tasks/evaluate: test
 tasks:
   train:
-    epochs: 1
+    epochs: 5
 gpu_list: [] # train on CPU
 seed: null
 dump_path: './outputs/'
