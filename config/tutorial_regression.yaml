@@ -1,0 +1,17 @@
+defaults:
+    - tutorial_defaults
+    - engine: regression
+    - override loss@tasks.train.loss: huber
+    - _self_
+engine:
+  target_key:
+    - positions
+    - directions
+  target_scale_factor:
+    positions: 1
+    directions: 0.01
+model:
+  num_output_channels: 6
+hydra:
+  run:
+    dir: /ml_workshop/watchmal_tutorialregression_run/

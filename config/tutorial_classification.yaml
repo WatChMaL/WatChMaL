@@ -2,9 +2,10 @@ defaults:
     - tutorial_defaults
     - engine: classifier
     - _self_
-data:
-  split_path: /watchmal_tutorial/split_index_list.npz
 engine:
   label_set:
     - 1
     - 2
+hydra:
+  run:
+    dir: /ml_workshop/watchmal_tutorialclassification_run/

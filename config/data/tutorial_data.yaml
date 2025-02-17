@@ -1,0 +1,7 @@
+defaults:
+  - dataset: cnn_mpmt
+split_path: /ml_workshop/watchmal_tutorialdata/split_index_list.npz
+dataset:
+  h5file: /ml_workshop/watchmal_tutorialdata/mPMT_3m_100k_e-_100k_mu-.h5
+  mpmt_positions_file: /ml_workshop/watchmal_tutorialdata/mpmt_image_positions.npz
+  geometry_file: /ml_workshop/watchmal_tutorialdata/mPMT_3m_geometry.npz

@@ -1,5 +1,5 @@
 defaults:
-    - data/dataset: tutorial_data
+    - data: tutorial_data
     - model: resnet18
     - tasks/train: train_resnet
     - tasks/restore_best_state: restore_best_state
@@ -7,6 +7,11 @@ defaults:
 tasks:
   train:
     epochs: 5
+    val_interval: 5
+    num_val_batches: 2
 gpu_list: [] # train on CPU
 seed: null
 dump_path: './outputs/'
+hydra:
+  job:
+    chdir: True
