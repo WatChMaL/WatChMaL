@@ -14,4 +14,4 @@ model:
   num_output_channels: 6
 hydra:
   run:
-    dir: /ml_workshop/watchmal_tutorialregression_run/
+    dir: /ml_workshop/watchmal_tutorial/regression_run/

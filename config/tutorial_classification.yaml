@@ -8,4 +8,4 @@ engine:
     - 2
 hydra:
   run:
-    dir: /ml_workshop/watchmal_tutorialclassification_run/
+    dir: /ml_workshop/watchmal_tutorial/classification_run/
