@@ -1,0 +1,4 @@
+_target_: watchmal.model.resnet.resnet50
+num_input_channels: 2
+num_output_channels: 1
+conv_pad_mode: zeros #why?

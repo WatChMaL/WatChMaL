@@ -1,5 +1,8 @@
 gpu_list:
-  - 5
+  - 0
+  - 1
+  - 2
+  - 3
 seed: null
 dump_path: './outputs/'
 model:

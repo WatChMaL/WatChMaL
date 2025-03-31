@@ -1,6 +1,6 @@
 defaults:
-  - data: iwcd_electron
-  - model: resnet18
+  - data: hkfd_electron
+  - model: resnet50
   - engine: regression
   - tasks/train: train_resnet
   - tasks/restore_best_state: restore_best_state
@@ -8,8 +8,11 @@ defaults:
   - override loss@tasks.train.loss: huber
   - _self_
 gpu_list:
-  - 5
+  - 0
+  - 1
+  - 2
+  - 3
 seed: null
 dump_path: './outputs/'
 model:
-  num_output_channels: 3
+  num_output_channels: 1
