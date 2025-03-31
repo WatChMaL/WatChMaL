@@ -1,6 +1,6 @@
 defaults:
-  - data: hkfd_electron
-  - model: resnet50
+  - data: iwcd
+  - model: resnet18
   - engine: regression
   - tasks/train: train_resnet
   - tasks/restore_best_state: restore_best_state
@@ -9,9 +9,6 @@ defaults:
   - _self_
 gpu_list:
   - 0
-  - 1
-  - 2
-  - 3
 seed: null
 dump_path: './outputs/'
 model:
