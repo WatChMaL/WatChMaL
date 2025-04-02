@@ -1,6 +1,6 @@
 defaults:
-  - data: iwcd
-  - model: resnet18
+  - data: hkfd_electron
+  - model: resnet50
   - engine: regression
   - tasks/train: train_resnet
   - tasks/restore_best_state: restore_best_state

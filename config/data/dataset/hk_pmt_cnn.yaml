@@ -1,8 +1,7 @@
 _target_: watchmal.dataset.cnn.cnn_dataset.CNNDataset
-pmt_position_file: /fred/oz233/aatta/ML/data/hkfd/HK_PMT_image_positions.npz
+pmt_positions_file: /fred/oz233/aatta/ML/data/hkfd/HK_20inchPMT_image_positions.npz
 use_times: True
 use_charges: True
-transforms: None
 one_indexed: False
 use_memmap: True
 

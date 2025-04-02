@@ -45,13 +45,13 @@ class RegressionEngine(ReconstructionEngine):
             self.target_key = [self.target_key]
         self.target_sizes = None
         if isinstance(target_scale_offset, Mapping):  # each target has its own offset
-            self.offset = {t: torch.tensor(target_scale_offset.get(t, 0)).to(self.device) for t in target_key}
+            self.offset = {t: torch.tensor(target_scale_offset.get(t, 0)).to(self.device) for t in [target_key]}
         else:  # each target has the same offset
-            self.offset = {t: torch.tensor(target_scale_offset).to(self.device) for t in target_key}
+            self.offset = {t: torch.tensor(target_scale_offset).to(self.device) for t in [target_key]}
         if isinstance(target_scale_factor, Mapping):  # each target has its own scale
-            self.scale = {t: torch.tensor(target_scale_factor.get(t, 1)).to(self.device) for t in target_key}
+            self.scale = {t: torch.tensor(target_scale_factor.get(t, 1)).to(self.device) for t in [target_key]}
         else:  # each target has the same scale
-            self.scale = {t: torch.tensor(target_scale_factor).to(self.device) for t in target_key}
+            self.scale = {t: torch.tensor(target_scale_factor).to(self.device) for t in [target_key]}
 
     def process_data(self, data):
         """Extract the event data and target from the input data dict"""
@@ -78,6 +78,24 @@ class RegressionEngine(ReconstructionEngine):
         with torch.set_grad_enabled(train):
             # scale and stack the targets for calculating the loss
             target = torch.column_stack([(v - self.offset[t]) / self.scale[t] for t, v in self.target.items()])
+
+            print('\n=============================================\n')
+            print(target)
+            print('\n=============================================\n')
+            print('target.shape:', target.shape)
+            print('\n=============================================\n')
+            print('self.data.shape:', self.data.shape)
+            print('\n=============================================\n')
+
+            print('\n=============================================\n')
+
+            output=self.model(self.data)
+            print("Model output shape:", output.shape)
+            print("Target shape:", target.shape)
+            # model_out=output.reshape(target.shape)
+            print('\n=============================================\n')
+            print('\n=============================================\n')
+
             # evaluate the model on the data and reshape output to match the target
             model_out = self.model(self.data).reshape(target.shape)
             # calculate the loss

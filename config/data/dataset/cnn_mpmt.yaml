@@ -1,5 +1,6 @@
 _target_: watchmal.dataset.cnn_mpmt.cnn_mpmt_dataset.CNNmPMTDataset
-channels: ['charge', 'time', 'mpmt_position']
+channels: ['charge', 'time']
+mpmt_positions_file: /fred/oz233/aatta/ML/data/iwcd/IWCDshort_mPMT_image_positions.npz
 transforms:
   - double_cover
 channel_scale_offset:
