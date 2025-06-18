@@ -67,7 +67,7 @@ class CNNDataset(H5Dataset):
             indexes). By default, zero-indexing is assumed.
         use_memmap: bool
             Use a memmap and load data into memory as needed (default), otherwise load entire dataset at initialisation
-        ---------- The following features are used for
+        ---------- The following features are used for optimization.
         channel_scale_factor: dict of float
             Dictionary with keys corresponding to channels and values contain the factors to divide that channel.
             By default, no scaling is applied.
