@@ -1,4 +1,7 @@
-defaults:
-  - /data_loaders:
-    - test
 report_interval: 10
+
+data_loaders:
+  test:
+    split_key: test_idxs
+    batch_size: 1000
+    num_workers: 16

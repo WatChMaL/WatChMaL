@@ -1,0 +1,3 @@
+_target_: watchmal.engine.regression_DI.RegressionEngine
+target_key: ['energies',]
+target_scale_factor: 2000

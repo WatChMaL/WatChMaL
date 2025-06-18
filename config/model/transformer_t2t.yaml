@@ -1,0 +1,12 @@
+_target_: watchmal.model.T2TViTransformer.T2T_ViTRegressor
+
+img_size: [192, 192]
+in_chans: 2
+embed_dim: 512
+depth: 24
+num_heads: 8
+mlp_ratio: 3.0
+t2t_token_dims: [64,128]
+dropout: 0
+droppath: 0.05
+num_output_channels: 1

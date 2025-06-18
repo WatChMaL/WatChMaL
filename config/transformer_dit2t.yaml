@@ -1,0 +1,20 @@
+gpu_list:
+  - 0
+  - 1
+seed: 8
+dump_path: './outputs/'
+model:
+  num_output_channels: 1
+defaults:
+  - data: hk_split_di
+  - data/dataset: hk_dit2tvit
+  - model: transformer_dit2t
+  - engine: regression_DI
+ # - tasks/restore_state: restore_state_tr
+  - tasks/train: train_transformer
+  - optimizers@tasks.train.optimizers: adamW_momentum
+  - scheduler@tasks.train.scheduler: cosinelr
+  - loss@tasks.train.loss: huber_momentum
+  - sampler@tasks.train.data_loaders.train.sampler: subset_sequential
+  - sampler@tasks.train.data_loaders.validation.sampler: subset_sequential
+  - _self_

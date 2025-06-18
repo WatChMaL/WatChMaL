@@ -1,0 +1,20 @@
+gpu_list:
+  - 0
+  - 1
+seed: 1111
+dump_path: './outputs/'
+model:
+  num_output_channels: 6
+defaults:
+  - data: hk_split
+  - data/dataset: hk_cnn
+  - model: resnet152_merge
+  - engine: regression_merge
+  - tasks/restore_state: restore_state_merge
+  - tasks/train: train_resnet  
+  - optimizers@tasks.train.optimizers: adam_merge
+  - loss@tasks.train.loss: huber_merge
+  - sampler@tasks.train.data_loaders.train.sampler: subset_random
+  - sampler@tasks.train.data_loaders.validation.sampler: subset_random
+  - _self_
+

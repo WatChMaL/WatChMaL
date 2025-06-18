@@ -1,0 +1,18 @@
+gpu_list: 
+  - 0
+#  - 1
+#  - 1
+seed: null
+dump_path: './outputs/'
+model:
+  num_output_channels: 1
+defaults:
+  - data: hk_test_split
+  - data/dataset: hk_vit
+  - model: transformer_t2t
+  - engine: regression_momentum
+  - tasks/restore_state: restore_state_tr
+  - tasks/evaluate: test
+  - loss@tasks.evaluate.loss: huber_momentum
+  - sampler@tasks.evaluate.data_loaders.test.sampler: subset_sequential
+  - _self_

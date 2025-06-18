@@ -1,0 +1,13 @@
+_target_: watchmal.model.vitransformer.ViTRegressor
+
+img_size: [192, 192]
+patch_size: 16
+in_chans: 2
+embed_dim: 1024
+depth: 24
+num_heads: 16
+mlp_ratio: 4.0
+dropout: 0
+droppath: 0.01
+num_output_channels: 1
+use_conv_stem: True
