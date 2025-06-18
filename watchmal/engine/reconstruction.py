@@ -15,6 +15,7 @@ from hydra.utils import instantiate
 import torch
 from torch.nn.parallel import DistributedDataParallel
 
+
 # WatChMaL imports
 from watchmal.dataset.data_utils import get_data_loader
 from watchmal.utils.logging_utils import CSVLog
@@ -81,6 +82,10 @@ class ReconstructionEngine(ABC):
     def configure_optimizers(self, optimizer_config):
         """Instantiate an optimizer from a hydra config."""
         self.optimizer = instantiate(optimizer_config, params=self.module.parameters())
+        total_params = sum(p.numel() for p in self.module.parameters() if p.requires_grad)
+        opt_params = sum(p.numel() for g in self.optimizer.param_groups for p in g['params'])
+        print(f"Total trainable parameters: {total_params}")
+        print(f"Parameters passed to optimizer: {opt_params}")
 
     def configure_scheduler(self, scheduler_config):
         """Instantiate a scheduler from a hydra config."""
@@ -273,6 +278,7 @@ class ReconstructionEngine(ABC):
         """
         # set model to eval mode
         self.model.eval()
+
         val_metrics = None
         for val_batch in range(num_val_batches):
             # get validation data mini-batch
@@ -312,6 +318,7 @@ class ReconstructionEngine(ABC):
                 self.save_state()
             self.val_log.log(log_entries)
         # return model to training mode
+
         self.model.train()
 
     def evaluate(self, report_interval=20):
