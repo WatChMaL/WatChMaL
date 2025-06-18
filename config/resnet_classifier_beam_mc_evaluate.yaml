@@ -1,0 +1,12 @@
+gpu_list:
+    - 0
+    - 1
+seed: null
+dump_path: './outputs/'
+defaults:
+    - data: hkfd_electron
+    - model: resnet50
+    - engine: classifier
+    - tasks/restore_state: classifier
+    - tasks/evaluate: test
+    - _self_

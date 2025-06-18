@@ -1,0 +1,15 @@
+gpu_list:
+    - 0
+    - 1
+    - 2
+    - 3
+seed: null
+dump_path: './outputs/'
+defaults:
+    - data: beam_mc
+    - model: resnet50
+    - engine: regression
+    - tasks/restore_state: regression_e_direction
+    - tasks/evaluate: test
+    - override loss@tasks.evaluate.loss: huber
+    - _self_

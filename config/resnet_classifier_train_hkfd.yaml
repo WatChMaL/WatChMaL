@@ -1,0 +1,16 @@
+gpu_list:
+    - 0
+    - 1
+    - 2
+    - 3
+seed: null
+dump_path: './outputs/'
+defaults:
+    - data: hkfd_electron
+    - model: resnet50
+    - engine: classifier
+    - tasks/train: train_resnet
+    - tasks/restore_best_state: restore_best_state
+    - tasks/evaluate: test
+    - override loss@tasks.train.loss: cross_entropy
+    - _self_

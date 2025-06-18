@@ -1,7 +1,0 @@
-torch
-hydra-core>=1.1
-omegaconf
-h5py
-numpy
-uproot
-matplotlib

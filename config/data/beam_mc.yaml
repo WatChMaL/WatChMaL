@@ -1,0 +1,5 @@
+defaults:
+  - dataset: hk_pmt_cnn
+split_path: /fred/oz233/aatta/ML/data/hkfd/beam_mc/wcsim_lbl_neg+pos_20kBL_0-44.npz
+dataset:
+  h5file: /fred/oz233/aatta/ML/data/hkfd/beam_mc/wcsim_lbl_neg+pos_20kBL_0-44_no_neg1.h5

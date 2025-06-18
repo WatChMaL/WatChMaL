@@ -32,7 +32,7 @@ class WatChMaLOutput(ABC, metaclass=ABCMeta):
         self._val_log_loss = None
         self._val_log_best = None
 
-    def plot_training_progression(self, plot_best=True, y_lim=None, fig_size=None, title=None, legend='center right'):
+    def plot_training_progression(self, plot_best=True, y_lim=None, fig_size=None, title=None, legend='center right', smoothed = False, windowsize = 10):
         """
         Plot the progression of training and validation loss from the run's logs
 
@@ -56,8 +56,23 @@ class WatChMaLOutput(ABC, metaclass=ABCMeta):
         """
         fig, ax = plt.subplots(figsize=fig_size)
         ax.set_title(title)
-        ax.plot(self.train_log_epoch, self.train_log_loss, lw=2, label='Train loss', color='b', alpha=0.3)
-        ax.plot(self.val_log_epoch, self.val_log_loss, lw=2, label='Validation loss', color='b')
+
+        if smoothed:
+            #calculate smoothed losses
+            smoothed_train_log_loss = np.convolve(self.train_log_loss, np.ones(windowsize)/windowsize, mode='valid')
+            smoothed_val_log_loss = np.convolve(self.val_log_loss, np.ones(windowsize)/windowsize, mode='valid')
+            
+            #calculate smoothed epochs
+            train_epochs_smoothed = self.train_log_epoch[:len(smoothed_train_log_loss)]
+            val_epochs_smoothed = self.val_log_epoch[:len(smoothed_val_log_loss)]
+
+            #plot smoothed losses
+            ax.plot(train_epochs_smoothed, smoothed_train_log_loss, lw=1, label='Train loss', color='g')
+            ax.plot(val_epochs_smoothed, smoothed_val_log_loss, lw=1, label='Validation loss', color='b', alpha=0.3)
+        else:
+            ax.plot(self.train_log_epoch, self.train_log_loss, lw=0.5, label='Train loss', color='g')
+            ax.plot(self.val_log_epoch, self.val_log_loss, lw=0.5, label='Validation loss', color='b', alpha=0.3)
+        
         if plot_best:
             ax.plot(self.val_log_epoch[self.val_log_best], self.val_log_loss[self.val_log_best], lw=0, marker='o',
                     label='Best validation loss', color='darkblue')

@@ -1,5 +1,5 @@
 defaults:
   - dataset: hk_pmt_cnn
-split_path: /fred/oz233/aatta/ML/data/hkfd/HKFD_e_0-2gev_0-999_200evts.npz
+split_path: /fred/oz233/aatta/ML/data/hkfd/uncut_e_0-2GeV_0-999_200events.npz
 dataset:
-  h5file: /fred/oz233/aatta/ML/data/hkfd/HKFD_e_0-2gev_0-999_200evts.h5
+  h5file: /fred/oz233/aatta/ML/data/hkfd/uncut_e_0-2GeV_0-999_200events.h5

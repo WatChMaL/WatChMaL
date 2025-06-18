@@ -78,24 +78,6 @@ class RegressionEngine(ReconstructionEngine):
         with torch.set_grad_enabled(train):
             # scale and stack the targets for calculating the loss
             target = torch.column_stack([(v - self.offset[t]) / self.scale[t] for t, v in self.target.items()])
-
-            print('\n=============================================\n')
-            print(target)
-            print('\n=============================================\n')
-            print('target.shape:', target.shape)
-            print('\n=============================================\n')
-            print('self.data.shape:', self.data.shape)
-            print('\n=============================================\n')
-
-            print('\n=============================================\n')
-
-            output=self.model(self.data)
-            print("Model output shape:", output.shape)
-            print("Target shape:", target.shape)
-            # model_out=output.reshape(target.shape)
-            print('\n=============================================\n')
-            print('\n=============================================\n')
-
             # evaluate the model on the data and reshape output to match the target
             model_out = self.model(self.data).reshape(target.shape)
             # calculate the loss
