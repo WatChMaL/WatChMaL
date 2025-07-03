@@ -43,7 +43,7 @@ class H5CommonDataset(Dataset, ABC):
         """Dataset from the HDF5 file in `h5_path`, using memmaps for hit arrays unless `use_memmap` is set to False"""
         self.h5_path = h5_path
         with h5py.File(self.h5_path, 'r') as h5_file:
-            self.dataset_length = h5_file["labels"].shape[0]
+            self.dataset_length = h5_file["event_hits_index"].shape[0]
 
         self.label_set = None
         self.labels_key = None
