@@ -68,10 +68,10 @@ class RegressionEngine(ReconstructionEngine):
         """Compute predictions for a batch of data"""
         # scale and stack the targets for calculating the loss
         self.stacked_target = torch.column_stack([(v - self.offset[t]) / self.scale[t] for t, v in self.target_dict.items()])
-        # split the output for each target
-        split_model_out = torch.split(self.model_out, self.target_sizes, dim=1)
         # evaluate the model on the data and reshape output to match the target
         self.model_out = self.model(self.data).reshape(self.stacked_target.shape)
+        # split the output for each target
+        split_model_out = torch.split(self.model_out, self.target_sizes, dim=1)
         self.predictions = {"predicted_" + t: o * self.scale[t] + self.offset[t]
                                       for t, o in zip(self.target_dict.keys(), split_model_out)}
         return self.target_dict | self.predictions
