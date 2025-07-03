@@ -53,29 +53,19 @@ class ClassifierEngine(ReconstructionEngine):
         self.data = data['data'].to(self.device)
         self.target = data[self.target_key].to(self.device)
 
-    def forward(self, train=True):
-        """
-        Compute predictions and metrics for a batch of data.
+    def forward_pass(self):
+        """Compute softmax predictions for a batch of data."""
+        self.model_out = self.model(self.data)
+        softmax = self.softmax(self.model_out)
+        outputs = {self.target_key: self.target,
+                   'softmax': softmax}
+        return outputs
 
-        Parameters
-        ==========
-        train : bool
-            Whether in training mode, requiring computing gradients for backpropagation
-
-        Returns
-        =======
-        dict
-            Dictionary containing loss, predicted labels, softmax, accuracy, and raw model outputs
-        """
-        with torch.set_grad_enabled(train):
-            # Move the data and the labels to the GPU (if using CPU this has no effect)
-            model_out = self.model(self.data)
-            softmax = self.softmax(model_out)
-            predicted_labels = torch.argmax(model_out, dim=-1)
-            self.loss = self.criterion(model_out, self.target)
-            accuracy = (predicted_labels == self.target).sum() / float(predicted_labels.nelement())
-            outputs = {self.target_key: self.target,
-                       'softmax': softmax}
-            metrics = {'loss': self.loss,
-                       'accuracy': accuracy}
-        return outputs, metrics
+    def compute_metrics(self):
+        """Compute loss and accuracy"""
+        self.loss = self.criterion(self.model_out, self.target)
+        predicted_labels = torch.argmax(self.model_out, dim=-1)
+        accuracy = (predicted_labels == self.target).mean()
+        metrics = {'loss': self.loss,
+                   'accuracy': accuracy}
+        return metrics
