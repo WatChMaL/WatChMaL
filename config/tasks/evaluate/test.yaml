@@ -1,4 +1,5 @@
 defaults:
+  - /loss: cross_entropy
   - /data_loaders:
     - test
 report_interval: 10
