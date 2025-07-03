@@ -68,7 +68,7 @@ def main(config):
         log.info(f"Using DistributedDataParallel on these devices: {devids}")
         mp.spawn(main_worker_function, nprocs=ngpus, args=(ngpus, is_distributed, config, HydraConfig.get()))
     else:
-        log.info("Only one gpu found, not using multiprocessing...")
+        log.info("Only one device found, not using multiprocessing...")
         main_worker_function(0, ngpus, is_distributed, config)
 
 
