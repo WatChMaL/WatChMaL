@@ -249,7 +249,7 @@ class ReconstructionEngine(ABC):
                 # Prepare the data for forward pass
                 self.process_data(train_data)
                 # Call forward: make a prediction & measure the average error
-                outputs, metrics = self.forward(True)
+                outputs, metrics = self.step(True,True)
                 # Convert torch tensors containing each metric into scalar
                 metrics = {k: v.item() for k, v in metrics.items()}
                 # Call backward: back-propagate error and update weights using loss = self.loss
