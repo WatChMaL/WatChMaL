@@ -65,7 +65,7 @@ class ClassifierEngine(ReconstructionEngine):
         """Compute loss and accuracy"""
         self.loss = self.criterion(self.model_out, self.target)
         predicted_labels = torch.argmax(self.model_out, dim=-1)
-        accuracy = (predicted_labels == self.target).mean()
+        accuracy = (predicted_labels == self.target).float().mean()
         metrics = {'loss': self.loss,
                    'accuracy': accuracy}
         return metrics
