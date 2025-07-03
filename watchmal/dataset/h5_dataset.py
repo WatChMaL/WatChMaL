@@ -51,6 +51,10 @@ class H5CommonDataset(Dataset, ABC):
 
         self.initialized = False
 
+        self.event_hits_index = None
+        self.hit_pmt = None
+        self.hit_time = None
+
     def initialize(self):
         """
         Initialises the arrays from the HDF5 file. For DistributedDataParallel, this cannot be done when first creating
@@ -59,17 +63,13 @@ class H5CommonDataset(Dataset, ABC):
         """
         self.h5_file = h5py.File(self.h5_path, "r")
 
-        # self.event_ids  = np.array(self.h5_file["event_ids"])
-        # self.root_files = np.array(self.h5_file["root_files"])
-        self.labels = np.array(self.h5_file["labels"])
-        self.positions  = np.array(self.h5_file["positions"])
-        self.angles     = np.array(self.h5_file["angles"])
-        self.energies   = np.array(self.h5_file["energies"])
-        # if "veto" in self.h5_file.keys():
-        #     self.veto  = np.array(self.h5_file["veto"])
-        #     self.veto2 = np.array(self.h5_file["veto2"])
-        self.event_hits_index = np.append(self.h5_file["event_hits_index"], self.h5_file["hit_pmt"].shape[0]).astype(np.int64)
+        # TODO: allow configuring which array(s) to load, or do automatically from regression or classification target
+        array_list = ["labels", "positions", "angles", "energies"]
+        for a in array_list:
+            if a in self.h5_file:
+                self.__setattr__(a, np.array(self.h5_file[a]))
 
+        self.event_hits_index = np.append(self.h5_file["event_hits_index"], self.h5_file["hit_pmt"].shape[0]).astype(np.int64)
         self.hit_pmt = self.load_hits("hit_pmt")
         self.hit_time = self.load_hits("hit_time")
 
