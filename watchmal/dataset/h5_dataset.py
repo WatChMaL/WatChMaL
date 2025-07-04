@@ -69,7 +69,7 @@ class H5CommonDataset(Dataset, ABC):
                     self.targets = {t: self.load_target(t) for t in self.target_key}
             except KeyError:
                 # truth info don't exist, can only predict but not train or evaluate
-                self.targets = None
+                self.targets = {}
 
     def load_target(self, target_key):
         if target_key == "directions":
