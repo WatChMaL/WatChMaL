@@ -86,24 +86,11 @@ class ReconstructionEngine(ABC):
         self.scheduler = instantiate(scheduler_config, optimizer=self.optimizer)
 
     def configure_data_loaders(self, data_config, loaders_config, is_distributed, seed):
-        """
-        Set up data loaders from loaders hydra configs for the data config, and a list of data loader configs.
-
-        Parameters
-        ==========
-        data_config
-            Hydra config specifying dataset.
-        loaders_config
-            Hydra config specifying a list of dataloaders.
-        is_distributed : bool
-            Whether running in multiprocessing mode.
-        seed : int
-            Random seed to use to initialize dataloaders.
-        """
         is_gpu = self.device != torch.device("cpu")
         for name, loader_config in loaders_config.items():
             self.data_loaders[name] = get_data_loader(**data_config, **loader_config, is_distributed=is_distributed,
                                                       is_gpu=is_gpu, seed=seed)
+            self.data_loaders[name].dataset.set_target(self.target_key)
 
     def get_synchronized_outputs(self, output_dict):
         """

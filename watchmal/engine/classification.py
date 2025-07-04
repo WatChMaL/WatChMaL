@@ -46,7 +46,7 @@ class ClassifierEngine(ReconstructionEngine):
         super().configure_data_loaders(data_config, loaders_config, is_distributed, seed)
         if self.label_set is not None:
             for name in loaders_config.keys():
-                self.data_loaders[name].dataset.map_labels(self.label_set, self.target_key)
+                self.data_loaders[name].dataset.map_labels(self.label_set)
 
     def process_data(self, data):
         """Extract the event data and target from the input data dict"""
