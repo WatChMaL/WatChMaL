@@ -27,6 +27,7 @@ class ClassifierEngine(ReconstructionEngine):
         super().__init__(target_key, model, rank, device, dump_path)
         self.softmax = torch.nn.Softmax(dim=1)
         self.label_set = label_set
+        self.target = None
 
     def configure_data_loaders(self, data_config, loaders_config, is_distributed, seed):
         """
@@ -56,8 +57,9 @@ class ClassifierEngine(ReconstructionEngine):
         """Compute softmax predictions for a batch of data."""
         self.model_out = self.model(self.data)
         softmax = self.softmax(self.model_out)
-        outputs = {self.target_key: self.target,
-                   'softmax': softmax}
+        outputs = {'softmax': softmax}
+        if self.target is not None:
+            outputs[self.target_key] = self.target
         return outputs
 
     def compute_metrics(self):
