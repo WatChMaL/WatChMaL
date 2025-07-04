@@ -67,7 +67,7 @@ class H5CommonDataset(Dataset, ABC):
                     self.targets = {target_key: self.load_target(target_key)}
                 else:
                     self.targets = {t: self.load_target(t) for t in self.target_key}
-            except AttributeError:
+            except KeyError:
                 # truth info don't exist, can only predict but not train or evaluate
                 self.targets = None
 
