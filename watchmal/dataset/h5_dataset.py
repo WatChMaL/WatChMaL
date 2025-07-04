@@ -109,7 +109,7 @@ class H5CommonDataset(Dataset, ABC):
             labels.
         """
         self.label_set = set(label_set)
-        if self.initialized and self.targets is not None:
+        if self.initialized and self.targets:
             self.unmapped_labels = self.targets[self.target_key]
             labels = np.ndarray(self.unmapped_labels.shape, dtype=np.int64)
             for i, l in enumerate(self.label_set):
