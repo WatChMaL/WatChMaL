@@ -143,9 +143,13 @@ class ReconstructionEngine(ABC):
                 global_metric_dict[name] = tensor.item()
         return global_metric_dict
 
-    @abstractmethod
     def process_data(self, data):
-        """Extract the event data and target from the input data dict"""
+        """Extract the event data from the input data dict"""
+        self.data = data['data'].to(self.device)
+
+    @abstractmethod
+    def process_target(self, data):
+        """Extract the target from the input data dict"""
         pass
 
     @abstractmethod
@@ -237,6 +241,7 @@ class ReconstructionEngine(ABC):
             for step, train_data in enumerate(train_loader):
                 # Prepare the data for forward pass
                 self.process_data(train_data)
+                self.process_target(train_data)
                 # Call forward: make a prediction & measure the average error
                 outputs, metrics = self.step(True,True)
                 # Convert torch tensors containing each metric into scalar
@@ -304,6 +309,7 @@ class ReconstructionEngine(ABC):
                 val_data = next(val_iter)
             # extract the event data and target from the input data dict
             self.process_data(val_data)
+            self.process_target(val_data)
             # evaluate the network
             outputs, metrics = self.step(False, True)
             if val_metrics is None:
@@ -343,8 +349,8 @@ class ReconstructionEngine(ABC):
             steps_per_epoch = len(self.data_loaders["test"])
             for step, data in enumerate(self.data_loaders["test"]):
                 self.process_data(data)
-
                 if with_metrics:
+                    self.process_target(data)
                     outputs, metrics = self.step(False, True)
                 else:
                     outputs = self.step(False, False)

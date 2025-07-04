@@ -56,9 +56,8 @@ class RegressionEngine(ReconstructionEngine):
         self.stacked_target = None
         self.predictions = None
 
-    def process_data(self, data):
+    def process_target(self, data):
         """Extract the event data and target from the input data dict"""
-        self.data = data['data'].to(self.device)
         self.target_dict = {t: data[t].to(self.device) for t in self.target_key}
         # First time we get data, determine the target sizes
         if self.target_sizes is None:

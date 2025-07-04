@@ -48,9 +48,8 @@ class ClassifierEngine(ReconstructionEngine):
             for name in loaders_config.keys():
                 self.data_loaders[name].dataset.map_labels(self.label_set)
 
-    def process_data(self, data):
+    def process_target(self, data):
         """Extract the event data and target from the input data dict"""
-        self.data = data['data'].to(self.device)
         self.target = data[self.target_key].to(self.device)
 
     def forward_pass(self):
