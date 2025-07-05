@@ -73,9 +73,9 @@ class H5CommonDataset(Dataset, ABC):
 
     def load_target(self, target_key):
         if target_key == "directions":
-            return np.expand_dims(direction_from_angles(np.array(self.h5_file["angles"])), axis=-2)
+            return direction_from_angles(np.array(self.h5_file["angles"]))
         else:
-            return np.array(self.h5_file[target_key])
+            return np.array(self.h5_file[target_key]).squeeze()
 
     def initialize(self):
         """
