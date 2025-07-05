@@ -62,23 +62,32 @@ class RegressionEngine(ReconstructionEngine):
         # First time we get data, determine the target sizes
         if self.target_sizes is None:
             self.target_sizes = [v.shape[-1] if len(v.shape) > 1 else 1 for v in self.target_dict.values()]
+        # scale and stack the targets for calculating the loss
+        self.stacked_target = torch.column_stack([(v - self.offset[t]) / self.scale[t] for t, v in self.target_dict.items()])
 
     def forward_pass(self):
         """Compute predictions for a batch of data"""
         # evaluate the model on the data
         self.model_out = self.model(self.data)
-        # scale and stack the targets for calculating the loss
-        self.stacked_target = torch.column_stack([(v - self.offset[t]) / self.scale[t] for t, v in self.target_dict.items()])
         # split the output for each target
         split_model_out = torch.split(self.model_out, self.target_sizes, dim=1)
         self.predictions = {"predicted_" + t: o * self.scale[t] + self.offset[t]
                             for t, o in zip(self.target_dict.keys(), split_model_out)}
+        # return outputs including the unscaled target dictionary plus elements for the corresponding predictions
         return self.target_dict | self.predictions
 
     def compute_metrics(self):
         self.loss = self.criterion(self.model_out, self.stacked_target)
-        # return outputs including the unscaled target dictionary plus elements for the corresponding predictions
+        # return loss and metrics for the predictions
         metrics = {t+" error": metric_functions[t](self.predictions["predicted_"+t], v)
                    for t, v in self.target_dict.items() if t in metric_functions}
         metrics['loss'] = self.loss
         return metrics
+
+    def save_state(self, suffix="", name=None):
+        self.state_data["target_sizes"] = self.target_sizes
+        super().save_state(suffix, name)
+
+    def restore_state(self, weight_file):
+        super().restore_state(weight_file)
+        self.target_sizes = self.state_data["target_sizes"]

@@ -39,6 +39,7 @@ class ReconstructionEngine(ABC):
             The path to store outputs in.
         """
         # create the directory for saving the log and dump files
+        self.state_data = {}
         self.epoch = 0
         self.iteration = 0
         self.best_validation_loss = None
@@ -425,11 +426,10 @@ class ReconstructionEngine(ABC):
         # Save parameters
         # 0+1) iteration counter + optimizer state => in case we want to "continue training" later
         # 2) network weight
-        torch.save({
-            'global_step': self.iteration,
-            'optimizer': self.optimizer.state_dict(),
-            'state_dict': model_dict
-        }, filename)
+        self.state_data['global_step'] = self.iteration
+        self.state_data['optimizer'] = self.optimizer.state_dict()
+        self.state_data['state_dict'] = model_dict
+        torch.save(self.state_data, filename)
         log.info(f"Saved state as: {filename}")
         return filename
 
@@ -448,11 +448,11 @@ class ReconstructionEngine(ABC):
             if self.is_distributed:
                 torch.distributed.barrier()
             # torch interprets the file, then we can access using string keys
-            checkpoint = torch.load(f, map_location=self.device)
+            self.state_data = torch.load(f, map_location=self.device)
             # load network weights
-            self.module.load_state_dict(checkpoint['state_dict'])
+            self.module.load_state_dict(self.state_data['state_dict'])
             # if optim is provided, load the state of the optim
             if self.optimizer is not None:
-                self.optimizer.load_state_dict(checkpoint['optimizer'])
+                self.optimizer.load_state_dict(self.state_data['optimizer'])
             # load iteration count
-            self.iteration = checkpoint['global_step']
+            self.iteration = self.state_data['global_step']
