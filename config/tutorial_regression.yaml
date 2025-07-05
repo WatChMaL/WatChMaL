@@ -2,6 +2,7 @@ defaults:
     - tutorial_defaults
     - engine: regression
     - override loss@tasks.train.loss: huber
+    - override loss@tasks.evaluate.loss: huber
     - _self_
 engine:
   target_key:
