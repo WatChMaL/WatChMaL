@@ -72,7 +72,7 @@ class RegressionEngine(ReconstructionEngine):
         # split the output for each target
         split_model_out = torch.split(self.model_out, self.target_sizes, dim=1)
         self.predictions = {"predicted_" + t: o * self.scale[t] + self.offset[t]
-                                      for t, o in zip(self.target_dict.keys(), split_model_out)}
+                            for t, o in zip(self.target_dict.keys(), split_model_out)}
         return self.target_dict | self.predictions
 
     def compute_metrics(self):
