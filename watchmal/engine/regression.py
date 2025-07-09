@@ -91,4 +91,5 @@ class RegressionEngine(ReconstructionEngine):
 
     def restore_state(self, weight_file):
         super().restore_state(weight_file)
-        self.target_sizes = self.state_data["target_sizes"]
+        if "target_sizes" in self.state_data:
+            self.target_sizes = self.state_data["target_sizes"]
