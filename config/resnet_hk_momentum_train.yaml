@@ -11,7 +11,7 @@ defaults:
   - model: resnet152_momentum
   - engine: regression_momentum
  # - tasks/restore_state: restore_state_momentum
-  - tasks/train: train_resnet  
+  - tasks/train: train_transformer  
   - optimizers@tasks.train.optimizers: adamW_momentum
   - scheduler@tasks.train.scheduler: cosinelr
   - loss@tasks.train.loss: huber_momentum

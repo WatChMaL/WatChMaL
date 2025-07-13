@@ -1,6 +1,6 @@
 import torch.nn as nn
 import torch
-
+from functools import partial
 
 def conv1x1(in_planes, out_planes, stride=1):
     """1x1 convolution"""
@@ -85,7 +85,7 @@ class Bottleneck(nn.Module):
 class ResNet(nn.Module):
 
     def __init__(self, block, layers, num_input_channels, num_output_channels, zero_init_residual=False,
-                 conv_pad_mode='zeros', group_norm=False, n_groups=32):
+                 conv_pad_mode='zeros', group_norm=False, n_groups=32, dropout_p=0.0):
         if group_norm:
             class GroupNorm(nn.GroupNorm):
                 def __init__(self, num_channels):
@@ -108,6 +108,8 @@ class ResNet(nn.Module):
         self.layer3 = self._make_layer(block, 256, layers[2], stride=2, conv_pad_mode=conv_pad_mode)
         self.layer4 = self._make_layer(block, 512, layers[3], stride=2, conv_pad_mode=conv_pad_mode)
 
+        self.dropout = nn.Dropout(p=dropout_p)
+        
         self.avgpool = nn.AdaptiveAvgPool2d((1,1))
         self.fc = nn.Linear(512 * block.expansion, num_output_channels)
 
@@ -152,12 +154,12 @@ class ResNet(nn.Module):
         x = self.layer1(x)
         x = self.layer2(x)
         x = self.layer3(x)
+        x = self.dropout(x)
         x = self.layer4(x)
 
         x = self.avgpool(x)
         x = torch.flatten(x, 1)
         x = self.fc(x)
-
         return x
 
 

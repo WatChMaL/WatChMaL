@@ -14,7 +14,8 @@ from hydra.utils import instantiate
 # torch imports
 import torch
 from torch.nn.parallel import DistributedDataParallel
-
+from transformers import get_scheduler
+from omegaconf import OmegaConf
 
 # WatChMaL imports
 from watchmal.dataset.data_utils import get_data_loader
@@ -89,7 +90,14 @@ class ReconstructionEngine(ABC):
 
     def configure_scheduler(self, scheduler_config):
         """Instantiate a scheduler from a hydra config."""
-        self.scheduler = instantiate(scheduler_config, optimizer=self.optimizer)
+        scheduler_kwargs = OmegaConf.to_container(scheduler_config, resolve=True)
+
+        scheduler_kwargs.pop('_target_', None)
+        self.scheduler = get_scheduler(
+            optimizer=self.optimizer,
+            **scheduler_kwargs
+        )
+        #self.scheduler = instantiate(scheduler_config, optimizer=self.optimizer)
 
     def configure_data_loaders(self, data_config, loaders_config, is_distributed, seed):
         """

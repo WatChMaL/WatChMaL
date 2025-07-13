@@ -1,4 +1,12 @@
 '''
+Author: Shuoyu Chen shuoyuchen.physics@gmail.com
+Date: 2025-06-23 13:09:23
+LastEditors: Shuoyu Chen shuoyuchen.physics@gmail.com
+LastEditTime: 2025-07-11 09:26:49
+FilePath: /schen/workspace/WatChMaL/watchmal/model/SwinTransformer.py
+Description: 
+'''
+'''
 Here is a Swin Transformer model.
 '''
 import torch

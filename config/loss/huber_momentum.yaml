@@ -1,3 +1,0 @@
-_target_: watchmal.loss.relative_huber.RelativeHuberLoss
-#delta: 0.1
-delta: 0.07

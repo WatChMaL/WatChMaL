@@ -1,3 +1,0 @@
-_target_: torch.nn.HuberLoss
-delta:  100
-#delta: 50000

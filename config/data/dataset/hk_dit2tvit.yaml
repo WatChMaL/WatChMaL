@@ -1,10 +1,9 @@
 _target_: watchmal.dataset.dit2tvit.dit2tvit_dataset.DoubleImageDataset
-h5file: /disk/schen/workspace/train/tiny_pmt_test.h5
-h5file_mpmt: /disk/schen/workspace/train/tiny_mpmt_test.h5
-pmt_positions_file: /disk/schen/workspace/train/PMTmPMT_PMT.npz
-mpmt_positions_file: /disk/schen/workspace/train/PMTmPMT_mPMT.npz
-geometry_file:  /disk/schen/workspace/WatChMaL/HK_20inchPMT_real_info.npz
-#collapse_arrays: False
+h5file: /path/to/dataset.h5
+h5file_mpmt: /path/to/dataset_mpmt.h5
+pmt_positions_file: /path/to/pmt_positions.npz
+mpmt_positions_file: /path/to/mpmt_positions.npz
+geometry_file:  /path/to/geometry.npz
 
 use_times: True
 use_charges: True
@@ -16,14 +15,4 @@ use_orientations: False
 use_invalid_value: False
 use_log_charge: False
 
-#channel_scale_offset:
-#  time: 950
-#  charge: -2
-#  positions: 0
-#  orientations: 0
-#channel_scale_factor:
-#  time: 700
-#  charge: 4
-#  positions: 3000
-#  orientations: 1
 

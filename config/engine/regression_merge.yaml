@@ -1,8 +1,0 @@
-_target_: watchmal.engine.regression.RegressionEngine
-target_key: ['directions','positions',]
-target_scale_factor: 
-  directions: 1
-  positions: 1300
-target_scale_offset:
-  directions: 0
-  positions: 0
