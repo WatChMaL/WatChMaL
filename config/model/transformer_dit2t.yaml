@@ -1,3 +1,2 @@
 _target_: watchmal.model.T2TViTransformer2I.DualT2T_ViTRegressor
-
-
+img_size: [192, 192]

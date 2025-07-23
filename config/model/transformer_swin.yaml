@@ -4,6 +4,6 @@ img_size: [192, 192]
 in_chans: 2
 model_name: swin_tiny_patch4_window7_224
 pretrained: False
-num_output_channels: 1
+
 
           
