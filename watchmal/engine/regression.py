@@ -45,13 +45,13 @@ class RegressionEngine(ReconstructionEngine):
             self.target_key = [self.target_key]
         self.target_sizes = None
         if isinstance(target_scale_offset, Mapping):  # each target has its own offset
-            self.offset = {t: torch.tensor(target_scale_offset.get(t, 0)).to(self.device) for t in target_key}
+            self.offset = {t: torch.tensor(target_scale_offset.get(t, 0)).to(self.device) for t in self.target_key}
         else:  # each target has the same offset
-            self.offset = {t: torch.tensor(target_scale_offset).to(self.device) for t in target_key}
+            self.offset = {t: torch.tensor(target_scale_offset).to(self.device) for t in self.target_key}
         if isinstance(target_scale_factor, Mapping):  # each target has its own scale
-            self.scale = {t: torch.tensor(target_scale_factor.get(t, 1)).to(self.device) for t in target_key}
+            self.scale = {t: torch.tensor(target_scale_factor.get(t, 1)).to(self.device) for t in self.target_key}
         else:  # each target has the same scale
-            self.scale = {t: torch.tensor(target_scale_factor).to(self.device) for t in target_key}
+            self.scale = {t: torch.tensor(target_scale_factor).to(self.device) for t in self.target_key}
 
     def process_data(self, data):
         """Extract the event data and target from the input data dict"""
