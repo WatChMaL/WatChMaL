@@ -398,7 +398,7 @@ class FiTQunOutput:
         file_path: str
             Path the fiTQun output root file
         """
-        self.chain = uproot.lazy(file_path)
+        self.chain = uproot.concatenate(file_path)
 
         self.n_timewindows = self.chain['fqntwnd']
         self.timewindow = self.chain['fqtwnd']
