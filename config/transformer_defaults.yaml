@@ -1,0 +1,17 @@
+defaults:
+    - data: vit_data
+    - model: transformer_swin
+    - tasks/train: train_transformer
+    - tasks/restore_best_state: restore_best_state
+    - tasks/evaluate: test
+tasks:
+  train:
+    epochs: 20
+    val_interval: 1000
+    num_val_batches: 64
+gpu_list: [] # train on CPU
+seed: null
+dump_path: './outputs/'
+hydra:
+  job:
+    chdir: True
