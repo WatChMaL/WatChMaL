@@ -56,7 +56,7 @@ class DualImageDataset(CNNDataset):
 
     def __getitem__(self, item):
         data_dict = super().__getitem__(item)
-        data_dict['data_main'] = data_dict.pop('data')
+        data_main = data_dict.pop('data')
         if not self.mpmt_dataset.initialized:
             self.mpmt_dataset.initialize()
             
@@ -66,5 +66,5 @@ class DualImageDataset(CNNDataset):
             self.mpmt_dataset.event_hit_times,
             self.mpmt_dataset.event_hit_charges
         )
-        data_dict['data_second'] = from_numpy(data_second)
+        data_dict['data'] = (data_main, from_numpy(data_second))
         return data_dict
