@@ -77,7 +77,8 @@ class DualT2T_Module(nn.Module):
         )
         self.num_patches = (img_size[0] // 16) * (img_size[1] // 16)
 
-    def forward(self, x_main, x_second):
+    def forward(self, x):
+        x_main, x_second = x
         B, _, H_img, W_img = x_main.shape
         num_pairs = (
             self.final_second_conv.in_channels // self.pair_enhancer_conv.out_channels
