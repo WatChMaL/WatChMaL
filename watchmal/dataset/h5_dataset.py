@@ -43,13 +43,39 @@ class H5CommonDataset(Dataset, ABC):
         """Dataset from the HDF5 file in `h5_path`, using memmaps for hit arrays unless `use_memmap` is set to False"""
         self.h5_path = h5_path
         with h5py.File(self.h5_path, 'r') as h5_file:
-            self.dataset_length = h5_file["labels"].shape[0]
+            self.dataset_length = h5_file["event_hits_index"].shape[0]
 
         self.label_set = None
         self.labels_key = None
         self.use_memmap = use_memmap
 
         self.initialized = False
+
+        self.h5_file = None
+        self.event_hits_index = None
+        self.hit_pmt = None
+        self.hit_time = None
+        self.target_key = None
+        self.targets = None
+        self.unmapped_labels = None
+
+    def set_target(self, target_key):
+        self.target_key = target_key
+        if self.initialized:
+            try:
+                if isinstance(self.target_key, str):
+                    self.targets = {target_key: self.load_target(target_key)}
+                else:
+                    self.targets = {t: self.load_target(t) for t in self.target_key}
+            except KeyError:
+                # truth info don't exist, can only predict but not train or evaluate
+                self.targets = {}
+
+    def load_target(self, target_key):
+        if target_key == "directions":
+            return direction_from_angles(np.array(self.h5_file["angles"]))
+        else:
+            return np.array(self.h5_file[target_key]).squeeze()
 
     def initialize(self):
         """
@@ -59,28 +85,19 @@ class H5CommonDataset(Dataset, ABC):
         """
         self.h5_file = h5py.File(self.h5_path, "r")
 
-        # self.event_ids  = np.array(self.h5_file["event_ids"])
-        # self.root_files = np.array(self.h5_file["root_files"])
-        self.labels = np.array(self.h5_file["labels"])
-        self.positions  = np.array(self.h5_file["positions"])
-        self.angles     = np.array(self.h5_file["angles"])
-        self.energies   = np.array(self.h5_file["energies"])
-        # if "veto" in self.h5_file.keys():
-        #     self.veto  = np.array(self.h5_file["veto"])
-        #     self.veto2 = np.array(self.h5_file["veto2"])
         self.event_hits_index = np.append(self.h5_file["event_hits_index"], self.h5_file["hit_pmt"].shape[0]).astype(np.int64)
-
         self.hit_pmt = self.load_hits("hit_pmt")
         self.hit_time = self.load_hits("hit_time")
 
         # Set attribute so that method won't be invoked again
         self.initialized = True
 
-        # perform label mapping now that labels have been initialised
+        # load targets and perform label mapping now the dataset has been initialised
+        self.set_target(self.target_key)
         if self.label_set is not None:
-            self.map_labels(self.label_set, self.labels_key)
+            self.map_labels(self.label_set)
 
-    def map_labels(self, label_set, labels_key="labels"):
+    def map_labels(self, label_set):
         """
         Maps the labels of the dataset into a range of integers from 0 up to N-1, where N is the number of unique labels
         in the provided label set.
@@ -90,20 +107,14 @@ class H5CommonDataset(Dataset, ABC):
         label_set: sequence of labels
             Set of all possible labels to map onto the range of integers from 0 to N-1, where N is the number of unique
             labels.
-        labels_key: string
-            Name of the key used for the labels
         """
         self.label_set = set(label_set)
-        self.labels_key = labels_key
-        if self.initialized:
-            try:
-                self.original_labels = getattr(self, labels_key)
-            except AttributeError:
-                self.original_labels = np.array(self.h5_file[labels_key])
-            labels = np.ndarray(self.original_labels.shape, dtype=int)
+        if self.initialized and self.targets:
+            self.unmapped_labels = self.targets[self.target_key]
+            labels = np.ndarray(self.unmapped_labels.shape, dtype=np.int64)
             for i, l in enumerate(self.label_set):
-                labels[self.original_labels == l] = i
-            setattr(self, labels_key, labels)
+                labels[self.unmapped_labels == l] = i
+            self.targets[self.target_key] = labels
 
     def load_hits(self, h5_key):
         """Loads data from a given key in the h5 file either into numpy arrays or memmaps"""
@@ -119,19 +130,8 @@ class H5CommonDataset(Dataset, ABC):
     def __getitem__(self, item):
         if not self.initialized:
             self.initialize()
-
-        data_dict = {
-            "labels": self.labels[item].astype(np.int64),
-            "energies": self.energies[item].copy(),
-            "angles": self.angles[item].copy(),
-            "positions": self.positions[item].copy(),
-            "directions": direction_from_angles(self.angles[item]),
-            # "event_ids": self.event_ids[item],
-            # "root_files": self.root_files[item],
-            "indices": item
-        }
-        if self.labels_key is not None and self.labels_key not in data_dict:
-            data_dict[self.labels_key] = getattr(self, self.labels_key)[item].copy()
+        data_dict = {k: t[item].copy() for k, t in self.targets.items()}
+        data_dict["indices"] = item
         return data_dict
 
 

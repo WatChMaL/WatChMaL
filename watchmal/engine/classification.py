@@ -27,6 +27,7 @@ class ClassifierEngine(ReconstructionEngine):
         super().__init__(target_key, model, rank, device, dump_path)
         self.softmax = torch.nn.Softmax(dim=1)
         self.label_set = label_set
+        self.target = None
 
     def configure_data_loaders(self, data_config, loaders_config, is_distributed, seed):
         """
@@ -46,36 +47,26 @@ class ClassifierEngine(ReconstructionEngine):
         super().configure_data_loaders(data_config, loaders_config, is_distributed, seed)
         if self.label_set is not None:
             for name in loaders_config.keys():
-                self.data_loaders[name].dataset.map_labels(self.label_set, self.target_key)
+                self.data_loaders[name].dataset.map_labels(self.label_set)
 
-    def process_data(self, data):
+    def process_target(self, data):
         """Extract the event data and target from the input data dict"""
-        self.data = data['data'].to(self.device)
         self.target = data[self.target_key].to(self.device)
 
-    def forward(self, train=True):
-        """
-        Compute predictions and metrics for a batch of data.
+    def forward_pass(self):
+        """Compute softmax predictions for a batch of data."""
+        self.model_out = self.model(self.data)
+        softmax = self.softmax(self.model_out)
+        outputs = {'softmax': softmax}
+        if self.target is not None:
+            outputs[self.target_key] = self.target
+        return outputs
 
-        Parameters
-        ==========
-        train : bool
-            Whether in training mode, requiring computing gradients for backpropagation
-
-        Returns
-        =======
-        dict
-            Dictionary containing loss, predicted labels, softmax, accuracy, and raw model outputs
-        """
-        with torch.set_grad_enabled(train):
-            # Move the data and the labels to the GPU (if using CPU this has no effect)
-            model_out = self.model(self.data)
-            softmax = self.softmax(model_out)
-            predicted_labels = torch.argmax(model_out, dim=-1)
-            self.loss = self.criterion(model_out, self.target)
-            accuracy = (predicted_labels == self.target).sum() / float(predicted_labels.nelement())
-            outputs = {self.target_key: self.target,
-                       'softmax': softmax}
-            metrics = {'loss': self.loss,
-                       'accuracy': accuracy}
-        return outputs, metrics
+    def compute_metrics(self):
+        """Compute loss and accuracy"""
+        self.loss = self.criterion(self.model_out, self.target)
+        predicted_labels = torch.argmax(self.model_out, dim=-1)
+        accuracy = (predicted_labels == self.target).float().mean()
+        metrics = {'loss': self.loss,
+                   'accuracy': accuracy}
+        return metrics
