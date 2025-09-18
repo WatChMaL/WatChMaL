@@ -91,35 +91,3 @@ class RegressionEngine(ReconstructionEngine):
                        for t, v in self.target.items() if t in metric_functions}
             metrics['loss'] = self.loss
         return outputs, metrics
-
-class RegressionDIEngine(RegressionEngine):
-
-
-    def __init__(self, target_key, model, rank, device, dump_path, **kwargs):
-        super().__init__(target_key, model, rank, device, dump_path, **kwargs)
-
-    def process_data(self, data):
-        self.data_main   = data["data_main"].to(self.device)
-        self.data_second = data["data_second"].to(self.device)
-        self.target = {t: data[t].to(self.device) for t in self.target_key}
-        if self.target_sizes is None:
-            self.target_sizes = [v.shape[1] if len(v.shape) > 1 else 1 for v in self.target.values()]
-
-    def forward(self, train=True):
-        with torch.set_grad_enabled(train):
-            target = torch.column_stack([(v - self.offset[t]) / self.scale[t] for t, v in self.target.items()])
-            model_out = self.model(self.data_main, self.data_second).reshape(target.shape)
-            self.loss = self.criterion(model_out.to(torch.float32), target.to(torch.float32))
-            split_model_out = torch.split(model_out, self.target_sizes, dim=1)
-            outputs = self.target.copy()
-            predicted_dict = {
-                "predicted_" + t: o * self.scale[t] + self.offset[t]
-                for t, o in zip(self.target.keys(), split_model_out)
-            }
-            outputs.update(predicted_dict)
-            metrics = {t+" error": metric_functions[t](outputs["predicted_"+t], v)
-                       for t, v in self.target.items() if t in metric_functions}
-            metrics['loss'] = self.loss
-            
-        return outputs, metrics
-
