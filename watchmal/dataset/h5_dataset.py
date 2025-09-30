@@ -61,6 +61,9 @@ class H5CommonDataset(Dataset, ABC):
 
     def set_target(self, target_key):
         self.target_key = target_key
+        if self.target_key is None:
+            self.targets = {}
+            return
         if self.initialized:
             try:
                 if isinstance(self.target_key, str):
