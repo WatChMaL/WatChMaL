@@ -6,11 +6,9 @@ model:
   num_output_channels: 3
 defaults:
   - data: iwcd_electron
-  - data/dataset: iwcd_cnn
   - model: resnet18
   - engine: regression
   - tasks/restore_state: restore_state
   - tasks/evaluate: test
-  - loss@tasks.evaluate.loss: huber
-  - sampler@tasks.evaluate.data_loaders.test.sampler: subset_sequential
+  - override loss@tasks.evaluate.loss: huber
   - _self_
