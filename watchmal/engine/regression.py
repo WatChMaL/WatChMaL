@@ -59,7 +59,7 @@ class RegressionEngine(ReconstructionEngine):
     def process_target(self, data):
         """Extract the event data and target from the input data dict"""
         if isinstance(data['data'], (list, tuple)):
-            self.data = tuple(d.to(self.device) for d in data['data'])
+            self.data = type(data['data'])(d.to(self.device) for d in data['data'])
         else: 
             self.data['data'].to(self.device)
         
