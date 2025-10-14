@@ -55,7 +55,10 @@ class RegressionEngine(ReconstructionEngine):
 
     def process_data(self, data):
         """Extract the event data and target from the input data dict"""
-        self.data = data['data'].to(self.device)
+        if isinstance(data['data'], (list, tuple)):
+            self.data = (data['data'][0].to(self.device), data['data'][1].to(self.device)) 
+        else: 
+            self.data['data'].to(self.device)
         self.target = {t: data[t].to(self.device) for t in self.target_key}
         # First time we get data, determine the target sizes
         if self.target_sizes is None:
