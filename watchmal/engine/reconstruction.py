@@ -81,9 +81,14 @@ class ReconstructionEngine(ABC):
     def configure_optimizers(self, optimizer_config):
         """Instantiate an optimizer from a hydra config."""
         self.optimizer = instantiate(optimizer_config, params=self.module.parameters())
+        total_params = sum(p.numel() for p in self.module.parameters() if p.requires_grad)
+        opt_params = sum(p.numel() for g in self.optimizer.param_groups for p in g['params'])
+        print(f"Total trainable parameters: {total_params}")
+        print(f"Parameters passed to optimizer: {opt_params}")
 
     def configure_scheduler(self, scheduler_config):
         """Instantiate a scheduler from a hydra config."""
+        
         self.scheduler = instantiate(scheduler_config, optimizer=self.optimizer)
 
     def configure_data_loaders(self, data_config, loaders_config, is_distributed, seed):
@@ -146,7 +151,10 @@ class ReconstructionEngine(ABC):
 
     def process_data(self, data):
         """Extract the event data from the input data dict"""
-        self.data = data['data'].to(self.device)
+        if isinstance(data['data'], (list, tuple)):
+            self.data = type(data['data'])(d.to(self.device) for d in data['data'])
+        else: 
+            self.data = data['data'].to(self.device)
 
     @abstractmethod
     def process_target(self, data):
@@ -297,6 +305,7 @@ class ReconstructionEngine(ABC):
         """
         # set model to eval mode
         self.model.eval()
+
         val_metrics = None
         for val_batch in range(num_val_batches):
             # get validation data mini-batch
@@ -337,6 +346,7 @@ class ReconstructionEngine(ABC):
                 self.save_state()
             self.val_log.log(log_entries)
         # return model to training mode
+
         self.model.train()
 
     def inference(self, report_interval=20, with_metrics=True):
