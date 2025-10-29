@@ -1,0 +1,9 @@
+defaults:
+ - /optimizers: adamW
+ - /loss: huber
+ - /scheduler: cosinelr
+ - /data_loaders:
+   - train
+   - validation
+checkpointing: False
+

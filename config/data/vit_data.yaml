@@ -1,0 +1,3 @@
+defaults:
+  - dataset: hk_vit
+split_path: /path/to/split.npz
