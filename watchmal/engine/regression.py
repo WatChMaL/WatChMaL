@@ -63,7 +63,6 @@ class RegressionEngine(ReconstructionEngine):
         if self.target_sizes is None:
             self.target_sizes = [v.shape[-1] if len(v.shape) > 1 else 1 for v in self.target_dict.values()]
         # scale and stack the targets for calculating the loss
-        print([f"{t}: {v}" for t, v in self.offset.items()])
         self.stacked_target = torch.column_stack([(v - self.offset[t]) / self.scale[t] for t, v in self.target_dict.items()])
 
     def forward_pass(self):
