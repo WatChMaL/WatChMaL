@@ -8,7 +8,7 @@ import numpy as np
 DEFAULT_TANK_AXIS = 1
 
 
-def towall(position, angle, tank_half_height=300, tank_radius=400, tank_axis=None):
+def towall(position, angle, tank_half_height, tank_radius, tank_axis=None):
     """
     Calculate towall: distance from position to detector wall, in particle direction
 
@@ -18,9 +18,9 @@ def towall(position, angle, tank_half_height=300, tank_radius=400, tank_axis=Non
         vector of (x, y, z) position of a particle or (N,3) array of positions for N particles
     angle : array_like
         vector of (zenith, azimuth) direction of particle or (N, 2) array of directions for N particles
-    tank_half_height : float, default: 300
+    tank_half_height : float
         half-height of the detector ID
-    tank_radius : float, default: 400
+    tank_radius : float
         Radius of the detector ID
     tank_axis : int, optional
         Axis along which the tank cylinder is oriented. By default, use the y-axis.
@@ -43,7 +43,7 @@ def towall(position, angle, tank_half_height=300, tank_radius=400, tank_axis=Non
     return np.minimum(towall_barrel, towall_endcap)
 
 
-def dwall(position, tank_half_height=300, tank_radius=400, tank_axis=None):
+def dwall(position, tank_half_height, tank_radius, tank_axis=None):
     """
     Calculate dwall: distance from position to the nearest detector wall
 
@@ -51,9 +51,9 @@ def dwall(position, tank_half_height=300, tank_radius=400, tank_axis=None):
     ----------
     position : array_like
         vector of (x, y, z) position of an event or (N,3) array of (x, y, z) position coordinates for N events
-    tank_half_height : float, default: 300
+    tank_half_height : float
         half-height of the detector ID
-    tank_radius : float, default: 400
+    tank_radius : float
         Radius of the detector ID
     tank_axis : int, optional
         Axis along which the tank cylinder is oriented. By default, use y-axis

@@ -341,14 +341,17 @@ class CNNmPMTEventDisplay(CNNmPMTDataset):
                 old_h_flip_permutation = self.h_flip_permutation
                 old_v_flip_permutation = self.v_flip_permutation
                 old_rotate_permutation = self.rotate_permutation
+                old_data_channels = self.data_channels
                 self.h_flip_permutation = self.horizontal_flip_mpmt_map
                 self.v_flip_permutation = self.vertical_flip_mpmt_map
                 self.rotate_permutation = self.horizontal_flip_mpmt_map[self.vertical_flip_mpmt_map]
-                data = self.process_data(pmt_ids, data_map[p])
+                self.data_channels = ...
+                data = self.process_data(pmt_ids, data_map[p]).squeeze()
                 fig, ax = self.plot_data_2d(data, **args)
                 self.h_flip_permutation = old_h_flip_permutation
                 self.v_flip_permutation = old_v_flip_permutation
                 self.rotate_permutation = old_rotate_permutation
+                self.data_channels = old_data_channels
             figs.append(fig)
             axes.append(ax)
         return figs, axes
