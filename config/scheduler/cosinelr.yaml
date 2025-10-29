@@ -1,4 +1,0 @@
-_target_: transformers.get_scheduler
-name: 'cosine' 
-num_warmup_steps: 50000
-num_training_steps: 1560000
