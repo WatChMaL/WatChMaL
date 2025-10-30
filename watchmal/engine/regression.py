@@ -20,14 +20,15 @@ metric_functions = {
 
 class RegressionEngine(ReconstructionEngine):
     """Engine for performing training or evaluation for a regression network."""
-    def __init__(self, target_key, model, rank, device, dump_path, target_scale_offset=0, target_scale_factor=1):
+    def __init__(self, target_key, model=None, rank=None, device=None, dump_path=None,
+                 target_scale_offset=0, target_scale_factor=1):
         """
         Parameters
         ==========
         target_key : string
             Name of the key for the target values in the dictionary returned by the dataloader
-        model
-            `nn.module` object that contains the full network that the engine will use in training or evaluation.
+        model : nn.Module
+            Model that outputs predicted values for each regressed quantity
         rank : int
             The rank of process among all spawned processes (in multiprocessing mode).
         device : int
@@ -65,10 +66,8 @@ class RegressionEngine(ReconstructionEngine):
         # scale and stack the targets for calculating the loss
         self.stacked_target = torch.column_stack([(v - self.offset[t]) / self.scale[t] for t, v in self.target_dict.items()])
 
-    def forward_pass(self):
+    def compute_outputs(self):
         """Compute predictions for a batch of data"""
-        # evaluate the model on the data
-        self.model_out = self.model(self.data)
         # split the output for each target
         split_model_out = torch.split(self.model_out, self.target_sizes, dim=1)
         self.predictions = {"predicted_" + t: o * self.scale[t] + self.offset[t]

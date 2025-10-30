@@ -5,14 +5,14 @@ from watchmal.engine.reconstruction import ReconstructionEngine
 
 class ClassifierEngine(ReconstructionEngine):
     """Engine for performing training or evaluation for a classification network."""
-    def __init__(self, target_key, model, rank, device, dump_path, label_set=None):
+    def __init__(self, target_key, model=None, rank=None, device=None, dump_path=None, label_set=None):
         """
         Parameters
         ==========
         target_key : string
             Name of the key for the target labels in the dictionary returned by the dataloader
-        model
-            `nn.module` object that contains the full network that the engine will use in training or evaluation.
+        model : nn.Module
+            Model that outputs predicted values to calculate softmax for each class
         rank : int
             The rank of process among all spawned processes (in multiprocessing mode).
         device : int
@@ -53,9 +53,8 @@ class ClassifierEngine(ReconstructionEngine):
         """Extract the event data and target from the input data dict"""
         self.target = data[self.target_key].to(self.device)
 
-    def forward_pass(self):
+    def compute_outputs(self):
         """Compute softmax predictions for a batch of data."""
-        self.model_out = self.model(self.data)
         softmax = self.softmax(self.model_out)
         outputs = {'softmax': softmax}
         if self.target is not None:
