@@ -154,7 +154,7 @@ class ReconstructionEngine(ABC):
         if isinstance(data['data'], (list, tuple)):
             self.data = type(data['data'])(d.to(self.device) for d in data['data'])
         else: 
-            self.data = self.data['data'].to(self.device)
+            self.data = data['data'].to(self.device)
 
     @abstractmethod
     def process_target(self, data):
