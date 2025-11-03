@@ -1,0 +1,3 @@
+defaults:
+  - /loss@classification: cross_entropy
+  - /loss@regression: huber

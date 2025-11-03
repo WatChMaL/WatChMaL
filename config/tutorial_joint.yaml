@@ -1,0 +1,11 @@
+defaults:
+    - tutorial_defaults
+    - engine: joint
+    - override loss@tasks.train.loss: joint
+    - override loss@tasks.evaluate.loss: joint
+    - _self_
+model:
+  num_output_channels: 9
+hydra:
+  run:
+    dir: /ml_workshop/watchmal_tutorial/joint_run/
