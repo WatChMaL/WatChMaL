@@ -325,10 +325,9 @@ class ReconstructionEngine(ABC):
             # evaluate the network
             outputs, metrics = self.step(False, True)
             if val_metrics is None:
-                val_metrics = metrics
-            else:
-                for k, v in metrics.items():
-                    val_metrics[k] += v
+                val_metrics = {k: 0 for k in metrics.keys()}
+            for k, v in metrics.items():
+                val_metrics[k] += v
         # record the validation stats to the csv
         val_metrics = {k: v/num_val_batches for k, v in val_metrics.items()}
         val_metrics = self.get_synchronized_metrics(val_metrics)
