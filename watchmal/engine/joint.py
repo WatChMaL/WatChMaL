@@ -1,5 +1,6 @@
 import torch
 from torch import nn
+from hydra.utils import instantiate
 
 from watchmal.engine.reconstruction import ReconstructionEngine
 
@@ -26,6 +27,8 @@ class JointClassificationRegression(ReconstructionEngine):
             Weight L for loss calculation where the loss will be L * regression_loss + (1 - L) * classification_loss
             If `loss_weight` is None, then use uncertainty weighting instead
         """
+        self.classification_engine = instantiate(classification_engine, rank=rank, device=device, dump_path=dump_path)
+        self.regression_engine = instantiate(regression_engine, rank=rank, device=device, dump_path=dump_path)
         super().__init__(
             model=model,
             rank=rank,
@@ -33,16 +36,14 @@ class JointClassificationRegression(ReconstructionEngine):
             dump_path=dump_path,
             target_key=regression_engine.target_key + [classification_engine.target_key],
         )
-
-        self.classification_engine = classification_engine
-        self.regression_engine = regression_engine
         self.regression_size = None
         self.loss_weight = loss_weight
         if loss_weight is None:
-            self.log_vars = nn.ParameterDict({
-                "regression_log_var": nn.Parameter(torch.zeros(1)),
-                "classification_log_var": nn.Parameter(torch.zeros(1)),
-            })
+            self.module.log_vars = nn.ParameterDict({
+                "regression_log_var": nn.Parameter(torch.zeros(1)).squeeze(),
+                "classification_log_var": nn.Parameter(torch.zeros(1)).squeeze(),
+            }).to(self.device)
+
 
     def configure_loss(self, loss_config):
         """Configure losses for both engines."""
@@ -54,7 +55,8 @@ class JointClassificationRegression(ReconstructionEngine):
         super().configure_data_loaders(data_config, loaders_config, is_distributed, seed)
         if self.classification_engine.label_set is not None:
             for name in loaders_config.keys():
-                self.data_loaders[name].dataset.map_labels(self.classification_engine.label_set)
+                self.data_loaders[name].dataset.map_labels(self.classification_engine.label_set,
+                                                           self.classification_engine.target_key)
 
     def process_data(self, data):
         """Shared data handling for both sub-engines."""
@@ -98,12 +100,13 @@ class JointClassificationRegression(ReconstructionEngine):
 
         if self.loss_weight is None:
             # Uncertainty-based combination
-            reg_log_var = self.log_vars["regression_log_var"]
-            cls_log_var = self.log_vars["classification_log_var"]
-            metrics.update(self.log_vars)
+            reg_log_var = self.module.log_vars["regression_log_var"]
+            cls_log_var = self.module.log_vars["classification_log_var"]
             weighted_reg_loss = torch.exp(-reg_log_var) * reg_loss + reg_log_var
             weighted_cls_loss = torch.exp(-cls_log_var) * cls_loss + cls_log_var
             self.loss = 0.5 * (weighted_reg_loss + weighted_cls_loss)
+            for k, v in self.module.log_vars.items():
+                metrics[k] = v.detach()
         else:
             self.loss = self.loss_weight * reg_loss + (1 - self.loss_weight) * cls_loss
 
