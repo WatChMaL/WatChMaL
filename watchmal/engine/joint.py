@@ -102,9 +102,9 @@ class JointClassificationRegression(ReconstructionEngine):
             # Uncertainty-based combination
             reg_log_var = self.module.log_vars["regression_log_var"]
             cls_log_var = self.module.log_vars["classification_log_var"]
-            weighted_reg_loss = torch.exp(-reg_log_var) * reg_loss + reg_log_var
-            weighted_cls_loss = torch.exp(-cls_log_var) * cls_loss + cls_log_var
-            self.loss = 0.5 * (weighted_reg_loss + weighted_cls_loss)
+            weighted_reg_loss = 0.5*torch.exp(-reg_log_var) * reg_loss + 0.5*reg_log_var
+            weighted_cls_loss = torch.exp(-cls_log_var) * cls_loss + 0.5*cls_log_var
+            self.loss = weighted_reg_loss + weighted_cls_loss
             for k, v in self.module.log_vars.items():
                 metrics[k] = v.detach()
         else:
