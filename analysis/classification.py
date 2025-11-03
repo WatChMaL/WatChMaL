@@ -404,7 +404,11 @@ class WatChMaLClassification(ClassificationRun, WatChMaLOutput):
             conf = OmegaConf.load(self.directory + '/.hydra/config.yaml')
             self.label_map = {l: i for i, l in enumerate(set(conf.engine.label_set))}
         except OmegaConfBaseException:
-            self.label_map = None
+            try:
+                conf = OmegaConf.load(self.directory + '/.hydra/config.yaml')
+                self.label_map = {l: i for i, l in enumerate(set(conf.engine.classification_engine.label_set))}
+            except OmegaConfBaseException:
+                self.label_map = None
 
     def read_training_log_from_csv(self, directory):
         """
