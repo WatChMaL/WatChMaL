@@ -11,8 +11,9 @@ regression_engine:
     - directions
     - energies
   target_scale_factor:
-    positions: 1
-    directions: 0.01
+    positions: 20
+    directions: 0.05
+    energies: 50
 defaults:
   - /engine@classification_engine: classifier
   - /engine@regression_engine: regression
