@@ -14,7 +14,7 @@ metric_functions = {
         lambda x, y: torch.mean(torch.arccos(torch.cos(x[:, 0])*torch.cos(y[:, 0])
                                              + torch.sin(x[:, 0])*torch.sin(y[:, 0])*torch.cos(x[:, 1]-y[:, 1]))),
     'energies':  # mean fractional error
-        lambda x, y: torch.mean((x - y) / y),
+        lambda x, y: torch.mean(torch.abs(x - y) / y),
 }
 
 
