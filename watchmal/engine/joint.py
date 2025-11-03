@@ -40,9 +40,9 @@ class JointClassificationRegression(ReconstructionEngine):
         self.loss_weight = loss_weight
         if loss_weight is None:
             self.module.log_vars = nn.ParameterDict({
-                "regression_log_var": nn.Parameter(torch.zeros(1)).squeeze(),
-                "classification_log_var": nn.Parameter(torch.zeros(1)).squeeze(),
-            }).to(self.device)
+                "regression_log_var": nn.Parameter(torch.tensor(0.0)),
+                "classification_log_var": nn.Parameter(torch.tensor(0.0)),
+            })
 
 
     def configure_loss(self, loss_config):
