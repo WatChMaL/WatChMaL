@@ -20,21 +20,20 @@ metric_functions = {
 
 class RegressionEngine(ReconstructionEngine):
     """Engine for performing training or evaluation for a regression network."""
-    def __init__(self, target_key, model=None, rank=None, device=None, dump_path=None,
-                 target_scale_offset=0, target_scale_factor=1):
+    def __init__(self, target_key, rank, device, dump_path, model=None, target_scale_offset=0, target_scale_factor=1):
         """
         Parameters
         ==========
         target_key : string
             Name of the key for the target values in the dictionary returned by the dataloader
-        model : nn.Module
-            Model that outputs predicted values for each regressed quantity
         rank : int
             The rank of process among all spawned processes (in multiprocessing mode).
         device : int
             The gpu that this process is running on.
         dump_path : string
             The path to store outputs in.
+        model : nn.Module
+            Model that outputs predicted values for each regressed quantity
         target_scale_offset : float or dict of float
             Offset to subtract from target values when calculating the loss, or dict of offsets for each target
         target_scale_factor : float or dict of float

@@ -5,20 +5,20 @@ from watchmal.engine.reconstruction import ReconstructionEngine
 
 class ClassifierEngine(ReconstructionEngine):
     """Engine for performing training or evaluation for a classification network."""
-    def __init__(self, target_key, model=None, rank=None, device=None, dump_path=None, label_set=None):
+    def __init__(self, target_key, rank, device, dump_path, model=None, label_set=None):
         """
         Parameters
         ==========
         target_key : string
             Name of the key for the target labels in the dictionary returned by the dataloader
-        model : nn.Module
-            Model that outputs predicted values to calculate softmax for each class
         rank : int
             The rank of process among all spawned processes (in multiprocessing mode).
         device : int
             The gpu that this process is running on.
         dump_path : string
             The path to store outputs in.
+        model : nn.Module
+            Model that outputs predicted values to calculate softmax for each class
         label_set : sequence
             The set of possible labels to classify (if None, which is the default, then class labels in the data must be
             0 to N).
