@@ -87,11 +87,11 @@ def main_worker_function(rank, config, hydra_config=None):
         device = torch.device("cpu")
     else:
         # Infer rank from gpu and ngpus, rank is position in gpu list
-        device = config.gpu_list[rank]
+        device = torch.device(f"cuda:{config.gpu_list[rank]}")
         torch.cuda.set_device(device)
         if is_distributed:
             # Set up pytorch distributed processing
-            torch.distributed.init_process_group('nccl', init_method='env://', world_size=ngpus, rank=rank)
+            torch.distributed.init_process_group('nccl', init_method='env://', world_size=ngpus, rank=rank, device_id=device)
 
     log.info(f"Running main worker function rank {rank} on device: {device}")
 
