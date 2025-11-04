@@ -116,7 +116,7 @@ class H5CommonDataset(Dataset, ABC):
         self.label_set = set(label_set)
         if labels_key is not None:
             self.labels_key = labels_key
-        elif self.label_set is None:
+        elif self.labels_key is None:
             self.labels_key = self.target_key
         if self.initialized and self.targets:
             self.unmapped_labels = self.targets[self.labels_key]
