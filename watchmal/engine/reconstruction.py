@@ -83,8 +83,9 @@ class ReconstructionEngine(ABC):
         self.optimizer = instantiate(optimizer_config, params=self.module.parameters())
         total_params = sum(p.numel() for p in self.module.parameters() if p.requires_grad)
         opt_params = sum(p.numel() for g in self.optimizer.param_groups for p in g['params'])
-        print(f"Total trainable parameters: {total_params}")
-        print(f"Parameters passed to optimizer: {opt_params}")
+        if self.rank == 0:
+            log.info(f"Total trainable parameters: {total_params}")
+            log.info(f"Parameters passed to optimizer: {opt_params}")
 
     def configure_scheduler(self, scheduler_config):
         """Instantiate a scheduler from a hydra config."""
