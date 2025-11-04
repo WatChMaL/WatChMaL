@@ -1,5 +1,9 @@
 _target_: watchmal.engine.joint.JointClassificationRegression
 _recursive_: false
+defaults:
+  - /engine@classification_engine: classifier
+  - /engine@regression_engine: regression
+  - _self_
 loss_weight: 0.9
 classification_engine:
   label_set:
@@ -14,7 +18,3 @@ regression_engine:
     positions: 20
     directions: 0.05
     energies: 50
-defaults:
-  - /engine@classification_engine: classifier
-  - /engine@regression_engine: regression
-  - _self_
