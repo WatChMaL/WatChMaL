@@ -1,5 +1,5 @@
 """
-Class for training a fully supervised classifier
+Class for training a fully supervised reconstruction network (generally classification and/or regression)
 """
 
 # generic imports
@@ -29,8 +29,8 @@ class ReconstructionEngine(ABC):
         ==========
         target_key : string
             Name of the key for the target values in the dictionary returned by the dataloader
-        model
-            `nn.module` object that contains the full network that the engine will use in training or evaluation.
+        model : nn.Module
+            The model representing the full network producing outputs for reconstruction
         rank : int
             The rank of process among all spawned processes (in multiprocessing mode).
         device : int
@@ -83,8 +83,9 @@ class ReconstructionEngine(ABC):
         self.optimizer = instantiate(optimizer_config, params=self.module.parameters())
         total_params = sum(p.numel() for p in self.module.parameters() if p.requires_grad)
         opt_params = sum(p.numel() for g in self.optimizer.param_groups for p in g['params'])
-        print(f"Total trainable parameters: {total_params}")
-        print(f"Parameters passed to optimizer: {opt_params}")
+        if self.rank == 0:
+            log.info(f"Total trainable parameters: {total_params}")
+            log.info(f"Parameters passed to optimizer: {opt_params}")
 
     def configure_scheduler(self, scheduler_config):
         """Instantiate a scheduler from a hydra config."""
@@ -162,7 +163,7 @@ class ReconstructionEngine(ABC):
         pass
 
     @abstractmethod
-    def forward_pass(self):
+    def compute_outputs(self):
         """Perform the forward pass"""
         pass
 
@@ -190,7 +191,9 @@ class ReconstructionEngine(ABC):
             Dictionary containing loss and other metrics
         """
         with torch.set_grad_enabled(train):
-            outputs = self.forward_pass()
+            # evaluate the model on the data
+            self.model_out = self.model(self.data)
+            outputs = self.compute_outputs()
             if not with_metrics:
                 return outputs
             metrics = self.compute_metrics()
@@ -323,10 +326,9 @@ class ReconstructionEngine(ABC):
             # evaluate the network
             outputs, metrics = self.step(False, True)
             if val_metrics is None:
-                val_metrics = metrics
-            else:
-                for k, v in metrics.items():
-                    val_metrics[k] += v
+                val_metrics = {k: 0 for k in metrics.keys()}
+            for k, v in metrics.items():
+                val_metrics[k] += v
         # record the validation stats to the csv
         val_metrics = {k: v/num_val_batches for k, v in val_metrics.items()}
         val_metrics = self.get_synchronized_metrics(val_metrics)

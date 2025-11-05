@@ -100,7 +100,7 @@ class H5CommonDataset(Dataset, ABC):
         if self.label_set is not None:
             self.map_labels(self.label_set)
 
-    def map_labels(self, label_set):
+    def map_labels(self, label_set, labels_key=None):
         """
         Maps the labels of the dataset into a range of integers from 0 up to N-1, where N is the number of unique labels
         in the provided label set.
@@ -110,14 +110,20 @@ class H5CommonDataset(Dataset, ABC):
         label_set: sequence of labels
             Set of all possible labels to map onto the range of integers from 0 to N-1, where N is the number of unique
             labels.
+        labels_key: str
+            key in the targets dict that corresponds to the labels being mapped
         """
         self.label_set = set(label_set)
+        if labels_key is not None:
+            self.labels_key = labels_key
+        elif self.labels_key is None:
+            self.labels_key = self.target_key
         if self.initialized and self.targets:
-            self.unmapped_labels = self.targets[self.target_key]
+            self.unmapped_labels = self.targets[self.labels_key]
             labels = np.ndarray(self.unmapped_labels.shape, dtype=np.int64)
             for i, l in enumerate(self.label_set):
                 labels[self.unmapped_labels == l] = i
-            self.targets[self.target_key] = labels
+            self.targets[self.labels_key] = labels
 
     def load_hits(self, h5_key):
         """Loads data from a given key in the h5 file either into numpy arrays or memmaps"""
