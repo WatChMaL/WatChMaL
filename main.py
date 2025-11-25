@@ -35,6 +35,8 @@ def main(config):
     log.info(f"Using the following git version of WatChMaL repository: {get_git_version(os.path.dirname(to_absolute_path(__file__)))}")
     log.info(f"Running with the following config:\n{OmegaConf.to_yaml(config)}")
 
+    if config.gpu_list is None:
+        config.gpu_list = []
     ngpus = len(config.gpu_list)
     is_distributed = ngpus > 1
     
@@ -42,58 +44,55 @@ def main(config):
     if is_distributed:
         os.environ['MASTER_ADDR'] = 'localhost'
 
-        if 'MASTER_PORT' in config:
-            master_port = config.MASTER_PORT
-        else:
-            master_port = 12355
+        master_port = config.get("MASTER_PORT", 12355)
             
         # Automatically select port based on base gpu
         master_port += config.gpu_list[0]
         os.environ['MASTER_PORT'] = str(master_port)
 
     # create run directory
-    if not os.path.exists(config.dump_path):
-        log.info(f"Creating directory for run output at : {config.dump_path}")
-        os.makedirs(config.dump_path)
-    
+    os.makedirs(config.dump_path, exist_ok=True)
     log.info(f"Output directory: {config.dump_path}")
 
     # initialize seed
     if config.seed is None:
         config.seed = torch.seed()
+    torch.manual_seed(config.seed)
     
     if is_distributed:
         log.info("Using multiprocessing...")
         devids = [f"cuda:{x}" for x in config.gpu_list]
         log.info(f"Using DistributedDataParallel on these devices: {devids}")
-        mp.spawn(main_worker_function, nprocs=ngpus, args=(ngpus, is_distributed, config, HydraConfig.get()))
+        mp.spawn(main_worker_function, nprocs=ngpus, args=(config, HydraConfig.get()))
     else:
         log.info("Only one device found, not using multiprocessing...")
-        main_worker_function(0, ngpus, is_distributed, config)
+        main_worker_function(0, config)
 
 
-def main_worker_function(rank, ngpus_per_node, is_distributed, config, hydra_config=None):
+def main_worker_function(rank, config, hydra_config=None):
     """
     Instantiate model on a particular GPU, and perform train/evaluation tasks as specified
 
     Args:
         rank            ... rank of process among all spawned processes (in multiprocessing mode)
-        ngpus_per_node  ... number of gpus being used (in multiprocessing mode)
-        is_distributed  ... boolean indicating if running in multiprocessing mode
         config          ... hydra config specified in the @hydra.main annotation
         hydra_config    ... HydraConfig object for logging in multiprocessing
     """
+    ngpus = len(config.gpu_list)
+    is_distributed = ngpus > 1
     if is_distributed:
         # Spawned process needs to configure the job logging configuration
         configure_log(hydra_config.job_logging, hydra_config.verbose)
-        # Set up pytorch distributed processing
-        torch.distributed.init_process_group('nccl', init_method='env://', world_size=ngpus_per_node, rank=rank)
-    if ngpus_per_node == 0:
+    if ngpus == 0:
         device = torch.device("cpu")
     else:
         # Infer rank from gpu and ngpus, rank is position in gpu list
-        device = config.gpu_list[rank]
+        device = torch.device(f"cuda:{config.gpu_list[rank]}")
         torch.cuda.set_device(device)
+        if is_distributed:
+            # Set up pytorch distributed processing
+            torch.distributed.init_process_group('nccl', init_method='env://', world_size=ngpus, rank=rank, device_id=device)
+
     log.info(f"Running main worker function rank {rank} on device: {device}")
 
     # Instantiate model and engine
@@ -129,6 +128,9 @@ def main_worker_function(rank, ngpus_per_node, is_distributed, config, hydra_con
     # Perform tasks
     for task, task_config in config.tasks.items():
         getattr(engine, task)(**task_config)
+
+    if is_distributed:
+        torch.distributed.destroy_process_group()
 
 
 if __name__ == '__main__':
