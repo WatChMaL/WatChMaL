@@ -213,7 +213,9 @@ class CNNmPMTDataset(H5Dataset):
     def __getitem__(self, item):
         """Returns image-like event data array (channels, rows, columns) for an event at a given index."""
         data_dict = super().__getitem__(item)
-        hit_data = {"charge": self.event_hit_charges, "time": self.event_hit_times}
+        hit_data = {"charge": self.event_hit_charges,
+                    "time": self.event_hit_times,
+                    "is_hit": np.ones_like(self.event_hit_times)}
         # apply scaling to channels
         for c in hit_data:
             hit_data[c] = (hit_data[c] - self.scale_offset.get(c, 0))/self.scale_factor.get(c, 1)
