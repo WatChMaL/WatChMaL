@@ -48,9 +48,9 @@ class CNNmPMTDataset(H5Dataset):
     with mPMTs arrange in an event-display-like format.
     """
 
-    def __init__(self, h5file, mpmt_positions_file, transforms=None, use_new_mpmt_convention=False, channels=None,
-                 collapse_mpmt_channels=None, channel_scale_factor=None, channel_scale_offset=None, geometry_file=None,
-                 use_memmap=True):
+    def __init__(self, h5file, mpmt_positions_file, transforms=None, use_new_mpmt_convention=False, rotate_mpmts=None,
+                 channels=None, collapse_mpmt_channels=None, channel_scale_factor=None, channel_scale_offset=None,
+                 geometry_file=None, use_memmap=True):
         """
         Constructs a dataset for CNN data. Event hit data is read in from the HDF5 file and the PMT charge data is
         formatted into an event-display-like image for input to a CNN. Each pixel of the image corresponds to one mPMT
@@ -68,6 +68,8 @@ class CNNmPMTDataset(H5Dataset):
             list should be the name of a method of this class that performs the transformation
         use_new_mpmt_convention: bool
             Whether to use the new or old (default) convention of WCSim for how PMT channels are mapped within the mPMT.
+        rotate_mpmts: sequence of int
+            List of IDs of mPMTs to rotate by 180 degrees from their default orientation
         channels: sequence of string
             List defines the PMT data included in the image-like CNN arrays. It can be either 'charge', 'time' or both
             (default)
@@ -76,10 +78,10 @@ class CNNmPMTDataset(H5Dataset):
             channels. i.e. provides the mean and the std of PMT charges and/or time in each mPMT instead of providing
             all PMT data. It can be [], ['charge'], ['time'] or ['charge', 'time']. By default, no collapsing is
             performed.
-        channel_scale_factor: dict of float
+        channel_scale_factor: dict[string, float]
             Dictionary with keys corresponding to channels and values contain the factors to divide that channel by.
             By default, no scaling is applied.
-        channel_scale_offset: dict of float
+        channel_scale_offset: dict[string, float]
             Dictionary with keys corresponding to channels and values contain the offsets to subtract from that channel.
             By default, no scaling is applied.
         geometry_file: string
@@ -90,6 +92,7 @@ class CNNmPMTDataset(H5Dataset):
 
         super().__init__(h5file, use_memmap)
 
+        self.mpmt_positions = np.load(mpmt_positions_file)['mpmt_image_positions']
         self.use_new_mpmt_convention = use_new_mpmt_convention
         if self.use_new_mpmt_convention:
             self.barrel_mpmt_map = BARREL_MPMT_MAP_NEW
@@ -99,7 +102,13 @@ class CNNmPMTDataset(H5Dataset):
             self.barrel_mpmt_map = BARREL_MPMT_MAP
             self.vertical_flip_mpmt_map = VERTICAL_FLIP_MPMT_MAP
             self.horizontal_flip_mpmt_map = HORIZONTAL_FLIP_MPMT_MAP
-        self.mpmt_positions = np.load(mpmt_positions_file)['mpmt_image_positions']
+        self.rotate_mpmt_map = self.horizontal_flip_mpmt_map[self.vertical_flip_mpmt_map]
+        self.rotate_mpmts = rotate_mpmts
+        if self.rotate_mpmts is not None:
+            # rows and columns of the mPMTs to rotate
+            rows = self.mpmt_positions[rotate_mpmts, 0]
+            cols = self.mpmt_positions[rotate_mpmts, 1]
+            self.rotate_mpmts = np.s_[..., rows, cols]
         self.transforms = du.get_transformations(self, transforms)
         if self.transforms is None:
             self.transforms = []
@@ -195,6 +204,9 @@ class CNNmPMTDataset(H5Dataset):
 
         # fix indexing of barrel PMTs in mPMT modules to match that of endcaps in the projection to 2D
         data[self.barrel] = data[self.barrel_mpmt_map][self.barrel]
+
+        if self.rotate_mpmts is not None:
+            data[self.rotate_mpmts] = data[self.rotate_mpmt_map][self.rotate_mpmts]
 
         return data
 
