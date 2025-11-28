@@ -4,17 +4,28 @@ from watchmal.engine.reconstruction import ReconstructionEngine
 from collections.abc import Mapping
 
 # define some useful metrics for different regression targets
+
+def three_momenta_metrics(reco, true):
+    reco_mag = torch.linalg.vector_norm(reco, dim=-1)
+    true_mag = torch.linalg.vector_norm(true, dim=-1)
+    return {'momentum bias': torch.mean((reco_mag - true_mag) / true_mag),
+            'momentum error': torch.mean(torch.abs(reco_mag - true_mag) / true_mag),
+            'direction error': torch.mean(torch.arccos(torch.clamp(torch.sum(reco * true, dim=-1)
+                                                                    / (reco_mag * true_mag), -1, 1)))}
+
 metric_functions = {
     'positions':  # mean 3D position error
-        lambda x, y: torch.mean(torch.linalg.vector_norm(x-y, dim=1)),
+        lambda x, y: {'position error': torch.mean(torch.linalg.vector_norm(x-y, dim=1))},
     'directions':  # mean angle between directions
-        lambda x, y: torch.mean(torch.arccos(torch.clamp(torch.sum(x*y, dim=-1)
-                                                         / torch.linalg.vector_norm(x, dim=-1), -1, 1))),
+        lambda x, y: {'direction error': torch.mean(torch.arccos(torch.clamp(torch.sum(x*y, dim=-1)
+                                                / torch.linalg.vector_norm(x, dim=-1), -1, 1)))},
     'angles':  # mean angle between directions
-        lambda x, y: torch.mean(torch.arccos(torch.cos(x[:, 0])*torch.cos(y[:, 0])
-                                             + torch.sin(x[:, 0])*torch.sin(y[:, 0])*torch.cos(x[:, 1]-y[:, 1]))),
+        lambda x, y: {'direction error': torch.mean(torch.arccos(torch.cos(x[:, 0])*torch.cos(y[:, 0])
+                                                + torch.sin(x[:, 0])*torch.sin(y[:, 0])*torch.cos(x[:, 1]-y[:, 1])))},
     'energies':  # mean fractional error
-        lambda x, y: torch.mean((x - y) / y),
+        lambda x, y: {'energy bias': torch.mean((x - y) / y),
+                      'energy error': torch.mean(torch.abs(x-y)/y)},
+    'three_momenta':  three_momenta_metrics,
 }
 
 
@@ -80,8 +91,8 @@ class RegressionEngine(ReconstructionEngine):
     def compute_metrics(self):
         self.loss = self.criterion(self.model_out, self.stacked_target)
         # return loss and metrics for the predictions
-        metrics = {t+" error": metric_functions[t](self.predictions["predicted_"+t], v)
-                   for t, v in self.target_dict.items() if t in metric_functions}
+        metrics = {k: m for t, v in self.target_dict.items() if t in metric_functions
+                   for k, m in metric_functions[t](self.predictions["predicted_"+t], v).items()}
         metrics['loss'] = self.loss
         return metrics
 
