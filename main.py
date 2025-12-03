@@ -107,6 +107,8 @@ def main_worker_function(rank, config, hydra_config=None):
     # Instantiate the engine
     engine = instantiate(config.engine, model=model, rank=rank, device=device, dump_path=config.dump_path)
     
+    # Configure automatic mixed precision
+    engine.configure_amp(config.get("amp", False))
     for task, task_config in config.tasks.items():
         if is_distributed:
             # Before each task, ensure GPUs are in sync to avoid e.g. loading a state before a GPU finished training
