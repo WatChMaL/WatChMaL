@@ -42,8 +42,16 @@ class H5CommonDataset(Dataset, ABC):
     def __init__(self, h5_path, use_memmap=True):
         """Dataset from the HDF5 file in `h5_path`, using memmaps for hit arrays unless `use_memmap` is set to False"""
         self.h5_path = h5_path
+
         with h5py.File(self.h5_path, 'r') as h5_file:
-            self.dataset_length = h5_file["event_hits_index"].shape[0]
+            if "main" in h5_file:
+                self.group_path = "main"
+                data_source = h5_file["main"]
+            else:
+                self.group_path = "" 
+                data_source = h5_file
+
+            self.dataset_length = data_source["event_hits_index"].shape[0]
 
         self.label_set = None
         self.labels_key = None
@@ -59,6 +67,11 @@ class H5CommonDataset(Dataset, ABC):
         self.targets = None
         self.unmapped_labels = None
 
+    def _h5_group(self):
+        if self.group_path:
+            return self.h5_file[self.group_path]
+        else:
+            return self.h5_file
     def set_target(self, target_key):
         self.target_key = target_key
         if self.target_key is None:
@@ -75,10 +88,11 @@ class H5CommonDataset(Dataset, ABC):
                 self.targets = {}
 
     def load_target(self, target_key):
+        group = self._h5_group()
         if target_key == "directions":
-            return direction_from_angles(np.array(self.h5_file["angles"]))
+            return direction_from_angles(np.array(group["angles"]))
         else:
-            return np.array(self.h5_file[target_key]).squeeze()
+            return np.array(group[target_key]).squeeze()
 
     def initialize(self):
         """
@@ -87,8 +101,8 @@ class H5CommonDataset(Dataset, ABC):
         so in that case this function should instead be called only once first actually loading some data.
         """
         self.h5_file = h5py.File(self.h5_path, "r")
-
-        self.event_hits_index = np.append(self.h5_file["event_hits_index"], self.h5_file["hit_pmt"].shape[0]).astype(np.int64)
+        group = self._h5_group()
+        self.event_hits_index = np.append(group["event_hits_index"], group["hit_pmt"].shape[0]).astype(np.int64)
         self.hit_pmt = self.load_hits("hit_pmt")
         self.hit_time = self.load_hits("hit_time")
 
@@ -121,11 +135,12 @@ class H5CommonDataset(Dataset, ABC):
 
     def load_hits(self, h5_key):
         """Loads data from a given key in the h5 file either into numpy arrays or memmaps"""
+        group = self._h5_group()
         if self.use_memmap:
-            data = self.h5_file[h5_key]
+            data = group[h5_key]
             return np.memmap(self.h5_path, mode="r", shape=data.shape, offset=data.id.get_offset(), dtype=data.dtype)
         else:
-            return np.array(self.h5_file[h5_key])
+            return np.array(group[h5_key])
 
     def __len__(self):
         return self.dataset_length
