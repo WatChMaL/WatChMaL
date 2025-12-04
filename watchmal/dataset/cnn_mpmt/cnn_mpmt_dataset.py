@@ -50,7 +50,7 @@ class CNNmPMTDataset(H5Dataset):
 
     def __init__(self, h5file, mpmt_positions_file, transforms=None, use_new_mpmt_convention=False, channels=None,
                  collapse_mpmt_channels=None, channel_scale_factor=None, channel_scale_offset=None, geometry_file=None,
-                 use_memmap=True):
+                 use_memmap=True, mask_pmts=None):
         """
         Constructs a dataset for CNN data. Event hit data is read in from the HDF5 file and the PMT charge data is
         formatted into an event-display-like image for input to a CNN. Each pixel of the image corresponds to one mPMT
@@ -86,9 +86,11 @@ class CNNmPMTDataset(H5Dataset):
             Path to file defining the 3D geometry (PMT positions and orientations), required if using geometry channels.
         use_memmap: bool
             Use a memmap and load data into memory as needed (default), otherwise load entire dataset at initialisation
+        mask_pmts: list of int
+            List of PMT IDs to mask out from all data (None by default)
 """
 
-        super().__init__(h5file, use_memmap)
+        super().__init__(h5file, use_memmap, mask_pmts)
 
         self.use_new_mpmt_convention = use_new_mpmt_convention
         if self.use_new_mpmt_convention:
