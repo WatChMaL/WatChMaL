@@ -206,7 +206,7 @@ class CNNmPMTDataset(H5Dataset):
         data[self.barrel] = data[self.barrel_mpmt_map][self.barrel]
 
         if self.rotate_mpmts is not None:
-            data[self.rotate_mpmts] = data[self.rotate_mpmt_map][self.rotate_mpmts]
+            data[self.rotate_mpmts] = data[self.rotate_mpmt][self.rotate_mpmts_map]
 
         return data
 
