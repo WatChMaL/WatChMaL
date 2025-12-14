@@ -129,7 +129,7 @@ class CNNmPMTDataset(H5Dataset):
         rows, row_counts = np.unique(self.mpmt_positions[:, 0], return_counts=True)  # count occurrences of each row
         cols, col_counts = np.unique(self.mpmt_positions[:, 1], return_counts=True)  # count occurrences of each column
         # barrel rows are those where the row appears in mpmt_positions as many times as the image width
-        barrel_rows = rows[row_counts == self.image_width]
+        barrel_rows = rows[row_counts > 0.7*self.image_width]
         # endcap size is the number of rows before the first barrel row
         self.endcap_size = np.min(barrel_rows)
         self.barrel = np.s_[..., self.endcap_size:np.max(barrel_rows) + 1, :]
