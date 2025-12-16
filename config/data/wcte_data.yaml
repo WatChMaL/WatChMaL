@@ -1,8 +1,8 @@
 defaults:
   - dataset: cnn_mpmt
-split_path: /vols/hyperk/WCTE/ML_2025/cds_geometry/split_paths/cds_split_path_emu_FC.npz
+split_path: /vols/hyperk/WCTE/ML_2025/cds_geometry/split_paths/wcte_CDS_pgun_e-_3M_mu-_3M_0to1GeV_fixedFC_fixedmu_6M/emu_FC.npz
 dataset:
-  h5file: /vols/hyperk/WCTE/ML_2025/cds_geometry/h5_files/wcte_CDS_pgun_e-_3M_mu-_3M_0to1GeV_fixedFC_fixed_mu_6M.h5
+  h5file: /vols/hyperk/WCTE/ML_2025/cds_geometry/h5_files/wcte_CDS_pgun_e-_3M_mu-_3M_0to1GeV_fixedFC_fixedmu_6M.h5
   mpmt_positions_file: /vols/hyperk/WCTE/ML_2025/cds_geometry/mpmt_pos_files/WCTE_mpmt_position_correct_251125.npz
   geometry_file: /vols/hyperk/WCTE/ML_2025/cds_geometry/geometries/WCTE_geometry_v1.12.21.npz
   rotate_mpmts: [45,46,47,53,54,55,56,57,64,65,81,82,83,84,89,90,91,92,93,94]
