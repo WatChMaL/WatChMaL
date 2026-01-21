@@ -764,6 +764,61 @@ class WatChMaLEnergyRegression(WatChMaLRegression, MomentumPrediction):
         return self._momentum_prediction
 
 
+class WatChMaLThreeMomentumRegression(WatChMaLRegression, MomentumPrediction, DirectionPrediction):
+    """Class to hold momentum and direction predictions of a WatChMaL three-momentum regression run """
+
+    predictions_name = "three_momenta"
+
+    def __init__(self, directory, run_label, true_directions=None, true_momenta=None, true_labels=None, indices=None,
+                 selection=None, **plot_args):
+        """
+        Constructs the object holding the results of a WatChMaL three-momenta regression run.
+
+        Parameters
+        ----------
+        directory: str
+            Top-level output directory of a WatChMaL regression run.
+        run_label: str
+            Label to describe this set of results to use in plot legends, etc.
+        true_directions: array_like of int, optional
+            Array of true directions for the events in these regression results to calculate direction prediction errors
+        true_momenta: array_like of float, optional
+            Array of true momenta for the events in these regression results to calculate momentum prediction residuals
+        true_labels: int or array_like of int, optional
+            PID label or array of PID labels for the events in these reconstruction results
+        indices: array_like of int, optional
+            Array of indices of events to select out of the indices output by WatChMaL (by default use all events sorted
+            by their indices).
+        selection: index_expression, optional
+            Selection to apply to the set of events to only use a subset of all events when plotting results, etc.
+            By default, use all results.
+        plot_args: optional
+            Additional arguments to pass to plotting functions, used to set the style when plotting these results
+            together with other runs' results.
+        """
+        WatChMaLRegression.__init__(self, directory=directory, run_label=run_label, indices=indices,
+                                    selection=selection, **plot_args)
+        self._direction_prediction = None
+        DirectionPrediction.__init__(self, true_directions=true_directions)
+        self._momentum_prediction = None
+        MomentumPrediction.__init__(self, true_momenta=true_momenta, true_labels=true_labels)
+
+    @property
+    def direction_prediction(self):
+        """Direction predictions calculated from predicted 3-momenta output from the WatChMaL regression run"""
+        if self._direction_prediction is None:
+            norm = np.linalg.norm(self.predictions, axis=1, keepdims=True)
+            norm[norm == 0] = 1
+            self._direction_prediction = self.predictions / norm
+        return self._direction_prediction
+
+    @property
+    def momentum_prediction(self):
+        """Momentum predictions calculated from predicted 3-momenta output from the WatChMaL regression run"""
+        if self._momentum_prediction is None:
+            self._momentum_prediction = np.linalg.norm(self.predictions, axis=1)
+        return self._momentum_prediction
+
 class CombinedRegressionRun(RegressionRun):
     """
     Class used to combine different regression runs that each provide different predicted quantities. The combined run

@@ -257,10 +257,9 @@ class CNNmPMTDataset(H5Dataset):
         offset = self.endcap_left - (self.image_width - self.endcap_right)
         data_dict["data"][self.data_channels] = np.roll(data_dict["data"][self.data_channels], offset, 2)
         # Note: Below assumes y-axis is the tank's azimuth axis. True for IWCD and WCTE, not true for SK, HKFD.
-        if "positions" in data_dict:
-            data_dict["positions"][..., 2] *= -1
-        if "directions" in data_dict:
-            data_dict["directions"][..., 2] *= -1
+        for v in ["positions", "directions", "three_momenta"]:
+            if v in data_dict:
+                data_dict[v][..., 2] *= -1
         if "angles" in data_dict:
             data_dict["angles"][..., 1] *= -1
         return data_dict
@@ -269,10 +268,9 @@ class CNNmPMTDataset(H5Dataset):
         """Takes CNN input data and truth info and performs vertical flip, permuting mPMT channels where needed."""
         data_dict["data"][self.data_channels] = self.vertical_image_flip(data_dict["data"])[self.data_channels]
         # Note: Below assumes y-axis is the tank's azimuth axis. True for IWCD and WCTE, not true for SK, HKFD.
-        if "positions" in data_dict:
-            data_dict["positions"][..., 1] *= -1
-        if "directions" in data_dict:
-            data_dict["directions"][..., 1] *= -1
+        for v in ["positions", "directions", "three_momenta"]:
+            if v in data_dict:
+                data_dict[v][..., 1] *= -1
         if "angles" in data_dict:
             data_dict["angles"][..., 0] *= -1
             data_dict["angles"][..., 0] += np.pi
@@ -295,10 +293,9 @@ class CNNmPMTDataset(H5Dataset):
         top_endcap[self.data_channels] = self.vertical_image_flip(top_endcap)[self.data_channels]
         bottom_endcap[self.data_channels] = self.vertical_image_flip(bottom_endcap)[self.data_channels]
         # Note: Below assumes y-axis is the tank's azimuth axis. True for IWCD and WCTE, not true for SK, HKFD.
-        if "positions" in data_dict:
-            data_dict["positions"][..., 0] *= -1
-        if "directions" in data_dict:
-            data_dict["directions"][..., 0] *= -1
+        for v in ["positions", "directions", "three_momenta"]:
+            if v in data_dict:
+                data_dict[v][..., 0] *= -1
         # New azimuth angle is -(azimuth-pi) if > 0 or -(azimuth+pi) if < 0
         if "angles" in data_dict:
             data_dict["angles"][..., 1] += np.where(data_dict["angles"][..., 1] > 0, -np.pi, np.pi)
@@ -320,10 +317,9 @@ class CNNmPMTDataset(H5Dataset):
         top_endcap[self.data_channels] = self.rotate_image(top_endcap)[self.data_channels]
         bottom_endcap[self.data_channels] = self.rotate_image(bottom_endcap)[self.data_channels]
         # Note: Below assumes y-axis is the tank's azimuth axis. True for IWCD and WCTE, not true for SK, HKFD.
-        if "positions" in data_dict:
-            data_dict["positions"][..., (0, 2)] *= -1
-        if "directions" in data_dict:
-            data_dict["directions"][..., (0, 2)] *= -1
+        for v in ["positions", "directions", "three_momenta"]:
+            if v in data_dict:
+                data_dict[v][..., (0, 2)] *= -1
         # rotate azimuth angle by pi, keeping values in range [-pi, pi]
         if "angles" in data_dict:
             data_dict["angles"][..., 1] += np.where(data_dict["angles"][..., 1] > 0, -np.pi, np.pi)
