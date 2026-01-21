@@ -2,7 +2,7 @@
 Class for loading data in h5 format
 """
 
-from watchmal.utils.math import direction_from_angles
+from watchmal.utils.math import direction_from_angles, momentum_from_energy
 
 # torch imports
 from torch.utils.data import Dataset
@@ -77,6 +77,10 @@ class H5CommonDataset(Dataset, ABC):
     def load_target(self, target_key):
         if target_key == "directions":
             return direction_from_angles(np.array(self.h5_file["angles"]))
+        elif target_key == "three_momenta":
+            directions = direction_from_angles(np.array(self.h5_file["angles"]))
+            momenta = momentum_from_energy(np.array(self.h5_file["energies"]), np.array(self.h5_file["labels"]))
+            return directions*momenta
         else:
             return np.array(self.h5_file[target_key]).squeeze()
 

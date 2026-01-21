@@ -6,5 +6,5 @@ defaults:
    - validation
 epochs: 20
 val_interval: 20
-num_val_batches: 2
-checkpointing: False
+num_val_batches: 4
+checkpointing: false
