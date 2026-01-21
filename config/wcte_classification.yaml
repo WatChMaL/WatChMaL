@@ -1,0 +1,10 @@
+defaults:
+    - wcte_defaults
+    - engine: classifier
+    - _self_
+engine:
+  label_set:
+    - 1
+    - 2
+model:
+  num_output_channels: 2

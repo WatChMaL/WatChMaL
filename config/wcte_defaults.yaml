@@ -1,0 +1,14 @@
+defaults:
+    - data: wcte_data
+    - model: resnet50
+    - tasks/train: train_resnet
+    - tasks/restore_best_state: restore_best_state
+    - tasks/evaluate: test
+gpu_list: [0]
+seed: null
+dump_path: './outputs/'
+hydra:
+  run:
+    dir: ./outputs/${now:%Y-%m-%d}/${now:%H-%M-%S.%f}
+  job:
+    chdir: True
