@@ -19,7 +19,8 @@ class PointNetDataset(H5Dataset):
     The second dimension of the data tensor is over the hit PMTs of the event.
     """
 
-    def __init__(self, h5file, geometry_file, use_times=True, use_orientations=False, n_points=4000, transforms=None, use_memmap=True):
+    def __init__(self, h5file, geometry_file, use_times=True, use_orientations=False, n_points=4000, transforms=None,
+                 use_memmap=True, pmt_type=None):
         """
         Constructs a dataset for PointNet data. Event hit data is read in from the HDF5 file and the PMT charge and/or
         time data is formatted into an array of points, with x, y and z position and other channels for orientation,
@@ -47,7 +48,7 @@ class PointNetDataset(H5Dataset):
         use_memmap: bool
             Use a memmap and load data into memory as needed (default), otherwise load entire dataset at initialisation
         """
-        super().__init__(h5file, use_memmap)
+        super().__init__(h5file, use_memmap, pmt_type=pmt_type)
         geo_file = np.load(geometry_file, 'r')
         self.geo_positions = geo_file["position"].astype(np.float32)
         self.geo_orientations = geo_file["orientation"].astype(np.float32)

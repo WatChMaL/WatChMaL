@@ -2,8 +2,6 @@
 Here is a dataset class for loading dual-image data from HDF5 files.
 """
 
-import h5py
-
 # torch imports
 from torch import from_numpy
 
@@ -12,78 +10,29 @@ import numpy as np
 
 np.set_printoptions(threshold=np.inf)
 # WatChMaL imports
-from watchmal.dataset.h5_dataset import H5Dataset
 from watchmal.dataset.cnn.cnn_dataset import CNNDataset
-import watchmal.dataset.data_utils as du
 
 class DualImageDataset(CNNDataset):
     def __init__(
         self,
         h5file,
         pmt_positions_file,
-        mpmt_positions_file=None,  
+        mpmt_positions_file=None,
         num_valid_mpmt_modules=816,
+        pmt_type_main=0,
+        pmt_type_mpmt=1,
         **kwargs,
     ):
-        super().__init__(h5file, pmt_positions_file, **kwargs)
+        super().__init__(h5file, pmt_positions_file, pmt_type=pmt_type_main, **kwargs)
 
         self.num_valid_mpmt_modules = num_valid_mpmt_modules
-        self.n_channels_mpmt = 38 
-
-        self.mpmt_positions = None
-        if mpmt_positions_file is not None:
-            self.mpmt_positions = np.load(mpmt_positions_file)[
-                "pmt_image_positions"
-            ].astype(int)
-        self.event_hits_index_mpmt = None
-        self.hit_pmt_mpmt = None
-        self.hit_time_mpmt = None
-        self.hit_charge_mpmt = None
+        self.n_channels_mpmt = 38
+        self.pmt_type_mpmt = pmt_type_mpmt
 
     def initialize(self):
-
         if self.initialized:
             return
         super().initialize()
-        if "mpmt" not in self.h5_file:
-            raise KeyError(f"'mpmt' group not found in HDF5 file {self.h5_path}")
-
-        mpmt_group = self.h5_file["mpmt"]
-        self.event_hits_index_mpmt = np.append(
-            mpmt_group["event_hits_index"], mpmt_group["hit_pmt"].shape[0]
-        ).astype(np.int64)
-
-        if self.use_memmap:
-            data = mpmt_group["hit_pmt"]
-            self.hit_pmt_mpmt = np.memmap(
-                self.h5_path,
-                mode="r",
-                shape=data.shape,
-                offset=data.id.get_offset(),
-                dtype=data.dtype,
-            )
-
-            data = mpmt_group["hit_time"]
-            self.hit_time_mpmt = np.memmap(
-                self.h5_path,
-                mode="r",
-                shape=data.shape,
-                offset=data.id.get_offset(),
-                dtype=data.dtype,
-            )
-
-            data = mpmt_group["hit_charge"]
-            self.hit_charge_mpmt = np.memmap(
-                self.h5_path,
-                mode="r",
-                shape=data.shape,
-                offset=data.id.get_offset(),
-                dtype=data.dtype,
-            )
-        else:
-            self.hit_pmt_mpmt = np.array(mpmt_group["hit_pmt"])
-            self.hit_time_mpmt = np.array(mpmt_group["hit_time"])
-            self.hit_charge_mpmt = np.array(mpmt_group["hit_charge"])
 
 
     def _process_mpmt_data(self, hit_pmts, hit_times, hit_charges):
@@ -114,20 +63,31 @@ class DualImageDataset(CNNDataset):
 
     def __getitem__(self, item):
         data_dict = super().__getitem__(item)
-        data_main = data_dict.pop("data")  
+        data_main = data_dict.pop("data")
 
-        if not self.initialized:
-            self.initialize()
+        start = self.event_hits_index[item]
+        stop = self.event_hits_index[item + 1]
+        hit_pmts = self.hit_pmt[start:stop]
+        hit_times = self.hit_time[start:stop]
+        hit_charges = self.hit_charge[start:stop]
+        hit_pmt_types = self.hit_pmt_type[start:stop] if self.hit_pmt_type is not None else None
 
-        start_mpmt = self.event_hits_index_mpmt[item]
-        stop_mpmt = self.event_hits_index_mpmt[item + 1]
-        hit_pmts_mpmt = self.hit_pmt_mpmt[start_mpmt:stop_mpmt]
-        hit_times_mpmt = self.hit_time_mpmt[start_mpmt:stop_mpmt]
-        hit_charges_mpmt = self.hit_charge_mpmt[start_mpmt:stop_mpmt]
+        if self.pmt_type_mpmt is not None:
+            if hit_pmt_types is None:
+                print(f"WARNING: 'hit_pmt_type' not found in {self.h5_path}; mPMT hits set to empty")
+                hit_pmts = hit_pmts[:0]
+                hit_times = hit_times[:0]
+                hit_charges = hit_charges[:0]
+            else:
+                if isinstance(self.pmt_type_mpmt, (list, tuple, set, np.ndarray)):
+                    mask = np.isin(hit_pmt_types, self.pmt_type_mpmt)
+                else:
+                    mask = hit_pmt_types == self.pmt_type_mpmt
+                hit_pmts = hit_pmts[mask]
+                hit_times = hit_times[mask]
+                hit_charges = hit_charges[mask]
 
-        sparse_mpmt_data_np = self._process_mpmt_data(
-            hit_pmts_mpmt, hit_times_mpmt, hit_charges_mpmt
-        )
+        sparse_mpmt_data_np = self._process_mpmt_data(hit_pmts, hit_times, hit_charges)
         data_second = from_numpy(sparse_mpmt_data_np) 
         data_dict["data"] = (data_main, data_second)
 

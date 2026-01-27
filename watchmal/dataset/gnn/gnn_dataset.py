@@ -15,7 +15,8 @@ from torch_cluster import knn_graph
 
 
 class GnnDataset(H5Dataset):
-    def __init__(self, h5file, geometry_file, k_neighbors, transforms=None, is_distributed=True, use_memmap=True):
+    def __init__(self, h5file, geometry_file, k_neighbors, transforms=None, is_distributed=True, use_memmap=True,
+                 pmt_type=None):
         """
         Args:
             h5file              ... path to h5 dataset file
@@ -24,7 +25,7 @@ class GnnDataset(H5Dataset):
             transforms          ... transforms to apply
             use_memmap          ... use a memmap and load data into memory as needed (default), otherwise load entire dataset at initialisation
         """
-        super().__init__(h5file, use_memmap)
+        super().__init__(h5file, use_memmap, pmt_type=pmt_type)
 
         geo_file = np.load(geometry_file, 'r')
         self.geo_positions = geo_file['position'].astype(np.float32)

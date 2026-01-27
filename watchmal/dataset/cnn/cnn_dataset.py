@@ -42,6 +42,7 @@ class CNNDataset(H5Dataset):
         geometry_file=None,
         use_invalid_value=False,
         use_log_charge=False,
+        pmt_type=None,
     ):
         """
         Constructs a dataset for CNN data. Event hit data is read in from the HDF5 file and the PMT charge and/or time
@@ -96,7 +97,7 @@ class CNNDataset(H5Dataset):
         ----------
         """
 
-        super().__init__(h5file, use_memmap)
+        super().__init__(h5file, use_memmap, pmt_type=pmt_type)
 
         self.pmt_positions = np.load(pmt_positions_file)["pmt_image_positions"].astype(
             int
