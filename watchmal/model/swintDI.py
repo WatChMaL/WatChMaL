@@ -813,6 +813,7 @@ class SwinRegressorDI(nn.Module):
         nn.init.zeros_(self.head.bias)
         self.output_dim = num_output_channels
 
-    def forward(self, x_main, x_mpmt38):
+    def forward(self, data):
+        x_main, x_mpmt38 = data
         feats = self.backbone(x_main, x_mpmt38)
         return self.head(feats)

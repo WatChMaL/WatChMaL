@@ -93,36 +93,3 @@ class RegressionEngine(ReconstructionEngine):
         super().restore_state(weight_file)
         if "target_sizes" in self.state_data:
             self.target_sizes = self.state_data["target_sizes"]
-
-class RegressionDIEngine(RegressionEngine):
-    """
-    Regression engine for dual-image input (20-inch image + mPMT image).
-    """
-
-    def __init__(self, target_key, model, rank, device, dump_path,
-                 target_scale_offset=0, target_scale_factor=1):
-        super().__init__(target_key, model, rank, device, dump_path,
-                         target_scale_offset=target_scale_offset,
-                         target_scale_factor=target_scale_factor)
-        self.data_main = None
-        self.data_second = None
-    def process_data(self, data):
-        data_main, data_second = data["data"]
-        self.data_main = data_main.to(self.device)
-        self.data_second = data_second.to(self.device)
-        self.data = (self.data_main, self.data_second)
-
-    def process_target(self, data):
-        super().process_target(data)
-
-    def forward_pass(self):
-        self.model_out = self.model(self.data_main, self.data_second)
-        split_model_out = torch.split(self.model_out, self.target_sizes, dim=1)
-        self.predictions = {
-            "predicted_" + t: o * self.scale[t] + self.offset[t]
-            for t, o in zip(self.target_key, split_model_out)
-        }
-        if self.target_dict is None:
-            return self.predictions
-        return self.target_dict | self.predictions
-
