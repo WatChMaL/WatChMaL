@@ -10,6 +10,7 @@ tasks:
     val_interval: 1000
     num_val_batches: 64
 gpu_list: [] # train on CPU
+amp: False # Automatic Mixed Precision could be used in most kind of nvidia GPUs to speed up training.
 seed: null
 dump_path: './outputs/'
 hydra:
