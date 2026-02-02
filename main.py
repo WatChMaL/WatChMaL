@@ -108,9 +108,6 @@ def main_worker_function(rank, config, hydra_config=None):
     engine = instantiate(config.engine, model=model, rank=rank, device=device, dump_path=config.dump_path)
     
     for task, task_config in config.tasks.items():
-        if is_distributed:
-            # Before each task, ensure GPUs are in sync to avoid e.g. loading a state before a GPU finished training
-            torch.distributed.barrier()
         with open_dict(task_config):
             # Configure data loaders
             if 'data_loaders' in task_config:
@@ -127,6 +124,9 @@ def main_worker_function(rank, config, hydra_config=None):
 
     # Perform tasks
     for task, task_config in config.tasks.items():
+        if is_distributed:
+            # Before each task, ensure GPUs are in sync to avoid e.g. loading a state before a GPU finished training
+            torch.distributed.barrier()
         getattr(engine, task)(**task_config)
 
     if is_distributed:
