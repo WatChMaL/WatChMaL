@@ -1,8 +1,10 @@
 defaults:
   - /sampler@train.sampler: subset_random
 train:
-  split_key: train_idxs
   batch_size: 1024
   num_workers: 4
   pre_transforms:
     - random_reflections
+  sampler:
+    indices:
+      split_key: train_idxs

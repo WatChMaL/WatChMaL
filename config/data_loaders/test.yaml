@@ -1,6 +1,8 @@
 defaults:
   - /sampler@test.sampler: subset_sequential
 test:
-  split_key: test_idxs
   batch_size: 8192
   num_workers: 4
+  sampler:
+    indices:
+      split_key: test_idxs

@@ -93,7 +93,7 @@ class ReconstructionEngine(ABC):
     def configure_data_loaders(self, data_config, loaders_config, is_distributed, seed):
         is_gpu = self.device != torch.device("cpu")
         for name, loader_config in loaders_config.items():
-            self.data_loaders[name] = get_data_loader(**data_config, **loader_config, is_distributed=is_distributed,
+            self.data_loaders[name] = get_data_loader(data_config.dataset, **loader_config, is_distributed=is_distributed,
                                                       is_gpu=is_gpu, seed=seed)
             self.data_loaders[name].dataset.set_target(self.target_key)
 

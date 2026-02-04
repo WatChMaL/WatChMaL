@@ -20,8 +20,13 @@ from watchmal.dataset.samplers import DistributedSamplerWrapper
 from torch_geometric.loader import DataLoader as PyGDataLoader
 
 
+def load_indices(split_path, split_key):
+    """Return array of indices loaded from split_key array of npz file at split_path"""
+    return np.load(split_path, allow_pickle=True)[split_key]
+
+
 def get_data_loader(dataset, batch_size, sampler, num_workers, is_distributed, is_gpu, seed, is_graph=False,
-                    split_path=None, split_key=None, pre_transforms=None, post_transforms=None, drop_last=False):
+                    pre_transforms=None, post_transforms=None, drop_last=False):
     """
     Creates a dataloader given the dataset and sampler configs. The dataset and sampler are instantiated using their
     corresponding configs. If using DistributedDataParallel, the sampler is wrapped using DistributedSamplerWrapper.
@@ -44,10 +49,6 @@ def get_data_loader(dataset, batch_size, sampler, num_workers, is_distributed, i
         Random seed used to coordinate samplers in distributed mode.
     is_graph : bool
         A boolean indicating whether the dataset is graph or not, to use PyTorch Geometric data loader if it is graph. False by default.
-    split_path
-        Path to an npz file containing an array of indices to use as a subset of the full dataset.
-    split_key : string
-        Name of the array to use in the file specified by split_path.
     pre_transforms : list of string
         List of transforms to apply to the dataset before any transforms specified by the dataset config.
     pre_transforms : list of string
@@ -63,17 +64,11 @@ def get_data_loader(dataset, batch_size, sampler, num_workers, is_distributed, i
     transforms = (pre_transforms or []) + transforms + (post_transforms or [])
     dataset = instantiate(dataset, transforms=(transforms or None))
     
-    if split_path is not None and split_key is not None:
-        split_indices = np.load(split_path, allow_pickle=True)[split_key]
-        sampler = instantiate(sampler, split_indices)
-    else:
-        sampler = instantiate(sampler)
+    sampler = instantiate(sampler)
     
     if is_distributed:
         ngpus = torch.distributed.get_world_size()
-
         batch_size = int(batch_size/ngpus)
-        
         sampler = DistributedSamplerWrapper(sampler=sampler, seed=seed)
 
     if is_graph:
