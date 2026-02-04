@@ -79,9 +79,9 @@ def momentum_from_energy(energy, label, particle_masses=np.array((0, 0.511, 105.
 
     Parameters
     ----------
-    energy : array_like
+    energy : array_like or scalar
         energy of particle or vector of energies of particles
-    label : array_like
+    label : array_like or int
         integer label of particle type or vector of labels of particles
     particle_masses : array_like
         array of particle masses indexed by label
@@ -91,7 +91,9 @@ def momentum_from_energy(energy, label, particle_masses=np.array((0, 0.511, 105.
     np.ndarray or scalar
         array of momentum values for each energy, or scalar if only one energy
     """
-    mass = particle_masses[label]*np.ones_like(energy)
+    energy = np.asarray(energy)
+    mass = np.asarray(particle_masses[label], dtype=energy.dtype)
+    mass = mass[(...,) + (None,) * (energy.ndim - mass.ndim)] # add axes to broadcast to energy along first axis/axes
     return np.sqrt(energy**2 - mass**2)
 
 
