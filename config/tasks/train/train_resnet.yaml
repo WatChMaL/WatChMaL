@@ -1,3 +1,4 @@
+_target_: ${engine._target_}.train # engine method
 defaults:
  - /optimizers: adam
  - /data_loaders:

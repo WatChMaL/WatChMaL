@@ -120,11 +120,13 @@ def main_worker_function(rank, config, hydra_config=None):
                 engine.configure_scheduler(task_config.pop("scheduler"))
 
     # Perform tasks
-    for task, task_config in config.tasks.items():
+    for task_name, task in config.tasks.items():
         if is_distributed:
             # Before each task, ensure GPUs are in sync to avoid e.g. loading a state before a GPU finished training
             torch.distributed.barrier()
-        getattr(engine, task)(**task_config)
+        log.info(f"Running task {task_name} on device: {device}")
+        instantiate(task, engine)
+        #getattr(engine, task)(**task_config)
 
     if is_distributed:
         torch.distributed.destroy_process_group()

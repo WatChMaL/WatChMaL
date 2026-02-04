@@ -1,1 +1,3 @@
+_target_: ${engine._target_}.restore_best_state # engine method
+
 name: null

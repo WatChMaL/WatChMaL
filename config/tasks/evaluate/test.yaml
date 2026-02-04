@@ -1,3 +1,5 @@
+_target_: ${engine._target_}.evaluate # engine method
+
 defaults:
   - /data_loaders:
     - test
