@@ -32,6 +32,8 @@ def main(config):
     Args:
         config  ... hydra config specified in the @hydra.main annotation
     """
+    log.info(f"Starting WatChMaL")
+    log.info(f"Run directory: {os.path.abspath(HydraConfig.get().runtime.output_dir)}")
     log.info(f"Using the following git version of WatChMaL repository: {get_git_version(os.path.dirname(to_absolute_path(__file__)))}")
     log.info(f"Running with the following config:\n{OmegaConf.to_yaml(config)}")
 
@@ -52,7 +54,7 @@ def main(config):
 
     # create run directory
     os.makedirs(config.dump_path, exist_ok=True)
-    log.info(f"Output directory: {config.dump_path}")
+    log.info(f"Output directory: {os.path.abspath(config.dump_path)}")
 
     # initialize seed
     if config.seed is None:
