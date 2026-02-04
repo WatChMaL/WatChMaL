@@ -112,12 +112,6 @@ def main_worker_function(rank, config, hydra_config=None):
             # Configure data loaders
             if 'data_loaders' in task_config:
                 engine.configure_data_loaders(config.data, task_config.pop("data_loaders"), is_distributed, config.seed)
-            # Configure optimizers
-            if 'optimizers' in task_config:
-                engine.configure_optimizers(task_config.pop("optimizers"))
-            # Configure scheduler
-            if 'scheduler' in task_config:
-                engine.configure_scheduler(task_config.pop("scheduler"))
 
     # Perform tasks
     for task_name, task in config.tasks.items():

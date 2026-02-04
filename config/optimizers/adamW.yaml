@@ -1,4 +1,5 @@
 _target_: torch.optim.AdamW
+_partial_: true # need to add params to fully instantiate
 lr: 5e-5
 weight_decay: 3e-4
 

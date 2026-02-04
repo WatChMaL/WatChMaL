@@ -77,18 +77,18 @@ class ReconstructionEngine(ABC):
         self.optimizer = None
         self.scheduler = None
 
-    def configure_optimizers(self, optimizer_config):
+    def configure_optimizer(self, optimizer):
         """Instantiate an optimizer from a hydra config."""
-        self.optimizer = instantiate(optimizer_config, params=self.module.parameters())
-        total_params = sum(p.numel() for p in self.module.parameters() if p.requires_grad)
-        opt_params = sum(p.numel() for g in self.optimizer.param_groups for p in g['params'])
-        print(f"Total trainable parameters: {total_params}")
-        print(f"Parameters passed to optimizer: {opt_params}")
+        self.optimizer = optimizer(params=self.module.parameters())
+        if self.rank == 0:
+            total_params = sum(p.numel() for p in self.module.parameters() if p.requires_grad)
+            opt_params = sum(p.numel() for g in self.optimizer.param_groups for p in g['params'])
+            print(f"Total trainable parameters: {total_params}")
+            print(f"Parameters passed to optimizer: {opt_params}")
 
-    def configure_scheduler(self, scheduler_config):
+    def configure_scheduler(self, scheduler):
         """Instantiate a scheduler from a hydra config."""
-        
-        self.scheduler = instantiate(scheduler_config, optimizer=self.optimizer)
+        self.scheduler = scheduler(optimizer=self.optimizer)
 
     def configure_data_loaders(self, data_config, loaders_config, is_distributed, seed):
         is_gpu = self.device != torch.device("cpu")
@@ -201,12 +201,17 @@ class ReconstructionEngine(ABC):
         self.loss.backward()  # compute new gradient
         self.optimizer.step()  # step params
 
-    def train(self, epochs=0, val_interval=20, num_val_batches=4, checkpointing=False, save_interval=None):
+    def train(self, optimizer, scheduler=None, epochs=1, val_interval=20, num_val_batches=4, checkpointing=False,
+              save_interval=None):
         """
         Train the model on the training set. The best state is always saved during training.
 
         Parameters
         ==========
+        optimizer: torch.optim.Optimizer
+            Optimizer to use during training
+        scheduler: torch.optim.lr_scheduler.LRScheduler
+            Scheduler to adjust learning rate, default None
         epochs: int
             Number of epochs to train, default 1
         val_interval: int
@@ -218,6 +223,9 @@ class ReconstructionEngine(ABC):
         save_interval: int
             Number of epochs between each state save, by default don't save
         """
+        self.configure_optimizer(optimizer)
+        if scheduler is not None:
+            self.configure_scheduler(scheduler)
         if self.rank == 0:
             log.info(f"Training {epochs} epochs with {num_val_batches}-batch validation each {val_interval} iterations")
         # set model to training mode
