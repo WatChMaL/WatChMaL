@@ -23,7 +23,7 @@ log = logging.getLogger(__name__)
 
 
 class ReconstructionEngine(ABC):
-    def __init__(self, target_key, model, rank, device, dump_path):
+    def __init__(self, target_key, model, rank, device, dump_path, loss=None):
         """
         Parameters
         ==========
@@ -37,6 +37,8 @@ class ReconstructionEngine(ABC):
             The gpu that this process is running on.
         dump_path : string
             The path to store outputs in.
+        loss : torch.nn.Module
+            Loss function required for training and evaluating models
         """
         # create the directory for saving the log and dump files
         self.state_data = {}
@@ -48,6 +50,7 @@ class ReconstructionEngine(ABC):
         self.model = model
         self.device = torch.device(device)
         self.target_key = target_key
+        self.criterion = loss
 
         # Set up the parameters to save given the model type
         if isinstance(self.model, DistributedDataParallel):
@@ -71,12 +74,8 @@ class ReconstructionEngine(ABC):
         if self.rank == 0:
             self.val_log = CSVLog(self.dump_path + "log_val.csv")
 
-        self.criterion = None
         self.optimizer = None
         self.scheduler = None
-
-    def configure_loss(self, loss_config):
-        self.criterion = instantiate(loss_config)
 
     def configure_optimizers(self, optimizer_config):
         """Instantiate an optimizer from a hydra config."""

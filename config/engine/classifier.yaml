@@ -1,3 +1,5 @@
+defaults:
+  - /loss: mse
 _target_: watchmal.engine.classification.ClassifierEngine
 target_key: 'labels'
 label_set:

@@ -1,6 +1,5 @@
 defaults:
  - /optimizers: adam
- - /loss: cross_entropy
  - /data_loaders:
    - train
    - validation

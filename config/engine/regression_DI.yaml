@@ -1,3 +1,5 @@
+defaults:
+  - /loss: huber
 _target_: watchmal.engine.regression.RegressionDIEngine
 target_key: ['energies',]
 target_scale_factor: 2000

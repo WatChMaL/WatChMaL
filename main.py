@@ -118,9 +118,6 @@ def main_worker_function(rank, config, hydra_config=None):
             # Configure scheduler
             if 'scheduler' in task_config:
                 engine.configure_scheduler(task_config.pop("scheduler"))
-            # Configure loss
-            if 'loss' in task_config:
-                engine.configure_loss(task_config.pop("loss"))
 
     # Perform tasks
     for task, task_config in config.tasks.items():

@@ -5,7 +5,6 @@ defaults:
   - tasks/train: train_resnet
   - tasks/restore_best_state: restore_best_state
   - tasks/evaluate: test
-  - override loss@tasks.train.loss: huber
   - _self_
 gpu_list:
   - 5
