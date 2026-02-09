@@ -1,3 +1,5 @@
+_target_: ${engine._target_}.train # engine method
+
 epochs: 20
 
 val_interval: 100

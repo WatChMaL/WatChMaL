@@ -1,5 +1,6 @@
+_target_: ${engine._target_}.evaluate # engine method
+
 defaults:
-  - /loss: cross_entropy
   - /data_loaders:
     - test
 report_interval: 10

@@ -23,7 +23,7 @@ log = logging.getLogger(__name__)
 
 
 class ReconstructionEngine(ABC):
-    def __init__(self, target_key, model, rank, device, dump_path):
+    def __init__(self, target_key, model, rank, device, dump_path, loss=None):
         """
         Parameters
         ==========
@@ -37,6 +37,8 @@ class ReconstructionEngine(ABC):
             The gpu that this process is running on.
         dump_path : string
             The path to store outputs in.
+        loss : torch.nn.Module
+            Loss function required for training and evaluating models
         """
         # create the directory for saving the log and dump files
         self.state_data = {}
@@ -48,6 +50,7 @@ class ReconstructionEngine(ABC):
         self.model = model
         self.device = torch.device(device)
         self.target_key = target_key
+        self.criterion = loss
 
         # Set up the parameters to save given the model type
         if isinstance(self.model, DistributedDataParallel):
@@ -71,30 +74,26 @@ class ReconstructionEngine(ABC):
         if self.rank == 0:
             self.val_log = CSVLog(self.dump_path + "log_val.csv")
 
-        self.criterion = None
         self.optimizer = None
         self.scheduler = None
 
-    def configure_loss(self, loss_config):
-        self.criterion = instantiate(loss_config)
-
-    def configure_optimizers(self, optimizer_config):
+    def configure_optimizer(self, optimizer):
         """Instantiate an optimizer from a hydra config."""
-        self.optimizer = instantiate(optimizer_config, params=self.module.parameters())
-        total_params = sum(p.numel() for p in self.module.parameters() if p.requires_grad)
-        opt_params = sum(p.numel() for g in self.optimizer.param_groups for p in g['params'])
-        print(f"Total trainable parameters: {total_params}")
-        print(f"Parameters passed to optimizer: {opt_params}")
+        self.optimizer = optimizer(params=self.module.parameters())
+        if self.rank == 0:
+            total_params = sum(p.numel() for p in self.module.parameters() if p.requires_grad)
+            opt_params = sum(p.numel() for g in self.optimizer.param_groups for p in g['params'])
+            print(f"Total trainable parameters: {total_params}")
+            print(f"Parameters passed to optimizer: {opt_params}")
 
-    def configure_scheduler(self, scheduler_config):
+    def configure_scheduler(self, scheduler):
         """Instantiate a scheduler from a hydra config."""
-        
-        self.scheduler = instantiate(scheduler_config, optimizer=self.optimizer)
+        self.scheduler = scheduler(optimizer=self.optimizer)
 
     def configure_data_loaders(self, data_config, loaders_config, is_distributed, seed):
         is_gpu = self.device != torch.device("cpu")
         for name, loader_config in loaders_config.items():
-            self.data_loaders[name] = get_data_loader(**data_config, **loader_config, is_distributed=is_distributed,
+            self.data_loaders[name] = get_data_loader(data_config.dataset, **loader_config, is_distributed=is_distributed,
                                                       is_gpu=is_gpu, seed=seed)
             self.data_loaders[name].dataset.set_target(self.target_key)
 
@@ -202,12 +201,17 @@ class ReconstructionEngine(ABC):
         self.loss.backward()  # compute new gradient
         self.optimizer.step()  # step params
 
-    def train(self, epochs=0, val_interval=20, num_val_batches=4, checkpointing=False, save_interval=None):
+    def train(self, optimizer, scheduler=None, epochs=1, val_interval=20, num_val_batches=4, checkpointing=False,
+              save_interval=None):
         """
         Train the model on the training set. The best state is always saved during training.
 
         Parameters
         ==========
+        optimizer: torch.optim.Optimizer
+            Optimizer to use during training
+        scheduler: torch.optim.lr_scheduler.LRScheduler
+            Scheduler to adjust learning rate, default None
         epochs: int
             Number of epochs to train, default 1
         val_interval: int
@@ -219,6 +223,9 @@ class ReconstructionEngine(ABC):
         save_interval: int
             Number of epochs between each state save, by default don't save
         """
+        self.configure_optimizer(optimizer)
+        if scheduler is not None:
+            self.configure_scheduler(scheduler)
         if self.rank == 0:
             log.info(f"Training {epochs} epochs with {num_val_batches}-batch validation each {val_interval} iterations")
         # set model to training mode

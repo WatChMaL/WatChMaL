@@ -10,5 +10,4 @@ defaults:
   - engine: regression
   - tasks/restore_state: restore_state
   - tasks/evaluate: test
-  - override loss@tasks.evaluate.loss: huber
   - _self_

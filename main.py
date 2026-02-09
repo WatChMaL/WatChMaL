@@ -32,6 +32,8 @@ def main(config):
     Args:
         config  ... hydra config specified in the @hydra.main annotation
     """
+    log.info(f"Starting WatChMaL")
+    log.info(f"Run directory: {os.path.abspath(HydraConfig.get().runtime.output_dir)}")
     log.info(f"Using the following git version of WatChMaL repository: {get_git_version(os.path.dirname(to_absolute_path(__file__)))}")
     log.info(f"Running with the following config:\n{OmegaConf.to_yaml(config)}")
 
@@ -52,7 +54,7 @@ def main(config):
 
     # create run directory
     os.makedirs(config.dump_path, exist_ok=True)
-    log.info(f"Output directory: {config.dump_path}")
+    log.info(f"Output directory: {os.path.abspath(config.dump_path)}")
 
     # initialize seed
     if config.seed is None:
@@ -112,22 +114,15 @@ def main_worker_function(rank, config, hydra_config=None):
             # Configure data loaders
             if 'data_loaders' in task_config:
                 engine.configure_data_loaders(config.data, task_config.pop("data_loaders"), is_distributed, config.seed)
-            # Configure optimizers
-            if 'optimizers' in task_config:
-                engine.configure_optimizers(task_config.pop("optimizers"))
-            # Configure scheduler
-            if 'scheduler' in task_config:
-                engine.configure_scheduler(task_config.pop("scheduler"))
-            # Configure loss
-            if 'loss' in task_config:
-                engine.configure_loss(task_config.pop("loss"))
 
     # Perform tasks
-    for task, task_config in config.tasks.items():
+    for task_name, task in config.tasks.items():
         if is_distributed:
             # Before each task, ensure GPUs are in sync to avoid e.g. loading a state before a GPU finished training
             torch.distributed.barrier()
-        getattr(engine, task)(**task_config)
+        log.info(f"Running task {task_name} on device: {device}")
+        instantiate(task, engine)
+        #getattr(engine, task)(**task_config)
 
     if is_distributed:
         torch.distributed.destroy_process_group()

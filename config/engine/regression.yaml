@@ -1,2 +1,4 @@
+defaults:
+  - /loss: huber
 _target_: watchmal.engine.regression.RegressionEngine
 target_key: 'positions'

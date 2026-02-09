@@ -1,6 +1,6 @@
+_target_: ${engine._target_}.train # engine method
 defaults:
- - /optimizers: adam
- - /loss: cross_entropy
+ - /optimizer: adam
  - /data_loaders:
    - train
    - validation

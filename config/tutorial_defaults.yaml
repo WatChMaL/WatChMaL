@@ -9,6 +9,9 @@ tasks:
     epochs: 3
     val_interval: 5
     num_val_batches: 2
+    data_loaders:
+      validation:
+        batch_size: 1024
 gpu_list: [] # train on CPU
 seed: null
 dump_path: './outputs/'

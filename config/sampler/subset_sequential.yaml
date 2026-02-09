@@ -1,1 +1,4 @@
 _target_: watchmal.dataset.samplers.SubsetSequentialSampler
+indices:
+  _target_: watchmal.dataset.data_utils.load_indices
+  split_path: ${data.split_path}
