@@ -76,10 +76,10 @@ class H5CommonDataset(Dataset, ABC):
 
     def load_target(self, target_key):
         if target_key == "directions":
-            return direction_from_angles(np.array(self.h5_file["angles"]))
+            return direction_from_angles(self.load_target("angles"))
         elif target_key == "three_momenta":
-            directions = direction_from_angles(np.array(self.h5_file["angles"]))
-            momenta = momentum_from_energy(np.array(self.h5_file["energies"]), np.array(self.h5_file["labels"]))
+            directions = direction_from_angles(self.load_target("angles"))
+            momenta = momentum_from_energy(self.load_target("energies"), self.load_target("labels"))[..., None]
             return directions*momenta
         else:
             return np.array(self.h5_file[target_key]).squeeze()
