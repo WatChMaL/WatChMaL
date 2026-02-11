@@ -34,6 +34,7 @@ class CNNDataset(H5Dataset):
         transforms=None,
         one_indexed=False,
         use_memmap=True,
+        mask_pmts=None,
         channel_scale_factor=None,
         channel_scale_offset=None,
         use_isHit=False,
@@ -67,6 +68,8 @@ class CNNDataset(H5Dataset):
             indexes). By default, zero-indexing is assumed.
         use_memmap: bool
             Use a memmap and load data into memory as needed (default), otherwise load entire dataset at initialisation
+        mask_pmts: list of int
+            List of PMT IDs to mask out from all data (None by default)
         ---------- The following features are used for optimization.
         channel_scale_factor: dict of float
             Dictionary with keys corresponding to channels and values contain the factors to divide that channel.
@@ -96,7 +99,7 @@ class CNNDataset(H5Dataset):
         ----------
         """
 
-        super().__init__(h5file, use_memmap)
+        super().__init__(h5file, use_memmap, mask_pmts)
 
         self.pmt_positions = np.load(pmt_positions_file)["pmt_image_positions"].astype(
             int

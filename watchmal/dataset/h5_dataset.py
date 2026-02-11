@@ -154,9 +154,10 @@ class H5Dataset(H5CommonDataset, ABC):
     hit_charge  (n_hits,)  float32    Charge of the digitized hit
     =============================================================
     """
-    def __init__(self, h5_path, use_memmap=True):
+    def __init__(self, h5_path, use_memmap=True, mask_pmts=None):
         H5CommonDataset.__init__(self, h5_path, use_memmap)
-        
+        self.mask_pmts = mask_pmts
+
     def initialize(self):
         """Creates a memmap for the digitized hit charge data."""
         super().initialize()
@@ -171,6 +172,11 @@ class H5Dataset(H5CommonDataset, ABC):
         self.event_hit_pmts = self.hit_pmt[start:stop]
         self.event_hit_charges = self.hit_charge[start:stop]
         self.event_hit_times = self.hit_time[start:stop]
+        if self.mask_pmts is not None:
+            mask = np.isin(self.event_hit_pmts, self.mask_pmts, invert=True)
+            self.event_hit_pmts = self.event_hit_pmts[mask]
+            self.event_hit_charges = self.event_hit_charges[mask]
+            self.event_hit_times = self.event_hit_times[mask]
 
         return data_dict
 
