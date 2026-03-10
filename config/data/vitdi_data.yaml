@@ -1,3 +1,5 @@
 defaults:
   - dataset: hk_dit2tvit
-split_path: /path/to/split.npz
+split_path: /path/to/your/split.npz
+dataset:
+  h5file: /path/to/your/dual_image_data.h5

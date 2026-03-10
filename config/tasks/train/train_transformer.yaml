@@ -5,5 +5,17 @@ defaults:
  - /data_loaders:
    - train
    - validation
+epochs: 40
+val_interval: 50
+num_val_batches: 40
 checkpointing: False
-
+data_loaders:
+  train:
+    split_key: train_idxs
+    batch_size: 200
+    num_workers: 24
+  validation:
+    split_key: val_idxs
+    batch_size: 200
+    num_workers: 24
+    drop_last: True

@@ -1,3 +1,5 @@
 defaults:
-  - dataset: hk_vit
-split_path: /path/to/split.npz
+  - dataset: hk_vitSI
+split_path: /path/to/your/split.npz
+dataset:
+  h5file: /path/to/your/single_image_data.h5

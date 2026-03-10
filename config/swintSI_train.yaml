@@ -1,0 +1,16 @@
+gpu_list:
+  - 0
+seed: 8
+dump_path: './outputs/'
+defaults:
+  - data: vit_data
+  - model: swinSI
+  - engine: regression
+  - tasks/train: train_transformer
+  - tasks/restore_best_state: restore_best_state
+  - tasks/evaluate: test
+  - override optimizers@tasks.train.optimizers: muon
+  - override scheduler@tasks.train.scheduler: cosinelr
+  - override loss@tasks.train.loss: huber_costum
+  - override loss@tasks.evaluate.loss: huber_costum
+  - _self_

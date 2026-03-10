@@ -1,0 +1,4 @@
+# Custom Huber-style loss
+# Implemented in watchmal/loss
+_target_: watchmal.loss.position_huber.PositionHuberLoss
+delta: 0.003

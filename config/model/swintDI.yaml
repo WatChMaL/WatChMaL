@@ -1,0 +1,23 @@
+_target_: watchmal.model.swintDI.SwinRegressorDI
+mpmt_lut_path: /path/to/your/mpmt_lut.npz
+use_conv_stem: false
+img_size: [192, 192]
+in_chans_main: 2
+in_chans_mpmt: 38
+pre_stage_embed_dim: 48
+pre_stage_depth: 8
+pre_stage_num_heads: 6
+pre_stage_window_size: 4
+xattn_first_k_layers: 2
+xattn_num_heads: 6
+embed_dim: 96
+depths: [4, 4, 10, 2]
+num_heads: [3, 6, 12, 24]
+window_size: 6
+mlp_ratio: 4.0
+drop_path_rate: 0.01
+use_geom_pos_embed: false
+use_mpmt_geom: false
+pmt_positions_file: /path/to/your/20inch_pmt_image_positions_dual.npz
+geometry_file: /path/to/your/hk_geometry.npz
+pmt_position_scale: 4000.0
