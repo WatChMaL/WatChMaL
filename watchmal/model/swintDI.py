@@ -547,13 +547,15 @@ class SparseMpmtEncoder(nn.Module):
 
         self.head = nn.Linear(in_dim_after_pairs, out_token_dim)
 
-    def forward(self, x_sparse, xy_coords):
+    def forward(self, x_sparse, xy_coords, geom_embed=None):
         x = x_sparse.permute(0, 2, 1).contiguous()
         B, N, _ = x.shape
 
         pairs = x.view(B, N, 19, 2)
 
         pair_embed = self.pair_mlp(pairs)
+        if geom_embed is not None:
+            pair_embed = pair_embed + geom_embed
 
         pair_embed = pair_embed.flatten(2)
 
@@ -597,6 +599,11 @@ class SwinTransformerDI(nn.Module):
         pair_hidden=8,
         ffn_hidden=128,
         use_conv_stem=False,
+        use_geom_pos_embed=False,
+        use_mpmt_geom=False,
+        pmt_positions_file=None,
+        geometry_file=None,
+        pmt_position_scale=4000.0,
     ):
         super().__init__()
         lut_numpy = np.load(mpmt_lut_path)["pmt_module_positions"]
@@ -626,6 +633,51 @@ class SwinTransformerDI(nn.Module):
                 norm_layer=norm_layer if patch_norm else None,
             )
 
+        self.use_geom_pos_embed = bool(use_geom_pos_embed)
+        self.use_mpmt_geom = bool(use_mpmt_geom)
+        self.pmt_position_scale = float(pmt_position_scale)
+        if self.use_geom_pos_embed:
+            if pmt_positions_file is None or geometry_file is None:
+                raise ValueError(
+                    "pmt_positions_file and geometry_file are required when use_geom_pos_embed=True"
+                )
+            pos_grid = self._build_pos_grid(
+                pmt_positions_file, geometry_file, img_size, self.pmt_position_scale
+            )
+            self.register_buffer("pos_grid", torch.from_numpy(pos_grid))
+            pos_in_chans = pos_grid.shape[1]
+            if self.use_conv_stem:
+                self.pos_stem = ConvStem(
+                    in_chans=pos_in_chans, pre_stage_embed_dim=pre_stage_embed_dim
+                )
+                self.pos_patch_embed = PatchEmbed(
+                    img_size=stem_out_img,
+                    patch_size=1,
+                    in_chans=pre_stage_embed_dim,
+                    embed_dim=pre_stage_embed_dim,
+                    norm_layer=norm_layer if patch_norm else None,
+                )
+            else:
+                self.pos_stem = nn.Identity()
+                self.pos_patch_embed = PatchEmbed(
+                    img_size=img_size,
+                    patch_size=2,
+                    in_chans=pos_in_chans,
+                    embed_dim=pre_stage_embed_dim,
+                    norm_layer=norm_layer if patch_norm else None,
+                )
+            self.pos_mlp = nn.Sequential(
+                nn.LayerNorm(pre_stage_embed_dim),
+                nn.Linear(pre_stage_embed_dim, pre_stage_embed_dim),
+                nn.GELU(),
+                nn.Linear(pre_stage_embed_dim, pre_stage_embed_dim),
+            )
+        else:
+            self.pos_grid = None
+            self.pos_stem = None
+            self.pos_patch_embed = None
+            self.pos_mlp = None
+
         self.mpmt_encoder = SparseMpmtEncoder(
             out_token_dim=pre_stage_embed_dim,
             pair_hidden=pair_hidden,
@@ -637,7 +689,7 @@ class SwinTransformerDI(nn.Module):
             self.patch_embed_main.patches_resolution[0]
             * self.patch_embed_main.patches_resolution[1]
         )
-        if ape:
+        if ape and not self.use_geom_pos_embed:
             self.absolute_pos_embed = nn.Parameter(
                 torch.zeros(1, num_patches_pre, pre_stage_embed_dim)
             )
@@ -645,6 +697,22 @@ class SwinTransformerDI(nn.Module):
         else:
             self.absolute_pos_embed = None
         self.pos_drop = nn.Dropout(p=drop_rate)
+
+        if self.use_mpmt_geom:
+            if geometry_file is None:
+                raise ValueError("geometry_file is required when use_mpmt_geom=True")
+            mpmt_geom = self._build_mpmt_geom(
+                geometry_file, int(self.mpmt_lut.shape[0]), self.pmt_position_scale
+            )
+            self.register_buffer("mpmt_geom", torch.from_numpy(mpmt_geom))
+            self.mpmt_geom_mlp = nn.Sequential(
+                nn.Linear(6, pair_hidden),
+                nn.GELU(),
+                nn.Linear(pair_hidden, pair_hidden),
+            )
+        else:
+            self.mpmt_geom = None
+            self.mpmt_geom_mlp = None
 
         self.pre_blocks_tail = nn.ModuleList(
             [
@@ -730,6 +798,46 @@ class SwinTransformerDI(nn.Module):
         self.avgpool = nn.AdaptiveAvgPool1d(1)
         self.apply(self._init_weights)
 
+    @staticmethod
+    def _build_pos_grid(pmt_positions_file, geometry_file, img_size, position_scale):
+        pmt_img_pos = np.load(pmt_positions_file)["pmt_image_positions"].astype(np.int64)
+        pmt_xyz = np.load(geometry_file)["positions"].astype(np.float32)
+        if pmt_img_pos.shape[0] != pmt_xyz.shape[0]:
+            raise ValueError(
+                "pmt_positions_file and geometry_file have inconsistent PMT counts"
+            )
+        H, W = img_size
+        rows = pmt_img_pos[:, 0]
+        cols = pmt_img_pos[:, 1]
+        if rows.min() < 0 or cols.min() < 0 or rows.max() >= H or cols.max() >= W:
+            raise ValueError("pmt_positions_file has coordinates outside img_size")
+        pos_grid = np.zeros((1, 4, H, W), dtype=np.float32)
+        pos_grid[0, 0, rows, cols] = pmt_xyz[:, 0] / position_scale
+        pos_grid[0, 1, rows, cols] = pmt_xyz[:, 1] / position_scale
+        pos_grid[0, 2, rows, cols] = pmt_xyz[:, 2] / position_scale
+        pos_grid[0, 3, rows, cols] = 1.0
+        return pos_grid
+
+    @staticmethod
+    def _build_mpmt_geom(geometry_file, num_modules, position_scale):
+        geo_file = np.load(geometry_file)
+        if "positions_mpmt" not in geo_file or "orientations_mpmt" not in geo_file:
+            raise ValueError("geometry_file missing mPMT positions/orientations")
+        pos = geo_file["positions_mpmt"].astype(np.float32) / position_scale
+        ori = geo_file["orientations_mpmt"].astype(np.float32)
+        expected = num_modules * 19
+        if pos.shape[0] != expected or ori.shape[0] != expected:
+            raise ValueError("Unexpected mPMT geometry size in geometry_file")
+        geom = np.concatenate([pos, ori], axis=1).reshape(num_modules, 19, 6)
+        return geom
+
+    def _pos_tokens(self, device, dtype):
+        pos = self.pos_grid.to(device=device, dtype=dtype)
+        pos = self.pos_stem(pos)
+        pos_tokens = self.pos_patch_embed(pos)
+        pos_tokens = self.pos_mlp(pos_tokens)
+        return pos_tokens
+
     def _init_weights(self, m):
         if isinstance(m, nn.Linear):
             trunc_normal_(m.weight, std=0.02)
@@ -744,8 +852,17 @@ class SwinTransformerDI(nn.Module):
 
         xm_img = self.stem_main(x_main)
         xm = self.patch_embed_main(xm_img)
+        if self.use_geom_pos_embed:
+            pos_tokens = self._pos_tokens(x_main.device, xm.dtype).expand(B, -1, -1)
+            xm = xm + pos_tokens
+        elif self.absolute_pos_embed is not None:
+            xm = xm + self.absolute_pos_embed
         xy_coords = self.mpmt_lut.unsqueeze(0).expand(B, -1, -1)
-        mpmt_tokens = self.mpmt_encoder(x_mpmt38, xy_coords)
+        geom_embed = None
+        if self.mpmt_geom is not None:
+            geom = self.mpmt_geom.to(device=x_mpmt38.device, dtype=x_mpmt38.dtype)
+            geom_embed = self.mpmt_geom_mlp(geom).unsqueeze(0)
+        mpmt_tokens = self.mpmt_encoder(x_mpmt38, xy_coords, geom_embed)
 
         num_patches = (
             self.patch_embed_main.patches_resolution[0]
@@ -768,7 +885,6 @@ class SwinTransformerDI(nn.Module):
         mm[b_idx, flat_indices] = mpmt_tokens
 
         if self.absolute_pos_embed is not None:
-            xm = xm + self.absolute_pos_embed
             B = x_main.size(0)
             num_patches = (
                 self.patch_embed_main.patches_resolution[0]
