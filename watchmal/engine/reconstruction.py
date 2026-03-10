@@ -10,7 +10,7 @@ import logging
 
 # hydra imports
 from hydra.utils import instantiate
-from watchmal.muon import MuonWithAuxAdam
+from watchmal.utils.muon import MuonWithAuxAdam, SingleDeviceMuonWithAuxAdam
 
 # torch imports
 import torch
@@ -85,7 +85,8 @@ class ReconstructionEngine(ABC):
 
         if is_muon:
             if self.rank == 0:
-                print("Configuring optimizer: MuonWithAuxAdam")
+                optimizer_name = "MuonWithAuxAdam" if self.is_distributed else "SingleDeviceMuonWithAuxAdam"
+                print(f"Configuring optimizer: {optimizer_name}")
             hidden_weights = [p for p in self.module.parameters() if p.ndim >= 2 and p.requires_grad]
             other_params = [p for p in self.module.parameters() if p.ndim < 2 and p.requires_grad]
             if self.rank == 0:
@@ -101,7 +102,8 @@ class ReconstructionEngine(ABC):
                 dict(params=other_params, use_muon=False,
                      lr=optimizer_config.aux_lr, betas=optimizer_config.aux_betas, weight_decay=optimizer_config.aux_weight_decay),
             ]
-            self.optimizer = MuonWithAuxAdam(param_groups)
+            optimizer_class = MuonWithAuxAdam if self.is_distributed else SingleDeviceMuonWithAuxAdam
+            self.optimizer = optimizer_class(param_groups)
         else:
             params_to_optimize = [{'params': self.module.parameters(), 'name': 'model_params'}]
             if self.criterion is not None and list(self.criterion.parameters()):
