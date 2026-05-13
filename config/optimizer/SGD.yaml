@@ -1,5 +1,6 @@
 # @package _group_
 _target_: torch.optim.SGD
+_partial_: true # need to add params to fully instantiate
 lr: 0.01
 weight_decay: 0
 nesterov: True

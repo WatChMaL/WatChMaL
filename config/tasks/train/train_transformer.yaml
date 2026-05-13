@@ -1,6 +1,6 @@
+_target_: ${engine._target_}.train # engine method
 defaults:
  - /optimizers: adamW
- - /loss: huber
  - /scheduler: cosinelr
  - /data_loaders:
    - train

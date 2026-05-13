@@ -3,6 +3,7 @@ defaults:
 split_path: /fast_scratch/WatChMaL/data/IWCD_mPMT_Short/index_lists/4class_e_mu_gamma_pi0/IWCD_mPMT_Short_4_class_3M_emgp0_idxs.npz
 dataset:
   h5file: /fast_scratch/WatChMaL/data/IWCD_mPMT_Short/IWCD_mPMT_Short_emgp0_E0to1000MeV_digihits.h5
+  mpmt_positions_file: /data/WatChMaL/data/IWCDshort_mPMT_image_positions.npz
   channel_scale_offset:
     time: 950
   geometry_file: /fast_scratch/WatChMaL/data/geometries/geo_mPMTshort.npz

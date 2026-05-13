@@ -1,3 +1,5 @@
+_target_: ${engine._target_}.predict # engine method
+
 defaults:
   - /data_loaders:
     - test

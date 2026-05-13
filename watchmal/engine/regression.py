@@ -31,7 +31,7 @@ metric_functions = {
 
 class RegressionEngine(ReconstructionEngine):
     """Engine for performing training or evaluation for a regression network."""
-    def __init__(self, target_key, model, rank, device, dump_path, target_scale_offset=0, target_scale_factor=1):
+    def __init__(self, target_key, model, rank, device, dump_path, loss=None, target_scale_offset=0, target_scale_factor=1):
         """
         Parameters
         ==========
@@ -45,13 +45,15 @@ class RegressionEngine(ReconstructionEngine):
             The gpu that this process is running on.
         dump_path : string
             The path to store outputs in.
+        loss : torch.nn.Module
+            Loss function required for training and evaluating models
         target_scale_offset : float or dict of float
             Offset to subtract from target values when calculating the loss, or dict of offsets for each target
         target_scale_factor : float or dict of float
             Scale factor to divide target values by when calculating the loss, or dict of scale factors for each target
         """
         # create the directory for saving the log and dump files
-        super().__init__(target_key, model, rank, device, dump_path)
+        super().__init__(target_key, model, rank, device, dump_path, loss)
         if isinstance(self.target_key, str):
             self.target_key = [self.target_key]
         self.target_sizes = None

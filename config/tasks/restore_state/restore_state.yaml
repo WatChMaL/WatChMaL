@@ -1,1 +1,3 @@
+_target_: ${engine._target_}.restore_state # engine method
+
 weight_file: '/path/to/outputs/ClassifierBEST.pth'

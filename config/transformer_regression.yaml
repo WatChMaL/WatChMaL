@@ -1,7 +1,6 @@
 defaults:
     - transformer_defaults
     - engine: regression
-    - override loss@tasks.train.loss: huber
     - _self_
 engine:
   target_key:
