@@ -10,7 +10,6 @@ import logging
 
 # hydra imports
 from hydra.utils import instantiate
-from watchmal.utils.muon import MuonWithAuxAdam, SingleDeviceMuonWithAuxAdam
 
 # torch imports
 import torch
@@ -81,46 +80,11 @@ class ReconstructionEngine(ABC):
 
     def configure_optimizers(self, optimizer_config):
         """Instantiate an optimizer from a hydra config."""
-        is_muon = "MuonWithAuxAdam" in optimizer_config.get('_target_', '')
-
-        if is_muon:
-            if self.rank == 0:
-                optimizer_name = "MuonWithAuxAdam" if self.is_distributed else "SingleDeviceMuonWithAuxAdam"
-                print(f"Configuring optimizer: {optimizer_name}")
-            hidden_weights = [p for p in self.module.parameters() if p.ndim >= 2 and p.requires_grad]
-            other_params = [p for p in self.module.parameters() if p.ndim < 2 and p.requires_grad]
-            if self.rank == 0:
-                print(f"Separated parameters into Muon group ({sum(p.numel() for p in hidden_weights)}) and auxiliary AdamW group ({sum(p.numel() for p in other_params)}).")
-            if self.criterion is not None and list(self.criterion.parameters()):
-                criterion_params = list(self.criterion.parameters())
-                other_params.extend(criterion_params)
-                if self.rank == 0:
-                    print(f"Found {sum(p.numel() for p in criterion_params)} trainable criterion parameters and added them to the auxiliary AdamW group.")
-            param_groups = [
-                dict(params=hidden_weights, use_muon=True,
-                     lr=optimizer_config.lr, weight_decay=optimizer_config.weight_decay),
-                dict(params=other_params, use_muon=False,
-                     lr=optimizer_config.aux_lr, betas=optimizer_config.aux_betas, weight_decay=optimizer_config.aux_weight_decay),
-            ]
-            optimizer_class = MuonWithAuxAdam if self.is_distributed else SingleDeviceMuonWithAuxAdam
-            self.optimizer = optimizer_class(param_groups)
-        else:
-            params_to_optimize = [{'params': self.module.parameters(), 'name': 'model_params'}]
-            if self.criterion is not None and list(self.criterion.parameters()):
-                if self.rank == 0:
-                    print("Criterion has trainable parameters, adding them to optimizer.")
-                params_to_optimize.append({'params': self.criterion.parameters(), 'name': 'loss_params'})
-            else:
-                if self.rank == 0:
-                    print("Criterion has no trainable parameters, optimizing model parameters only.")
-            optimizer_partial = instantiate(optimizer_config, _partial_=True)
-            self.optimizer = optimizer_partial(params=params_to_optimize)
-            total_params = sum(p.numel() for p in self.module.parameters() if p.requires_grad)
-            opt_params = sum(p.numel() for g in self.optimizer.param_groups for p in g['params'])
-            if self.criterion is not None:
-                total_params += sum(p.numel() for p in self.criterion.parameters() if p.requires_grad)
-            print(f"Total trainable parameters (model + loss): {total_params}")
-            print(f"Total parameters passed to optimizer: {opt_params}")
+        self.optimizer = instantiate(optimizer_config, params=self.module.parameters())
+        total_params = sum(p.numel() for p in self.module.parameters() if p.requires_grad)
+        opt_params = sum(p.numel() for g in self.optimizer.param_groups for p in g['params'])
+        print(f"Total trainable parameters: {total_params}")
+        print(f"Parameters passed to optimizer: {opt_params}")
 
     def configure_scheduler(self, scheduler_config):
         """Instantiate a scheduler from a hydra config."""
