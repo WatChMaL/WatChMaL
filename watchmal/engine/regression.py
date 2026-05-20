@@ -93,3 +93,45 @@ class RegressionEngine(ReconstructionEngine):
         super().restore_state(weight_file)
         if "target_sizes" in self.state_data:
             self.target_sizes = self.state_data["target_sizes"]
+
+
+class MultiTaskRegressionEngine(RegressionEngine):
+    """Regression engine for models that output a dict of task predictions."""
+
+    def __init__(self, target_key, model, rank, device, dump_path, **kwargs):
+        super().__init__(target_key, model, rank, device, dump_path, **kwargs)
+        self.scaled_target_dict = None
+
+    def process_target(self, data):
+        """Extract and scale target tensors for each task."""
+        self.target_dict = {t: data[t].to(self.device) for t in self.target_key}
+        for task, target_tensor in self.target_dict.items():
+            if target_tensor.dim() == 3 and target_tensor.shape[1] == 1:
+                self.target_dict[task] = target_tensor.squeeze(1)
+        self.scaled_target_dict = {
+            task: (self.target_dict[task] - self.offset[task]) / self.scale[task]
+            for task in self.target_key
+        }
+
+    def forward_pass(self):
+        """Run multi-task model and unscale predictions for logging/metrics."""
+        self.model_out = self.model(self.data)
+        self.predictions = {
+            "predicted_" + task: self.model_out[task] * self.scale[task] + self.offset[task]
+            for task in self.target_key
+        }
+        if self.target_dict is None:
+            return self.predictions
+        return self.target_dict | self.predictions
+
+    def compute_metrics(self):
+        """Compute uncertainty-weighted multi-task loss and task errors."""
+        self.loss, loss_details = self.criterion(self.model_out, self.scaled_target_dict)
+
+        metrics = {
+            task + " error": metric_functions[task](self.predictions["predicted_" + task], self.target_dict[task])
+            for task in self.target_key if task in metric_functions
+        }
+        metrics.update(loss_details)
+        metrics["loss"] = self.loss
+        return metrics
