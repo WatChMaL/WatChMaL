@@ -83,19 +83,21 @@ class ReconstructionEngine(ABC):
         """Instantiate an optimizer from a hydra config."""
         is_muon = "MuonWithAuxAdam" in optimizer_config.get('_target_', '')
 
+        criterion_params = (list(self.criterion.parameters())
+                            if self.criterion is not None and list(self.criterion.parameters())
+                            else [])
+        if self.rank == 0 and criterion_params:
+            log.info(f"Found {sum(p.numel() for p in criterion_params)} trainable criterion parameters, adding to optimizer.")
+
         if is_muon:
-            if self.rank == 0:
-                optimizer_name = "MuonWithAuxAdam" if self.is_distributed else "SingleDeviceMuonWithAuxAdam"
-                print(f"Configuring optimizer: {optimizer_name}")
+            optimizer_name = "MuonWithAuxAdam" if self.is_distributed else "SingleDeviceMuonWithAuxAdam"
             hidden_weights = [p for p in self.module.parameters() if p.ndim >= 2 and p.requires_grad]
             other_params = [p for p in self.module.parameters() if p.ndim < 2 and p.requires_grad]
+            other_params.extend(criterion_params)
             if self.rank == 0:
-                print(f"Separated parameters into Muon group ({sum(p.numel() for p in hidden_weights)}) and auxiliary AdamW group ({sum(p.numel() for p in other_params)}).")
-            if self.criterion is not None and list(self.criterion.parameters()):
-                criterion_params = list(self.criterion.parameters())
-                other_params.extend(criterion_params)
-                if self.rank == 0:
-                    print(f"Found {sum(p.numel() for p in criterion_params)} trainable criterion parameters and added them to the auxiliary AdamW group.")
+                log.info(f"Configuring optimizer: {optimizer_name}")
+                log.info(f"Separated parameters into Muon group ({sum(p.numel() for p in hidden_weights)}) "
+                         f"and auxiliary AdamW group ({sum(p.numel() for p in other_params)}).")
             param_groups = [
                 dict(params=hidden_weights, use_muon=True,
                      lr=optimizer_config.lr, weight_decay=optimizer_config.weight_decay),
@@ -106,21 +108,16 @@ class ReconstructionEngine(ABC):
             self.optimizer = optimizer_class(param_groups)
         else:
             params_to_optimize = [{'params': self.module.parameters(), 'name': 'model_params'}]
-            if self.criterion is not None and list(self.criterion.parameters()):
-                if self.rank == 0:
-                    print("Criterion has trainable parameters, adding them to optimizer.")
-                params_to_optimize.append({'params': self.criterion.parameters(), 'name': 'loss_params'})
-            else:
-                if self.rank == 0:
-                    print("Criterion has no trainable parameters, optimizing model parameters only.")
+            if criterion_params:
+                params_to_optimize.append({'params': criterion_params, 'name': 'loss_params'})
             optimizer_partial = instantiate(optimizer_config, _partial_=True)
             self.optimizer = optimizer_partial(params=params_to_optimize)
-            total_params = sum(p.numel() for p in self.module.parameters() if p.requires_grad)
-            opt_params = sum(p.numel() for g in self.optimizer.param_groups for p in g['params'])
-            if self.criterion is not None:
-                total_params += sum(p.numel() for p in self.criterion.parameters() if p.requires_grad)
-            print(f"Total trainable parameters (model + loss): {total_params}")
-            print(f"Total parameters passed to optimizer: {opt_params}")
+            if self.rank == 0:
+                total_params = sum(p.numel() for p in self.module.parameters() if p.requires_grad)
+                total_params += sum(p.numel() for p in criterion_params)
+                opt_params = sum(p.numel() for g in self.optimizer.param_groups for p in g['params'])
+                log.info(f"Total trainable parameters (model + loss): {total_params}")
+                log.info(f"Total parameters passed to optimizer: {opt_params}")
 
     def configure_scheduler(self, scheduler_config):
         """Instantiate a scheduler from a hydra config."""
