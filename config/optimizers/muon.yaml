@@ -1,4 +1,4 @@
-_target_: muon.MuonWithAuxAdam
+_target_: watchmal.utils.muon_optimizer.MuonWithAuxAdamW
 lr: 8e-5
 weight_decay: 0.0001
 aux_lr: 1e-5
