@@ -8,7 +8,7 @@ class MuonWithAuxAdamW(torch.optim.Optimizer):
     """
     Combines torch.optim.Muon and torch.optim.AdamW in one optimizer object.
 
-    Matrix parameters (ndim >= 2) use Muon; everything else uses AdamW. (Muon cannot be used for scalar parameters)
+    Matrix parameters (ndim = 2) use Muon; everything else uses AdamW. (Muon cannot be used for scalar parameters, and in this pytorch muon implementation, it cannot be used for higher-dimensional parameters either.)
     """
 
     def __init__(self, params, lr, weight_decay, aux_lr, aux_betas, aux_weight_decay):
@@ -16,8 +16,8 @@ class MuonWithAuxAdamW(torch.optim.Optimizer):
         if params and isinstance(params[0], dict):
             params = [p for group in params for p in list(group['params'])]
 
-        muon_params = [p for p in params if p.ndim >= 2 and p.requires_grad]
-        adam_params = [p for p in params if p.ndim <  2 and p.requires_grad]
+        muon_params = [p for p in params if p.ndim == 2 and p.requires_grad]
+        adam_params = [p for p in params if p.ndim != 2 and p.requires_grad]
 
         self._muon  = torch.optim.Muon(muon_params,  lr=lr,     weight_decay=weight_decay)
         self._adamw = torch.optim.AdamW(adam_params, lr=aux_lr, betas=aux_betas,
