@@ -53,7 +53,7 @@ class ReconstructionEngine(ABC):
         self.target_key = target_key
 
         # Automatic Mixed Precision
-        self.use_amp = False
+        self.amp_dtype = None
         self.scaler = None
 
         # Set up the parameters to save given the model type
@@ -98,13 +98,18 @@ class ReconstructionEngine(ABC):
         
         self.scheduler = instantiate(scheduler_config, optimizer=self.optimizer)
 
-    def configure_amp(self, amp_enabled: bool = False):
-        """Configure automatic mixed precision (AMP)."""
-        self.use_amp = bool(amp_enabled) and (self.device.type == "cuda")
-        if self.use_amp:
-            self.scaler = GradScaler("cuda")
+    def configure_amp(self, amp_dtype="bf16"):
+        """Configure automatic mixed precision (AMP) for given dtype (fp16 or bf16)"""
+        self.amp_dtype = None
+        self.scaler = None
+        if self.device.type == "cuda":
+            if amp_dtype == "bf16" or amp_dtype == True:
+                self.amp_dtype = torch.bfloat16
+            elif amp_dtype == "fp16":
+                self.amp_dtype = torch.float16
+                self.scaler = GradScaler("cuda")
         if self.rank == 0:
-            log.info(f"AMP enabled: {self.use_amp}")
+            log.info(f"AMP enabled: {amp_dtype}")
 
     def configure_data_loaders(self, data_config, loaders_config, is_distributed, seed):
         is_gpu = self.device != torch.device("cpu")
@@ -205,7 +210,7 @@ class ReconstructionEngine(ABC):
             Dictionary containing loss and other metrics
         """
         with torch.set_grad_enabled(train):
-            with autocast(device_type=self.device.type, enabled=self.use_amp):
+            with autocast(device_type=self.device.type, enabled=self.amp_dtype is not None, dtype=self.amp_dtype):
                 outputs = self.forward_pass()
                 if not with_metrics:
                     return outputs
@@ -213,10 +218,19 @@ class ReconstructionEngine(ABC):
                 return outputs, metrics
 
     def backward(self):
-        """Backward pass using the loss computed for a mini-batch"""
-        self.optimizer.zero_grad()  # reset accumulated gradient
-        self.loss.backward()  # compute new gradient
-        self.optimizer.step()  # step params
+        """Backward pass using the loss computed for a mini-batch, returning whether optimizer was updated"""
+        self.optimizer.zero_grad()
+        if self.amp_dtype is not None and self.scaler is not None:
+            self.scaler.scale(self.loss).backward()
+            previous_scale = self.scaler.get_scale()
+            self.scaler.step(self.optimizer)
+            self.scaler.update()
+            optimizer_was_updated = self.scaler.get_scale() >= previous_scale
+        else:
+            self.loss.backward()
+            self.optimizer.step()
+            optimizer_was_updated = True
+        return optimizer_was_updated
 
     def train(self, epochs=0, val_interval=20, num_val_batches=4, checkpointing=False, save_interval=None):
         """
@@ -270,18 +284,7 @@ class ReconstructionEngine(ABC):
                 # Call forward: make a prediction & measure the average error
                 outputs, metrics = self.step(True, True)
                 metrics = {k: v.item() for k, v in metrics.items()}
-                if self.use_amp and (self.scaler is not None):
-                    self.optimizer.zero_grad()
-                    previous_scale = self.scaler.get_scale()
-                    self.scaler.scale(self.loss).backward()
-                    self.scaler.step(self.optimizer)
-                    self.scaler.update()
-                    optimizer_was_updated = self.scaler.get_scale() >= previous_scale
-                else:
-                    # standard forward and backward pass
-                    # Call backward: back-propagate error and update weights using loss = self.loss
-                    self.backward()
-                    optimizer_was_updated = True
+                optimizer_was_updated = self.backward()
                 # run scheduler
                 if self.scheduler is not None and optimizer_was_updated:
                     self.scheduler.step()
