@@ -51,7 +51,7 @@ class ClassifierEngine(ReconstructionEngine):
 
     def process_target(self, data):
         """Extract the event data and target from the input data dict"""
-        self.target = data[self.target_key].to(self.device)
+        self.target = data[self.target_key].to(self.device, non_blocking=True)
 
     def forward_pass(self):
         """Compute softmax predictions for a batch of data."""

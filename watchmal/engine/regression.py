@@ -69,7 +69,7 @@ class RegressionEngine(ReconstructionEngine):
 
     def process_target(self, data):
         """Extract the event data and target from the input data dict"""
-        self.target_dict = {t: data[t].to(self.device) for t in self.target_key}
+        self.target_dict = {t: data[t].to(self.device, non_blocking=True) for t in self.target_key}
         # First time we get data, determine the target sizes
         if self.target_sizes is None:
             self.target_sizes = [v.shape[-1] if len(v.shape) > 1 else 1 for v in self.target_dict.values()]
@@ -90,9 +90,10 @@ class RegressionEngine(ReconstructionEngine):
 
     def compute_metrics(self):
         self.loss = self.criterion(self.model_out, self.stacked_target)
-        # return loss and metrics for the predictions
-        metrics = {k: m for t, v in self.target_dict.items() if t in metric_functions
-                   for k, m in metric_functions[t](self.predictions["predicted_"+t], v).items()}
+        # return loss and metrics for the predictions without tracking gradients for logging-only metrics
+        with torch.no_grad():
+            metrics = {k: m for t, v in self.target_dict.items() if t in metric_functions
+                       for k, m in metric_functions[t](self.predictions["predicted_"+t].detach(), v).items()}
         metrics['loss'] = self.loss
         return metrics
 
