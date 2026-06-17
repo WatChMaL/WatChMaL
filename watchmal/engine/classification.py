@@ -5,20 +5,20 @@ from watchmal.engine.reconstruction import ReconstructionEngine
 
 class ClassifierEngine(ReconstructionEngine):
     """Engine for performing training or evaluation for a classification network."""
-    def __init__(self, target_key, model, rank, device, dump_path, label_set=None):
+    def __init__(self, target_key, rank, device, dump_path, model=None, label_set=None):
         """
         Parameters
         ==========
         target_key : string
             Name of the key for the target labels in the dictionary returned by the dataloader
-        model
-            `nn.module` object that contains the full network that the engine will use in training or evaluation.
         rank : int
             The rank of process among all spawned processes (in multiprocessing mode).
         device : int
             The gpu that this process is running on.
         dump_path : string
             The path to store outputs in.
+        model : nn.Module
+            Model that outputs predicted values to calculate softmax for each class
         label_set : sequence
             The set of possible labels to classify (if None, which is the default, then class labels in the data must be
             0 to N).
@@ -47,15 +47,14 @@ class ClassifierEngine(ReconstructionEngine):
         super().configure_data_loaders(data_config, loaders_config, is_distributed, seed)
         if self.label_set is not None:
             for name in loaders_config.keys():
-                self.data_loaders[name].dataset.map_labels(self.label_set)
+                self.data_loaders[name].dataset.map_labels(self.label_set, self.target_key)
 
     def process_target(self, data):
         """Extract the event data and target from the input data dict"""
         self.target = data[self.target_key].to(self.device)
 
-    def forward_pass(self):
+    def compute_outputs(self):
         """Compute softmax predictions for a batch of data."""
-        self.model_out = self.model(self.data)
         softmax = self.softmax(self.model_out)
         outputs = {'softmax': softmax}
         if self.target is not None:
