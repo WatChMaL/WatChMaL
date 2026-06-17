@@ -118,12 +118,28 @@ class CNNDataset(H5Dataset):
         self.data_size = np.max(self.pmt_positions, axis=0) + 1
         if use_padding:
             self.data_size = padding_to_fixed_dimension
-        self.barrel_rows = [
-            row
-            for row in range(self.data_size[0])
-            if np.count_nonzero(self.pmt_positions[:, 0] == row) == self.data_size[1]
-        ]
-        self.transforms = None  # du.get_transformations(transformations, transforms)
+
+        self.image_height, self.image_width = self.data_size[0], self.data_size[1]
+        # make some index expressions for different parts of the image, to use in transformations etc
+        rows, row_counts = np.unique(self.pmt_positions[:, 0], return_counts=True)
+        cols, col_counts = np.unique(self.pmt_positions[:, 1], return_counts=True)
+        # barrel rows are those where the row appears in mpmt_positions as many times as the image width
+        barrel_rows = rows[row_counts > 0.7 * self.image_width]
+        # endcap_size is the number of rows before the first barrel row
+        self.endcap_size = np.min(barrel_rows)
+        self.barrel = np.s_[..., self.endcap_size:np.max(barrel_rows) + 1, :]
+        # endcap columns are those where the column appears more than the number of barrel rows
+        endcap_cols = cols[col_counts > len(barrel_rows)]
+        self.endcap_left = np.min(endcap_cols)
+        self.endcap_right = np.max(endcap_cols) + 1
+        self.top_endcap = np.s_[..., :self.endcap_size, self.endcap_left:self.endcap_right]
+        self.bottom_endcap = np.s_[..., -self.endcap_size:, self.endcap_left:self.endcap_right]
+
+
+        self.transforms = du.get_transformations(self, transforms)
+        if self.transforms is None:
+            self.transforms = []
+
         self.one_indexed = one_indexed
 
         if use_positions:
@@ -271,15 +287,53 @@ class CNNDataset(H5Dataset):
     def __getitem__(self, item):
         data_dict = super().__getitem__(item)
 
-        processed_data = from_numpy(
-            self.process_data(
-                self.event_hit_pmts, self.event_hit_times, self.event_hit_charges
-            )
-        )
-        processed_data = du.apply_random_transformations(
-            self.transforms, processed_data
-        )
+        processed_data = self.process_data(self.event_hit_pmts, self.event_hit_times, self.event_hit_charges)
 
+        # Apply transformations
         data_dict["data"] = processed_data
+        for t in self.transforms:
+            data_dict = t(data_dict)
+        data_dict["data"] = from_numpy(data_dict["data"].copy())
 
         return data_dict
+
+    def double_cover(self, data_dict):
+        """
+        Takes CNN input data in event-display-like format and returns the data with all parts of the detector duplicated
+        and rearranged to provide a double-cover of the image, providing two 'views' of the detector from a single image
+        with less blank space and physically meaningful cyclic boundary conditions at the edges of the image.
+
+        Since CNNDataset uses a simple PMT grid (1 PMT per pixel) instead of mPMT (19 PMTs per pixel), this version
+        is simpler - no channel permutations are needed.
+
+        The transformation looks something like the following, where PMTs on the end caps are numbered and PMTs on the
+        barrel are letters:
+        ```
+                                         CBALKJIHGFED
+                         01                01    32
+                         23                23    10
+                    ABCDEFGHIJKL   -->   DEFGHIJKLABC
+                    MNOPQRSTUVWX         PQRSTUVWXMNO
+                         45                45    76
+                         67                67    54
+                                         ONMXWVUSTRQP
+        ```
+        """
+        # Make copies of the endcaps, flipped (180° rotated), to use later
+        top_endcap_copy = np.flip(data_dict["data"][self.top_endcap], [1, 2])
+        bottom_endcap_copy = np.flip(data_dict["data"][self.bottom_endcap], [1, 2])
+        # Roll the tensor so that the first quarter is the last quarter
+        quarter_barrel_width = self.image_width // 4
+        data = np.roll(data_dict["data"], -quarter_barrel_width, 2)
+        # Paste the copied flipped endcaps a quarter barrel-width past the original endcap position
+        endcap_copy_columns = np.s_[quarter_barrel_width + self.endcap_left: quarter_barrel_width + self.endcap_right]
+        data[..., :self.endcap_size, endcap_copy_columns] = top_endcap_copy
+        data[..., -self.endcap_size:, endcap_copy_columns] = bottom_endcap_copy
+        # Rotate the bottom and top halves of barrel and concatenate to the top and bottom of the image
+        # If the endcaps are offset from the middle of the image, need to roll the flipped barrel to keep the same offset
+        offset = (self.image_width - self.endcap_right) - self.endcap_left
+        barrel_rolled = np.roll(data[self.barrel], offset, 2)
+        barrel_bottom_flipped, barrel_top_flipped = np.array_split(np.flip(barrel_rolled, [1, 2]), 2, axis=1)
+        data_dict["data"] = np.concatenate((barrel_top_flipped, data, barrel_bottom_flipped), axis=1)
+        return data_dict
+

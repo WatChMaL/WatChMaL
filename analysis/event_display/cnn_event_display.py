@@ -5,7 +5,6 @@ import numpy as np
 from analysis.event_display.event_display import plot_event_2d, plot_event_3d
 from watchmal.dataset.cnn.cnn_dataset import CNNDataset
 from matplotlib.pyplot import cm
-import torch
 
 
 def coordinates_from_data(data):
@@ -34,7 +33,7 @@ class CNNEventDisplay(CNNDataset):
     """
     This class extends the CNNDataset class to provide event display functionality.
     """
-    def plot_data_2d(self, data, transformations=None, **kwargs):
+    def plot_data_2d(self, data, transforms=None, **kwargs):
         """
         Plots CNN data as a 2D event-display-like image.
 
@@ -42,7 +41,7 @@ class CNNEventDisplay(CNNDataset):
         ----------
         data : array_like
             Array of PMT data formatted for use in CNN, i.e. with dimensions of (x, y)
-        transformations : function or str or sequence of function or str, optional
+        transforms : function or str or sequence of function or str, optional
             Transformation function, or the name of a method of the dataset, or a sequence of functions or method names
             to apply to the data, such as those used for augmentation.
         kwargs : optional
@@ -70,19 +69,15 @@ class CNNEventDisplay(CNNDataset):
         """
         rows = self.pmt_positions[:, 0]
         columns = self.pmt_positions[:, 1]
-        data = torch.Tensor(data)
-        pmt_locations = torch.zeros_like(data, dtype=bool)  # fill a data-like array with False
-        pmt_locations[0, rows, columns] = True  # replace with True where there is an actual mPMT
-        if transformations is not None:
-            data = self.apply_transformation(transformations, data)
-            pmt_locations = self.apply_transformation(transformations, pmt_locations)
-        coordinates = coordinates_from_data(data)  # coordinates corresponding to each element of the data array
-        data_nan = np.full_like(data, np.nan)  # fill an array with nan for positions where there's no actual PMTs
-        data_nan[:, pmt_locations[0]] = data[:, pmt_locations[0]]  # replace the nans with the data where there is a PMT
-        pmt_coordinates = coordinates[pmt_locations.flatten()]  # the coordinates of where the actual mPMTs are
+        data_nan = np.full_like(data, np.nan)
+        data_nan[:, rows, columns] = data[:, rows, columns]
+        if transforms is not None:
+            data_nan = self.apply_transform(transforms, {"data": data_nan})["data"]
+        coordinates = coordinates_from_data(data_nan)  # coordinates corresponding to each element of the data array
+        pmt_coordinates = coordinates[~np.isnan(data_nan).flatten()]  # the coordinates of where the actual mPMTs are
         return plot_event_2d(data_nan.flatten(), coordinates, pmt_coordinates, **kwargs)
 
-    def plot_event_2d(self, event, transformations=None, **kwargs):
+    def plot_event_2d(self, event, transforms=None, **kwargs):
         """
         Plots an event as a 2D event-display-like image.
 
@@ -90,7 +85,7 @@ class CNNEventDisplay(CNNDataset):
         ----------
         event : int
             index of the event to plot
-        transformations : function or str or sequence of function or str, optional
+        transforms : function or str or sequence of function or str, optional
             Transformation function, or the name of a method of this class, or a sequence of functions or method names
             to apply to the event data, such as those used for augmentation.
         kwargs : optional
@@ -116,16 +111,16 @@ class CNNEventDisplay(CNNDataset):
         fig: matplotlib.figure.Figure
         ax: matplotlib.axes.Axes
         """
-        data = self[event]['data']
-        return self.plot_data_2d(data, transformations=transformations, **kwargs)
+        data = self[event]['data'].numpy()
+        return self.plot_data_2d(data, transforms=transforms, **kwargs)
 
-    def apply_transformation(self, transformation, data):
+    def apply_transform(self, transform, data):
         """
         Apply a transformation or sequence of transformations to data.
 
         Parameters
         ----------
-        transformation : function or str or sequence of function or str, optional
+        transform : function or str or sequence of function or str, optional
             Transformation function, or the name of a method of this class, or a sequence of functions or method names
             to apply to the event data, such as those used for augmentation.
         data : array_like
@@ -136,13 +131,13 @@ class CNNEventDisplay(CNNDataset):
         np.ndarray
             transformed data
         """
-        if isinstance(transformation, str):
-            transformation = getattr(self, transformation)
-        if callable(transformation):
-            return transformation(data)
+        if isinstance(transform, str):
+            transform = getattr(self, transform)
+        if callable(transform):
+            return transform(data)
         else:
-            for t in transformation:
-                data = self.apply_transformation(t, data)
+            for t in transform:
+                data = self.apply_transform(t, data)
             return data
 
     def plot_event_3d(self, event, geometry_file_path, **kwargs):
