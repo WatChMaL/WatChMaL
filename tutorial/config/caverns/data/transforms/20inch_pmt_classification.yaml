@@ -1,0 +1,59 @@
+# Tutorial transform config for classification tasks
+# This config includes common transforms for graph classification
+
+transforms:
+
+  # Add graph-level features (e.g., number of hits)
+  # This adds features to the data object that can be used by models
+  AddFeaturesInData:
+    _target_: watchmal.dataset.graph.pyg_transformations.AddFeaturesInData
+    charge_index: 1  # Index of charge feature in node features
+    feature_names: 
+      - 'n_hits'  # Add number of hits as a graph-level feature
+      - 'event_total_charge'  # Uncomment to add total charge
+    
+    # Normalization bounds for the added features
+    # max_vals: [6000.]  # Max value for n_hits
+    # min_vals: [120.]   # Min value for n_hits
+    
+    # If using event_total_charge, uncomment and adjust:
+    max_vals: [6000., 12000]
+    min_vals: [120., 140]
+
+  # Normalize node features
+  # This applies normalization (and optionally log) to node features
+  Normalize:
+    _target_: watchmal.dataset.graph.pyg_transformations.Normalize
+
+    eps: !!float 1e-10  # Small epsilon to avoid division by zero
+    
+    # For each feature, specify if log should be applied
+    # Example: [True, False, False, False, False] means log only first feature
+    # Adjust based on your node features (e.g., [True] for charge, [False] for time)
+    apply_log: [True, False, False, False, False]
+    
+    # Normalization parameters: [max_values], [min_values]
+    # Adjust these based on your data statistics
+    feat_norm: 
+      - [1900, 1000]  # Max values for each feature
+      - [550, 0.01]  # Min values for each feature
+
+  # Map labels to class indices (for classification)
+  # Maps particle type labels (e.g., 13 for mu-, 11 for e-) to class indices (0, 1, ...)
+  MapLabels:
+    _target_: watchmal.dataset.graph.pyg_transformations.MapLabels
+
+    # List of label values in your dataset (e.g., PDG codes)
+    # These will be mapped to 0, 1, 2, ... in order
+    label_set: 
+      - 13  # mu-
+      - 11  # e-
+    # Add more labels as needed:
+    # - 111  # pi0
+
+  # Convert data types and wrap into dictionary format
+  ConvertAndToDict:
+    _target_: watchmal.dataset.graph.pyg_transformations.ConvertAndToDict
+
+    feature_to_type: float32  # Node features data type
+    target_to_type: int64      # Labels data type (int64 for classification)

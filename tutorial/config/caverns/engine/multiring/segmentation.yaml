@@ -1,0 +1,2 @@
+_target_: watchmal.engine.multiring.segmentation.MultiRingSegEngine
+target_key: voxel_parent_frac

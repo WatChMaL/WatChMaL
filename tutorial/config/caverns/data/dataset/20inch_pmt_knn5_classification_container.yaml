@@ -1,0 +1,52 @@
+# Container variant of 20inch_pmt_knn5_classification.yaml — same dataset, but paths
+# rewritten to the mount points set up by tutorial/launch/caverns/container/run_in_container.sh:
+#   BIND_DATA  /sps/hyperk/Datasets/graph_datasets      -> /workspace/work/data
+#   BIND_INDEX /sps/t2k/eleblevec/NeuNetSoft/index_lists -> /workspace/work/index_lists
+# If you change those binds (or run outside the container), use the non-"_container"
+# config instead, or update the paths below to match your own binds.
+
+kind: "pyg_in_memory"
+
+# Path to the .npz file containing train/val/test indices
+# Format: {'train_idxs': array, 'val_idxs': array, 'test_idxs': array}
+split_path: /workspace/work/index_lists/train50_val100_test150.npz
+
+# Set to True if your dataset is fully processed (has edges pre-computed)
+fully_processed: True
+
+# When fully_processed is True, set this to null
+# If you need to recompute edges, you would set compute_edges_parameters here
+compute_edges_parameters: null
+
+# Mandatory, length should be equal to the number of targets in the dataset
+target_names: ['mu-', 'e-']  # Example for binary classification
+# target_names: ['energy']  # Example for energy regression
+# target_names: ['vtx_x', 'vtx_y', 'vtx_z']  # Example for vertex regression
+
+# Signal key used for plotting purposes
+signal_key: 'e-'
+
+dataset_parameters:
+  # --- Hydra arguments ---
+  _target_: watchmal.dataset.graph.pyg_in_memory_20inch_pmt.PyGInMemory20inchDataset
+
+  graph_file_names:
+    - data.pt
+
+  # --- Path to your graph dataset folder(s), as seen INSIDE the container ---
+  graph_folder_path:
+    - /workspace/work/data/debug/e-_10_train_tq_edges_xyz_label_eventType_knn5
+    - /workspace/work/data/debug/e-_10_train_tq_edges_xyz_label_eventType_knn5
+    - /workspace/work/data/debug/e-_10_train_tq_edges_xyz_label_eventType_knn5
+    - /workspace/work/data/debug/e-_10_train_tq_edges_xyz_label_eventType_knn5
+    - /workspace/work/data/debug/e-_10_train_tq_edges_xyz_label_eventType_knn5
+    - /workspace/work/data/debug/e-_10_train_tq_edges_xyz_label_eventType_knn5
+    - /workspace/work/data/debug/e-_10_train_tq_edges_xyz_label_eventType_knn5
+    - /workspace/work/data/debug/e-_10_train_tq_edges_xyz_label_eventType_knn5
+    - /workspace/work/data/debug/e-_10_train_tq_edges_xyz_label_eventType_knn5
+    - /workspace/work/data/debug/e-_10_train_tq_edges_xyz_label_eventType_knn5
+    - /workspace/work/data/debug/e-_10_train_tq_edges_xyz_label_eventType_knn5
+    - /workspace/work/data/debug/e-_10_train_tq_edges_xyz_label_eventType_knn5
+    - /workspace/work/data/debug/e-_10_train_tq_edges_xyz_label_eventType_knn5
+    - /workspace/work/data/debug/mu-_10_train_tq_edges_xyz_label_eventType_knn5
+    - /workspace/work/data/debug/mu-_10_train_tq_edges_xyz_label_eventType_knn5

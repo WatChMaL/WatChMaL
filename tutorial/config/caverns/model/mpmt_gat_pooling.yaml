@@ -1,0 +1,24 @@
+# Hierarchical mPMT GAT: attention within each mPMT module (local), then across
+# mPMT modules (global). Designed for detectors instrumented with multi-PMT
+# modules (e.g. WCTE); expects the paired PMT/mPMT graphs produced by
+# PyGInMemoryMPMTDataset.
+_target_: watchmal.model.mPMT_gat_pooling.HierarchicalGAT
+
+pmt_in_channels: 2  # number of features per PMT node (charge, time)
+out_channels: 2     # number of output classes
+
+dropout: 0.2
+
+hidden_channels: 16
+
+# =================== local intra-mPMT parameters =======================
+num_local_layers: 3  # number of local (intra-mPMT) GAT layers
+num_heads_local: 4
+
+# =================== global inter-mPMT parameters ======================
+num_inter_layers: 5  # number of global (inter-mPMT) GAT layers
+num_heads_global: 4
+
+# ============ additional features to feed the final MLP ================
+use_nhits: False
+use_event_total_charge: False

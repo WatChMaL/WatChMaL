@@ -1,0 +1,66 @@
+# Test / evaluation of a trained multi-ring segmentation model.
+#
+# The test path runs diagnostics from the optional `diagnostic_multiring` submodule,
+# so initialize it first:
+#   git submodule update --init submodules/diagnostic_multiring
+#
+# Launch (same pattern as tutorial/launch/caverns/run_main_cclyon.sh; point train_output_dir at a
+# finished training run dir, which holds .hydra/config.yaml and
+# MultiRingSegEngine_MultiRingModel_BEST.pth):
+#   python main.py \
+#       --config-path /ABS/PATH/TO/tutorial/config/caverns/main --config-name multiring_segmentation_test \
+#       hydra.searchpath=[/ABS/PATH/TO/tutorial/config/caverns] \
+#       engine.train_output_dir=/path/to/training/run \
+#       engine.dataset_overrides.base_dir=/path/to/your/multiring_dataset
+hydra:
+  run:
+    dir: ${engine.train_output_dir}/test/${now:%Y-%m-%d}/${now:%H-%M-%S}
+  output_subdir: .hydra
+
+engine:
+  _target_: watchmal.engine.multiring.segmentation.MultiRingSegEngine
+  target_key: voxel_parent_frac
+  train_output_dir: /path/to/your/training/run
+  dataset_overrides:
+    base_dir: /path/to/your/multiring_dataset
+    file_name_pattern: wcsim_output_multihit_with_digi_hit_and_trigger.h5
+
+# Model and dataset are rebuilt from the training run's saved .hydra/config.yaml.
+model:
+  _target_: watchmal.engine.multiring.segmentation.build_model_from_train_output
+  train_output_dir: ${engine.train_output_dir}
+  ckpt_name: MultiRingSegEngine_MultiRingModel_BEST.pth
+  device: cuda:0
+
+data:
+  dataset:
+    _target_: watchmal.engine.multiring.segmentation.build_dataset_from_train_output
+    train_output_dir: ${engine.train_output_dir}
+    dataset_overrides: ${engine.dataset_overrides}
+
+tasks:
+  test:
+    data_loaders:
+      test:
+        batch_size: 32
+        num_workers: 2
+        max_events: 100
+    diagnostic:
+      enabled:
+        - dice_vs_angle
+        - ring_count_confusion
+        - charge_profile_mean
+      out_dir: img
+      stats:
+        start_at: 0
+        max_events: 10000
+      plots:
+        dice_vs_angle: { nbins: 18 }
+        ring_count_confusion: { normalize: true }
+
+MASTER_PORT: 12357
+core: caverns
+seed: 1234
+gpu_list: [0]
+kind: cnn
+launch_wandb: false

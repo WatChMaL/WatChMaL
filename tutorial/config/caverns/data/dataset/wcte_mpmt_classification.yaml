@@ -1,0 +1,43 @@
+# WCTE mPMT graph dataset — e-/mu- classification (PyGInMemoryMPMTDataset)
+#
+# WCTE events are stored as TWO pre-built graphs per event: a PMT-level graph
+# (data.pt) and an mPMT-level graph (data_mPMT.pt), loaded together for the
+# hierarchical mPMT models. Node features: charge, time, mPMT_id.
+# Reference sample: uniform, isotropic, fully-contained (FC) e-/mu- events.
+# Graphs are fully processed (edges pre-computed at graph-generation time).
+#
+# Usage: replace split_path and pyg_data_folder_path with your dataset location
+# (the defaults below are the reference sample on CC-Lyon).
+
+kind: "pyg_in_memory"
+
+# Path to the .npz file containing train/val/test indices
+# Format: {'train_idxs': array, 'val_idxs': array, 'test_idxs': array}
+split_path: "/sps/t2k/mferey/CAVERNS/NeuralNetworks_Software/index_list/train1000_val200_test800_e-_mu-_uni_iso_FC_1000.npz"
+
+# Set to True if your dataset is fully processed (has edges pre-computed)
+fully_processed: True
+
+# When fully_processed is True, set this to null
+compute_edges_parameters: null
+
+# PDG codes present in the sample (mapped to class indices by the MapLabels transform)
+label_set: [11, 13]
+
+# Mandatory, length should be equal to the number of targets in the dataset
+target_names: ['e-', 'mu-']
+
+# Signal key used for plotting purposes
+signal_key: 'e-'
+
+dataset_parameters:
+  # --- Hydra arguments ---
+  _target_: watchmal.dataset.graph.pyg_in_memory_mpmt.PyGInMemoryMPMTDataset
+
+  # Two files are required: PMT-level graphs first, mPMT-level graphs second
+  pyg_data_file_names:
+    - data.pt
+    - data_mPMT.pt
+
+  # --- Path to your graph dataset folder ---
+  pyg_data_folder_path: /sps/hyperk/mferey/Data/WCTE_v2/Graphs/WCTE_uni_iso_FC_e-mu_1000_f_charge_time_mPMT

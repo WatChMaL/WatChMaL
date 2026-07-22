@@ -1,0 +1,25 @@
+# Tutorial wandb config
+# Configure your Weights & Biases logging here
+# Set launch_wandb: True in your main config to enable wandb logging
+
+# Your wandb entity (username or team name)
+entity: mathieu-ferey-laboratoire-leprince-ringuet
+
+# Your wandb project name
+project: smoke_runs
+
+# Tags to organize your runs (optional)
+tags: 
+  - tutorial
+  - debug
+  # Add more tags as needed:
+  # - classification
+  # - regression
+  # - gcn
+  # - gat
+
+# Job type description (optional)
+job_type: tutorial
+
+# Additional notes about this run (optional)
+notes: "Tutorial run for learning CAVERNS GNN models"

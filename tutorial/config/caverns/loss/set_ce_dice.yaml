@@ -1,0 +1,5 @@
+_target_: watchmal.loss.set_ce_loss.loss_set_ce_dice
+lambda_dice: 1.0
+poisson: true
+matching: hungarian
+symmetric: true

@@ -1,0 +1,6 @@
+_target_: watchmal.engine.graph.regression.RegressionEngine
+
+# if you wish to change 'target' to 'xx' here you'll
+# need to do it in the DataToWatchmalDict source
+# code too.
+target_key: 'target' 

@@ -1,0 +1,31 @@
+# WCTE mPMT transform config for e-/mu- classification
+# Applied to the PMT-level graphs (mPMT-level transforms are not yet supported,
+# see watchmal/dataset/graph/data_utils.py).
+# Node features are [charge, time, mPMT_id].
+
+transforms:
+
+  # - Normalize - #
+  Normalize:
+    _target_: watchmal.dataset.graph.pyg_transformations.Normalize
+
+    feat_norm:
+      # charge, time, mPMT_id
+      - [1000, 100, 1]  # max values for features
+      - [0.01, 0, 0]    # min values for features
+
+    apply_log: [True, False, False]  # apply log to charge only
+
+  # Should always be activated when performing classification:
+  # maps PDG codes (label_set) to class indices 0..N-1
+  MapLabels:
+    _target_: watchmal.dataset.graph.pyg_transformations.MapLabels
+    label_set:
+      - 11
+      - 13
+
+  # - Convert + wrap each data into a dictionary when called by the loaders - #
+  ConvertAndToDict:
+    _target_: watchmal.dataset.graph.pyg_transformations.ConvertAndToDict
+    feature_to_type: float32
+    target_to_type: int64

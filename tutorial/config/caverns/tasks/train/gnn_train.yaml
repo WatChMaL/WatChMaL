@@ -1,0 +1,38 @@
+# Tutorial training config
+# This config is optimized for learning and quick iterations
+
+# Number of training epochs
+# Reduced from 500 for tutorial purposes - increase for full training
+epochs: 5
+
+# Validation interval: how often to run validation (in steps)
+# Validation metrics are computed and logged every val_interval steps
+val_interval: 2
+# Print status on the gradient descent every val_interval step
+# + wandb global log (gradients + parameters) every 2 * val_interval
+
+# Gradient checkpointing: saves memory at the cost of speed
+# Set to True if you run out of memory, False otherwise
+checkpointing: False
+
+# Data loader configuration
+# These parameters are passed to get_data_loader in data_utils.py
+data_loaders:
+
+  train:
+    split_key: train_idxs  # Key in split_path .npz file for training indices
+    is_graph: True         # Set to True for graph datasets
+    drop_last: True        # Drop last incomplete batch (recommended for training)
+    
+    pin_memory: True       # Faster data transfer to GPU (set False for CPU)
+    num_workers: 2         # Number of data loading workers (0 for debugging)
+    batch_size: 15         # Batch size - adjust based on your GPU memory
+    
+  validation:
+    split_key: val_idxs    # Key in split_path .npz file for validation indices
+    is_graph: True         # Set to True for graph datasets
+    drop_last: True        # Drop last incomplete batch
+    
+    pin_memory: True       # Faster data transfer to GPU
+    num_workers: 2        # Number of data loading workers
+    batch_size: 10        # Batch size for validation (can be larger than train)

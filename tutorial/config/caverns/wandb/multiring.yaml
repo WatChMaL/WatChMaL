@@ -1,0 +1,8 @@
+# Passed verbatim to wandb.init(). Set entity to your own wandb team/user, or
+# leave it commented to use your default entity.
+# entity: your-wandb-entity
+project: multiring-segmentation
+tags:
+  - sparseunet
+  - segmentation
+job_type: train

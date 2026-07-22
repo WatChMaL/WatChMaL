@@ -1,0 +1,28 @@
+# Sparse 3D U-Net encoder + query-transformer per-voxel head, assembled by
+# build_segmentation_model. _recursive_: false so the encoder/head/wrapper are
+# instantiated by build_segmentation_model (which wires encoder+head into the wrapper).
+_target_: watchmal.utils.build_utils.build_segmentation_model
+_recursive_: false
+
+encoder:
+  _target_: watchmal.model.multiring.encoders.sparse_unet3D.SparseUNet3D
+  c_in: 5
+  c_stem: 32
+  channels: [64, 64, 64]
+  mem_level: 3
+  d_mem: 64
+
+head:
+  _target_: watchmal.model.multiring.heads.query_transformer.QueryPerVoxelSoftmaxHead
+  d_model: 64
+  c_vox: 32
+  c_mask: 32
+  n_queries: 4
+  nhead: 8
+  layers: 3
+  pe_bands: 8
+  voxel_attention: true
+  # activation: softmax        # softmax | sparsemax | entmax15
+
+wrapper:
+  _target_: watchmal.model.multiring.wrappers.model_wrapper.MultiRingModel

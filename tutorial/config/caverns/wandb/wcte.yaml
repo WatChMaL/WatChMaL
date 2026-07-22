@@ -1,0 +1,17 @@
+# WCTE wandb config
+# Set launch_wandb: True in your main config to enable wandb logging
+
+# Your wandb entity (username or team name); null = your default wandb login
+entity: mathieu-ferey-laboratoire-leprince-ringuet
+
+# Your wandb project name
+project: WCTE
+
+tags:
+  - wcte
+  - e-/mu-
+  - classification
+  - mPMT
+  - hierarchical_gat
+
+job_type: tutorial

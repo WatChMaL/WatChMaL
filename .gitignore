@@ -119,3 +119,7 @@ __MACOSX/
 # anchors to the repo root, so the tracked tutorial/config and tutorial/launch stay)
 /config/
 /launch/
+
+# plotting/viz kept local, not shipped — belongs in a separate WatChMaL viz repo.
+# The graph engines import it lazily and skip plotting when it is absent.
+/watchmal/utils/viz_utils.py
