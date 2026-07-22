@@ -48,7 +48,7 @@ def select_run(core):
     return run
 
 
-@hydra.main(config_path='config/', config_name='resnet_train', version_base="1.1")
+@hydra.main(config_path='tutorial/config/watchmal', config_name='resnet_train', version_base="1.1")
 def main(config):
     """
     Run model using given config, spawn worker subprocesses as necessary
