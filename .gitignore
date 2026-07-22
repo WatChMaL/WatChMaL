@@ -114,3 +114,8 @@ kernprof.py
 .idea/
 __MACOSX/
 /outputs/
+
+# personal workspace copied from tutorial/ by setup/make_dirs.sh (leading slash
+# anchors to the repo root, so the tracked tutorial/config and tutorial/launch stay)
+/config/
+/launch/
