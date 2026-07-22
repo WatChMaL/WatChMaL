@@ -1,14 +1,10 @@
 import torch
 import numpy as np
-import pandas as pd
-
-import scipy.special as special
 
 # watchmal imports
 from watchmal.engine.graph.reconstruction import ReconstructionEngine
 
 from watchmal.utils.logging_utils_caverns import setup_logging
-from watchmal.utils.viz_utils import roc_curve, p_r_curve, confusion_matrix, scatplot_2d, combined_histograms_plot, histogram_2d, count_plot, zoomed_roc_curve
 
 log = setup_logging(__name__)
 
@@ -88,6 +84,17 @@ class ClassifierEngine(ReconstructionEngine):
         """
         Only rank 0 should call make_plots()
         """
+        # Plotting utilities live in a separate WatChMaL viz repo and are not shipped
+        # here; import lazily so a run without them degrades to "no plots" rather than
+        # failing to import the engine.
+        try:
+            from watchmal.utils.viz_utils import roc_curve, confusion_matrix
+        except ImportError:
+            log.warning("viz_utils not available; skipping evaluation plots.")
+            return
+
+        import scipy.special as special
+        import pandas as pd
       
         softmax_preds = special.softmax(preds, axis=1)
         predicted_classes = np.argmax(softmax_preds, axis=1)

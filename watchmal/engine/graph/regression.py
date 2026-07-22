@@ -9,7 +9,6 @@ import torch
 from watchmal.engine.graph.reconstruction import ReconstructionEngine
 
 from watchmal.utils.logging_utils_caverns import setup_logging
-from watchmal.utils.viz_utils import preds_targets_histogram
 
 log = setup_logging(__name__)
 
@@ -63,6 +62,14 @@ class RegressionEngine(ReconstructionEngine):
 
 
     def make_plots(self, preds, targets, prefix_plot_name):
+        # Plotting utilities live in a separate WatChMaL viz repo and are not shipped
+        # here; import lazily so a run without them degrades to "no plots" rather than
+        # failing to import the engine.
+        try:
+            from watchmal.utils.viz_utils import preds_targets_histogram
+        except ImportError:
+            log.warning("viz_utils not available; skipping evaluation plots.")
+            return
 
         # Denormalizing data
         # index 0 is maximum values, index 1 is minimum
