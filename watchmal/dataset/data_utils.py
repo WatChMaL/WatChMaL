@@ -14,7 +14,7 @@ import numpy as np
 import random
 
 # WatChMaL imports
-from watchmal.dataset.samplers import DistributedSamplerWrapper
+from watchmal.dataset.samplers.watchmal_core_sampler import DistributedSamplerWrapper
 
 # pyg imports
 from torch_geometric.loader import DataLoader as PyGDataLoader
