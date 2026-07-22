@@ -7,20 +7,32 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="${NEUNET_ROOT:-$(cd "${SCRIPT_DIR}/../../../.." && pwd)}"
 
-RUN_SCRIPT="${SCRIPT_DIR}/train_sr_in_container.sh"
-# RUN_SCRIPT="${SCRIPT_DIR}/train_mr_in_container.sh"
-
-# BIND_DATA="/sps/t2k/melbaz/Simulation/output:/workspace/work/data"
-BIND_DATA=/sps/hyperk/Datasets/graph_datasets:/workspace/work/data
-# split_path (train/val/test index list) used by the sr tutorial datasets lives outside
-# BIND_DATA, so it needs its own mount — matches tutorial/config/caverns/data/dataset/*_container.yaml
-BIND_INDEX=/sps/t2k/eleblevec/NeuNetSoft/index_lists:/workspace/work/index_lists
+# RUN_SCRIPT="${SCRIPT_DIR}/train_sr_in_container.sh"
+RUN_SCRIPT="${SCRIPT_DIR}/train_mr_in_container.sh"
 BIND_CODE="${REPO_ROOT}:/workspace/work/ml" 
 
-# Available images : 
-# - /sps/t2k/melbaz/env/ml_image.sif -> ref. image for multi-ring tasks. Also work for single ring tasks
-# - /sps/t2k/eleblevec/containers/pytorch_pyg_cu130_v1.1.sif -> Newer image (updated to cuda 13.0 & torch 2.11). Not suitable for multi-ring tasks. Not suitable for V100 (H100 GPUs only)
-IMAGE=/sps/t2k/melbaz/env/ml_image.sif
+# -- Data --
+# - t2k partition
+# BIND_DATA=/sps/t2k/melbaz/Simulation/output:/workspace/work/data
+# BIND_DATA=/sps/hyperk/Datasets/graph_datasets:/workspace/work/data
+# - hyperk partition
+BIND_DATA=/sps/hyperk/Datasets/mr_smoke_datasets:/workspace/work/data/1_4rings_random_vertex_mix_muon_electron_2
+
+# -- Split index --
+# split_path (train/val/test index list) used by the sr tutorial datasets lives outside BIND_DATA, 
+# so it needs its own mount
+# - t2k partition
+# BIND_INDEX=/sps/t2k/eleblevec/NeuNetSoft/index_lists:/workspace/work/index_lists
+# - hyperk partition
+BIND_INDEX=/sps/hyperk/Datasets/index_list:/workspace/work/index_list
+
+# -- Container images --
+# - t2k partition
+# /sps/t2k/melbaz/env/ml_image.sif                         -> ref. image for multi-ring tasks. Also work for single ring tasks
+# /sps/t2k/eleblevec/containers/pytorch_pyg_cu130_v1.1.sif -> Newer image (updated to cuda 13.0 & torch 2.11). Not suitable for multi-ring tasks. Not suitable for V100 (H100 GPUs only)
+# - hyperk partition
+# /sps/hyperk/zhu/CAVERNS/env/ml_image.sif                 -> image for multi-ring tasks. Also work for single ring tasks
+IMAGE=/sps/hyperk/zhu/CAVERNS/env/ml_image.sif
 
 
 # ---- wandb control (consumed by the in-container script) ----

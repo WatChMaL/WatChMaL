@@ -16,6 +16,9 @@
 # ============================================================================
 # Training Configuration - EDIT THESE
 # ============================================================================
+MINICONDA_DIR=${MINICONDA_DIR:-"/sps/t2k/eleblevec/miniconda3"}
+PYTHON_ENV_NAME=${PYTHON_ENV_NAME:-"pt28_cuda129"}
+
 
 # Path to WatChMaL repository — auto-detected from this script's location, so it
 # works on any cluster / any checkout (also from your launch/ copy).
@@ -53,6 +56,7 @@ hydra_searchpath=${NeuNet_folder_path}/${config_folder}
 # ============================================================================
 # Execution Code - DO NOT MODIFY BELOW
 # ============================================================================
+export HYDRA_FULL_ERROR=1
 
 echo "=========================================="
 echo "Running training interactively"
@@ -61,7 +65,7 @@ echo "GPU: $gpu_list"
 echo "=========================================="
 
 cd $NeuNet_folder_path
-export HYDRA_FULL_ERROR=1
+source $MINICONDA_DIR/bin/activate $PYTHON_ENV_NAME
 
 
 # add -c job aat the end to launch a dry run
