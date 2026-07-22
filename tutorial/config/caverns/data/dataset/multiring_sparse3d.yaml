@@ -4,7 +4,7 @@ dataset:
   params:
     # Directory containing your multi-ring HDF5 files (searched recursively for
     # file_name_pattern). CHANGE THIS to your dataset location.
-    base_dir: /workspace/work/data/HyperK_HybridmPMT_WithOD_Realistic/1_4rings_random_vertex_mix_muon_electron_2
+    base_dir: /workspace/work/data/1_4rings_random_vertex_mix_muon_electron_2
     file_name_pattern: wcsim_output_multihit_with_digi_hit_and_trigger.h5
 
     min_charge: 0.01

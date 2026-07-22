@@ -9,7 +9,7 @@
 # Set your dataset paths (split_path + graph_folder_path) in
 #   tutorial/config/caverns/data/dataset/20inch_pmt_knn5_classification.yaml
 
-MASTER_PORT: 12357
+MASTER_PORT: 12356
 core: caverns
 seed: 1234
 gpu_list: []  # Set to [0, 1, ...] to use specific GPUs

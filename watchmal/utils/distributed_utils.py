@@ -6,9 +6,41 @@ To add :
 - get_gathered
 """
 
+import logging
 import os
 
 from torch.distributed import init_process_group
+
+
+def restrict_logging_to_rank0(rank, level=logging.WARNING):
+    """Silence INFO/DEBUG on non-zero DDP ranks so start-up logs are not printed
+    once per process.
+
+    Each spawned worker re-runs hydra's ``configure_log()``, so without this every
+    module's INFO line (dataset init, parameter counts, data-loader setup, ...) is
+    emitted ``world_size`` times. Here rank 0 stays the only INFO/DEBUG emitter,
+    while records at ``level`` and above (WARNING/ERROR) still get through from
+    every rank so real problems are never hidden.
+
+    Call this AFTER ``configure_log()`` has (re)installed the root handlers. The
+    filter is attached to the root *handlers*, not the root logger: a record that
+    propagates up from a module logger bypasses ancestor loggers' levels and
+    filters but still passes through their handlers.
+
+    Args:
+        rank: this worker's rank; a no-op on rank 0.
+        level: minimum level still allowed through on non-zero ranks.
+    """
+    if rank == 0:
+        return
+
+    class _MinLevelFilter(logging.Filter):
+        def filter(self, record):
+            return record.levelno >= level
+
+    rank_filter = _MinLevelFilter()
+    for handler in logging.getLogger().handlers:
+        handler.addFilter(rank_filter)
 
 
 def ddp_setup(rank, world_size, master_port, device=None):

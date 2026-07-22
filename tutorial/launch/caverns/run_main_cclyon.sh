@@ -36,7 +36,7 @@ config_folder=tutorial/config/caverns
 #   - gat_vertex_regression
 #   - wcte_mpmt_gat_classification
 # For multiring_segmentation_train see the container config part.
-config_name=gat_classification
+config_name=gat_vertex_regression
 
 # GPU configuration
 # For single GPU: 'gpu_list=[0]'

@@ -32,7 +32,7 @@ import time
 # watchmal imports
 from watchmal.utils.logging_utils_caverns import setup_logging
 from watchmal.utils.build_utils import build_model
-from watchmal.utils.distributed_utils import ddp_setup
+from watchmal.utils.distributed_utils import ddp_setup, restrict_logging_to_rank0
 
 log = setup_logging(__name__)
 sleep_time = 5
@@ -54,6 +54,10 @@ def run(rank, gpu_list, dataset, wandb_run, hydra_config, global_hydra_config):
     device = 'cpu' if len(gpu_list) == 0 else (f"cuda:{int(gpu_list[rank])}" if len(gpu_list) > 1 else f"cuda:{int(gpu_list[0])}")
     wandb_run = wandb_run if rank == 0 else None
     log.info(f"Running worker {rank} on device : {device} with wandb_run : {wandb_run}")
+
+    # Each worker still announced itself above; from here on keep INFO/DEBUG on
+    # rank 0 only so the shared start-up logs are not duplicated per process.
+    restrict_logging_to_rank0(rank)
 
     # Instantiate the model (for each process if many)
     # Seed with the run-wide value un-offset: the engine captures it at construction and

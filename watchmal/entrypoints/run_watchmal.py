@@ -31,7 +31,7 @@ import os
 import logging
 
 # watchmal imports
-from watchmal.utils.distributed_utils import ddp_setup
+from watchmal.utils.distributed_utils import ddp_setup, restrict_logging_to_rank0
 
 # Plain module logger, as upstream does it: this worker drives the watchmal core, so
 # it stays off the caverns logging helper. Hydra's root handlers pick the records up
@@ -58,6 +58,10 @@ def run(rank, gpu_list, dataset, wandb_run, hydra_config, global_hydra_config):
         configure_log(global_hydra_config.job_logging, global_hydra_config.verbose)
 
     log.info(f"Running worker {rank} on device : {device}")
+
+    # Each worker still announced itself above; from here on keep INFO/DEBUG on
+    # rank 0 only so the shared start-up logs are not duplicated per process.
+    restrict_logging_to_rank0(rank)
 
     torch.manual_seed(hydra_config.seed)
 
