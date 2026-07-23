@@ -1,9 +1,6 @@
 """
 Sparse UNet3D encoder for multiring segmentation.
 
-Author: Mathias El Baz
-Date: 2026-02-14
-
 This script defines:
 - BNAct1d: A 1D batch normalization + ReLU activation module.
 - SubMBlock: A residual block with two submanifold sparse convolutions.

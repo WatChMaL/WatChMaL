@@ -50,5 +50,5 @@ fi
 python main.py --config-path $hydra_searchpath/main --config-name gat_classification_container \
     hydra.searchpath=[$hydra_searchpath] \
     ${HYDRA_WANDB} \
-    gpu_list=[0] \
+    gpu_list=[0,1] \
     "$@"
