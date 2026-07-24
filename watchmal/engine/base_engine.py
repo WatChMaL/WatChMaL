@@ -202,6 +202,14 @@ class BaseEngine(ABC):
         self.use_amp = False
         self.scaler = None
 
+        # Optional early stopping (graph / multi-ring loops use it; the CNN loop ignores
+        # it). Held on the base so the single worker can configure any engine uniformly.
+        self.early_stopping = None
+
+    def configure_early_stopping(self, early_stopping_config):
+        """Instantiate an early-stopping helper from a hydra config."""
+        self.early_stopping = instantiate(early_stopping_config)
+
     def configure_amp(self, amp_enabled: bool = False):
         """Configure automatic mixed precision (AMP). No-op unless on CUDA."""
         from torch.amp import GradScaler

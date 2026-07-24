@@ -1,16 +1,17 @@
 """
-Main file used for running the code
+Main file used for running the code.
 
-This is the single entry point for both cores. Everything up to the worker spawn is
-core-agnostic; the per-core startup lives in watchmal/entrypoints/run_<core>.py and is
-selected by the optional top-level `core` key, which defaults to the watchmal core so
-existing configs are unaffected.
+Single entry point for the unified WatChMaL core. Everything here is model-family
+agnostic: the parent process settles the seed, optionally initialises wandb, optionally
+prebuilds an in-memory dataset, then spawns the single worker
+(watchmal/entrypoints/run.py) once per GPU. There is no longer a `core:` switch - CNN,
+graph and multi-ring runs all go through the same worker and the same engine base; a
+model family is selected purely by the hydra `engine`/`model`/`data` configs.
 
-The worker functions share one signature -
-`run(rank, gpu_list, dataset, wandb_run, hydra_config, global_hydra_config)` - so the
-spawn below is uniform; the watchmal worker ignores `dataset`/`wandb_run` (it builds
-datasets in the engine and has no wandb integration), while the caverns worker uses
-them (in-memory dataset prebuilt here, wandb run initialised here).
+The worker signature is `run(rank, gpu_list, dataset, wandb_run, hydra_config,
+global_hydra_config)`. `dataset` is non-None only for in-memory (pyg) datasets prebuilt
+here so each worker does not reload them; `wandb_run` is non-None only when wandb is
+enabled.
 """
 
 # hydra imports
@@ -28,32 +29,9 @@ import logging
 import os
 
 from watchmal.utils.logging_utils import get_git_version
+from watchmal.entrypoints.run import run
 
 log = logging.getLogger(__name__)
-
-CORES = ("watchmal", "caverns")
-
-
-def select_run(core):
-    """
-    Return the worker function of the requested core.
-
-    The import is done here rather than at module level so that a run only pulls in the
-    modules of the core it actually uses.
-
-    Args:
-        core ... name of the core to run, one of CORES
-
-    Returns:
-        the core's `run(rank, gpu_list, dataset, wandb_run, hydra_config, global_hydra_config)`
-    """
-    if core == "watchmal":
-        from watchmal.entrypoints.run_watchmal import run
-    elif core == "caverns":
-        from watchmal.entrypoints.run_caverns import run
-    else:
-        raise ValueError(f"Unknown core '{core}', expected one of {list(CORES)}")
-    return run
 
 
 @hydra.main(config_path='tutorial/config/watchmal', config_name='resnet_train', version_base="1.1")
@@ -67,20 +45,11 @@ def main(config):
     log.info(f"Using the following git version of WatChMaL repository: {get_git_version(os.path.dirname(to_absolute_path(__file__)))}")
     log.info(f"Running with the following config:\n{OmegaConf.to_yaml(config)}")
 
-    core = config.get("core", "watchmal")
-    run = select_run(core)
-    log.info(f"Running with the '{core}' core")
-
     global_hydra_config = HydraConfig.get()
 
-    # Seed policy is core-aware and settled here, before the spawn, so every rank shares
-    # the same value. The watchmal core auto-generates one if none is given (upstream
-    # behaviour; every shipped watchmal config uses seed: null); the caverns core
-    # requires one.
+    # Seed policy is settled here, before the spawn, so every rank shares the same value.
+    # If no seed is given one is generated (and logged); a config may still pin it.
     if config.get("seed", None) is None:
-        if core == "caverns":
-            log.error("No seed provided. The caverns core requires an explicit top-level `seed in the main config file")
-            raise SystemExit(1)
         config.seed = torch.seed()
         log.info(f"No seed provided; generated seed {config.seed}")
 
@@ -89,7 +58,7 @@ def main(config):
     gpu_list = config.gpu_list
     ngpus = len(gpu_list)
 
-    # wandb is a caverns feature for now; imported lazily so the watchmal core never needs it.
+    # wandb is optional; imported lazily so a CSV-only run never needs the package.
     if config.get("launch_wandb", False) or ('WANDB_SWEEP_ID' in os.environ):
         import wandb
         wandb_conf = config.get("wandb", None)
@@ -106,9 +75,8 @@ def main(config):
     else:
         wandb_run = None
 
-    # In-memory (pyg) datasets are built once here so each spawned worker does not
-    # reload them; every other dataset (all watchmal ones, which carry no `kind`) is
-    # built by the engine.
+    # In-memory (pyg) datasets are built once here so each spawned worker does not reload
+    # them; every other dataset (which carries no `kind`) is built inside the engine.
     data_config = config.get("data", None)
     dataset_config = data_config.get("dataset", None) if data_config is not None else None
     dataset_kind = dataset_config.get("kind", "") if dataset_config is not None else ""
