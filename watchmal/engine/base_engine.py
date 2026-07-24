@@ -197,6 +197,33 @@ class BaseEngine(ABC):
         self.optimizer = None
         self.scheduler = None
 
+        # Automatic Mixed Precision (used by the CNN reconstruction loop via
+        # configure_amp(); the graph / multi-ring loops simply never enable it).
+        self.use_amp = False
+        self.scaler = None
+
+    def configure_amp(self, amp_enabled: bool = False):
+        """Configure automatic mixed precision (AMP). No-op unless on CUDA."""
+        from torch.amp import GradScaler
+        self.use_amp = bool(amp_enabled) and (self.device.type == "cuda")
+        if self.use_amp:
+            self.scaler = GradScaler("cuda")
+        if self.rank == 0:
+            log.info(f"AMP enabled: {self.use_amp}")
+
+    def setup_data_loaders(self, data_config, loaders_config, is_distributed, seed):
+        """
+        Uniform data-loader entry point called by the worker for every engine family.
+
+        Default (graph / multi-ring) path: build the dataset then the loaders in two
+        steps. The CNN engine overrides this method with its own single-step
+        get_data_loader path. Keeping one entry-point signature is what lets the single
+        worker configure any engine without knowing its family; the two dataset pipelines
+        stay separate underneath.
+        """
+        self.configure_dataset(data_config)
+        self.configure_data_loaders(loaders_config)
+
     def configure_loss(self, loss_config):
         """Instantiate loss from a hydra config."""
         self.criterion = instantiate(loss_config)
@@ -223,21 +250,23 @@ class BaseEngine(ABC):
         self.target_names = list(dataset_config.target_names)
         log.info(f"dataset: {dataset[0]}")
 
-    @abstractmethod
     def configure_dataset(self, data_config):
         """
-        Configure the dataset from data_config. Must set:
-        - self.dataset: the dataset instance
-        - self.split_path: path to split indices file
-        - self.is_pyg: bool indicating if using PyG loader
-        - self.target_names: list of target names (optional)
-        
+        Configure the dataset from data_config. Graph / multi-ring engines override this
+        to set self.dataset / self.split_path / self.is_pyg / self.target_names. The CNN
+        engine builds its loaders directly in setup_data_loaders and never calls this, so
+        the default just signals misuse rather than being abstract (which would force a
+        stub on the CNN engine).
+
         Parameters
         ----------
         data_config : DictConfig or dict
             Configuration containing dataset parameters, split_path, etc.
         """
-        pass
+        raise NotImplementedError(
+            f"{self.__class__.__name__} does not implement configure_dataset(); its data "
+            f"loaders are built in setup_data_loaders()."
+        )
 
     def configure_data_loaders(self, loaders_config):
         """

@@ -1,32 +1,33 @@
 """
-Class for training a fully supervised classifier
+CNN / image reconstruction engine (fully-supervised classifier / regressor).
+
+Since the single-core merge this inherits the shared `BaseEngine`, so it uses the same
+state init, loss/optimizer/scheduler config, DDP reduce/gather helpers, AMP config and
+run tracker (analysis-compatible CSV + optional wandb) as every other engine family. Only
+the CNN-specific pieces stay here: the iteration-based train/validate/inference loops, the
+`process_data/process_target/forward_pass/compute_metrics` split, the `get_data_loader`
+data path (via the `setup_data_loaders` override), and the CNN checkpoint format.
 """
 
 # generic imports
 import numpy as np
 from datetime import datetime
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 import logging
-
-# hydra imports
-from hydra.utils import instantiate
 
 # torch imports
 import torch
-from torch.nn.parallel import DistributedDataParallel
+from torch.amp import autocast
 
 # WatChMaL imports
 from watchmal.dataset.data_utils import get_data_loader
-from watchmal.utils.logging_utils import CSVLog
-
-# AMP imports
-from torch.amp import GradScaler, autocast
+from watchmal.engine.base_engine import BaseEngine
 
 log = logging.getLogger(__name__)
 
 
-class ReconstructionEngine(ABC):
-    def __init__(self, target_key, model, rank, device, dump_path):
+class ReconstructionEngine(BaseEngine):
+    def __init__(self, target_key, model, rank, device, dump_path, wandb_run=None, dataset=None):
         """
         Parameters
         ==========
@@ -40,135 +41,44 @@ class ReconstructionEngine(ABC):
             The gpu that this process is running on.
         dump_path : string
             The path to store outputs in.
+        wandb_run : optional
+            Active wandb run (rank 0) or None. Accepted so the single worker can build any
+            engine uniformly; used for optional wandb logging through the shared tracker.
+        dataset : optional
+            Accepted for a uniform constructor signature; the CNN pipeline builds its
+            datasets inside setup_data_loaders, so this is ignored here.
         """
-        # create the directory for saving the log and dump files
+        super().__init__(
+            target_key=target_key,
+            model=model,
+            rank=rank,
+            device=device,
+            dump_path=dump_path,
+            wandb_run=wandb_run,
+            dataset=dataset,
+        )
+        # CNN-core checkpoint container and placeholder for the raw model output.
         self.state_data = {}
-        self.epoch = 0
-        self.iteration = 0
-        self.best_validation_loss = None
-        self.dump_path = dump_path
-        self.rank = rank
-        self.model = model
-        self.device = torch.device(device)
-        self.target_key = target_key
-
-        # Automatic Mixed Precision
-        self.use_amp = False
-        self.scaler = None
-
-        # Set up the parameters to save given the model type
-        if isinstance(self.model, DistributedDataParallel):
-            self.is_distributed = True
-            self.module = self.model.module
-            self.n_gpus = torch.distributed.get_world_size()
-        else:
-            self.is_distributed = False
-            self.module = self.model
-
-        self.data_loaders = {}
-
-        # define the placeholder attributes
-        self.data = None
-        self.loss = None
         self.model_out = None
 
-        # logging attributes
-        self.train_log = CSVLog(self.dump_path + f"log_train_{self.rank}.csv")
+    # configure_loss / configure_optimizers / configure_scheduler / configure_amp and the
+    # DDP helpers (get_synchronized_metrics / get_synchronized_outputs) and backward() are
+    # all inherited from BaseEngine.
 
-        if self.rank == 0:
-            self.val_log = CSVLog(self.dump_path + "log_val.csv")
-
-        self.criterion = None
-        self.optimizer = None
-        self.scheduler = None
-
-    def configure_loss(self, loss_config):
-        self.criterion = instantiate(loss_config)
-
-    def configure_optimizers(self, optimizer_config):
-        """Instantiate an optimizer from a hydra config."""
-        self.optimizer = instantiate(optimizer_config, params=self.module.parameters())
-        total_params = sum(p.numel() for p in self.module.parameters() if p.requires_grad)
-        opt_params = sum(p.numel() for g in self.optimizer.param_groups for p in g['params'])
-        print(f"Total trainable parameters: {total_params}")
-        print(f"Parameters passed to optimizer: {opt_params}")
-
-    def configure_scheduler(self, scheduler_config):
-        """Instantiate a scheduler from a hydra config."""
-        
-        self.scheduler = instantiate(scheduler_config, optimizer=self.optimizer)
-
-    def configure_amp(self, amp_enabled: bool = False):
-        """Configure automatic mixed precision (AMP)."""
-        self.use_amp = bool(amp_enabled) and (self.device.type == "cuda")
-        if self.use_amp:
-            self.scaler = GradScaler("cuda")
-        if self.rank == 0:
-            log.info(f"AMP enabled: {self.use_amp}")
-
-    def configure_data_loaders(self, data_config, loaders_config, is_distributed, seed):
+    def setup_data_loaders(self, data_config, loaders_config, is_distributed, seed):
+        """CNN data path: build each loader directly via get_data_loader (single step).
+        Overrides the base two-step (configure_dataset + configure_data_loaders) default."""
         is_gpu = self.device != torch.device("cpu")
         for name, loader_config in loaders_config.items():
             self.data_loaders[name] = get_data_loader(**data_config, **loader_config, is_distributed=is_distributed,
                                                       is_gpu=is_gpu, seed=seed)
             self.data_loaders[name].dataset.set_target(self.target_key)
 
-    def get_synchronized_outputs(self, output_dict):
-        """
-        Gathers results from multiple processes using pytorch distributed operations for DistributedDataParallel
-
-        Parameters
-        ==========
-        output_dict : dict of torch.Tensor
-            Dictionary containing values that are tensor outputs of a single process.
-
-        Returns
-        =======
-        global_output_dict : dict of torch.Tensor
-            Dictionary containing concatenated tensor values gathered from all processes
-        """
-        global_output_dict = {}
-        for name, tensor in output_dict.items():
-            if self.is_distributed:
-                if self.rank == 0:
-                    tensor_list = [torch.zeros_like(tensor, device=self.device) for _ in range(self.n_gpus)]
-                    torch.distributed.gather(tensor, tensor_list)
-                    global_output_dict[name] = torch.cat(tensor_list).detach().cpu().numpy()
-                else:
-                    torch.distributed.gather(tensor, dst=0)
-            else:
-                global_output_dict[name] = tensor.detach().cpu().numpy()
-        return global_output_dict
-
-    def get_synchronized_metrics(self, metric_dict):
-        """
-        Gathers metrics from multiple processes using pytorch distributed operations for DistributedDataParallel
-
-        Parameters
-        ==========
-        metric_dict : dict of torch.Tensor
-            Dictionary containing values that are tensor outputs of a single process.
-
-        Returns
-        =======
-        global_metric_dict : dict
-            Dictionary containing mean of tensor values gathered from all processes
-        """
-        global_metric_dict = {}
-        for name, tensor in zip(metric_dict.keys(), metric_dict.values()):
-            if self.is_distributed:
-                torch.distributed.reduce(tensor, 0)
-                if self.rank == 0:
-                    global_metric_dict[name] = tensor.item()/self.n_gpus
-            else:
-                global_metric_dict[name] = tensor.item()
-        return global_metric_dict
-
     def process_data(self, data):
         """Extract the event data from the input data dict"""
         if isinstance(data['data'], (list, tuple)):
             self.data = type(data['data'])(d.to(self.device) for d in data['data'])
-        else: 
+        else:
             self.data = data['data'].to(self.device)
 
     @abstractmethod
@@ -211,12 +121,6 @@ class ReconstructionEngine(ABC):
                     return outputs
                 metrics = self.compute_metrics()
                 return outputs, metrics
-
-    def backward(self):
-        """Backward pass using the loss computed for a mini-batch"""
-        self.optimizer.zero_grad()  # reset accumulated gradient
-        self.loss.backward()  # compute new gradient
-        self.optimizer.step()  # step params
 
     def train(self, epochs=0, val_interval=20, num_val_batches=4, checkpointing=False, save_interval=None):
         """
@@ -288,10 +192,9 @@ class ReconstructionEngine(ABC):
                 # update the epoch and iteration
                 step += 1
                 self.iteration += 1
-                # get relevant attributes of result for logging
-                log_entries = {"iteration": self.iteration, "epoch": self.epoch, **metrics}
-                # record the metrics for the mini-batch in the log
-                self.train_log.log(log_entries)
+                # record the metrics for the mini-batch in the log (analysis CSV + optional wandb)
+                self.tracker.train_step(self.iteration, self.epoch, metrics)
+                self.tracker.wandb_log({'train_batch_' + k: v for k, v in metrics.items()})
                 # run validation on given intervals
                 if self.iteration % val_interval == 0:
                     if self.rank == 0:
@@ -309,11 +212,10 @@ class ReconstructionEngine(ABC):
             # save state at end of epoch
             if self.rank == 0 and (save_interval is not None) and ((self.epoch+1) % save_interval == 0):
                 self.save_state(suffix=f'_epoch_{self.epoch+1}')
-        self.train_log.close()
+        self.tracker.close()
         if self.rank == 0:
             log.info(f"Epoch {self.epoch} completed in {datetime.now() - epoch_start_time}")
             log.info(f"Training {epochs} epochs completed in {datetime.now()-start_time}")
-            self.val_log.close()
 
     def validate(self, val_iter, num_val_batches, checkpointing):
         """
@@ -356,20 +258,21 @@ class ReconstructionEngine(ABC):
         val_metrics = {k: v/num_val_batches for k, v in val_metrics.items()}
         val_metrics = self.get_synchronized_metrics(val_metrics)
         if self.rank == 0:
-            log_entries = {"iteration": self.iteration, "epoch": self.epoch, **val_metrics, "saved_best": False}
             # Save if this is the best model so far
             print(f"  Validation {', '.join(f'{k}: {v:.5g}' for k, v in val_metrics.items())}", end="")
-            if val_metrics["loss"] < self.best_validation_loss:
+            saved_best = val_metrics["loss"] < self.best_validation_loss
+            if saved_best:
                 print(" ... Best validation loss so far!")
                 self.best_validation_loss = val_metrics["loss"]
                 self.save_state(suffix="_BEST")
-                log_entries["saved_best"] = True
             else:
                 print("")
             # Save the latest model if checkpointing
             if checkpointing:
                 self.save_state()
-            self.val_log.log(log_entries)
+            # record the validation stats (analysis CSV + optional wandb)
+            self.tracker.validation(self.iteration, self.epoch, val_metrics, saved_best)
+            self.tracker.wandb_log({'val_epoch_' + k: v for k, v in val_metrics.items()})
         # return model to training mode
 
         self.model.train()
