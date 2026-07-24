@@ -11,16 +11,16 @@
 # For a quick smoke test: add  tasks.train.epochs=1 data.dataset.params.num_batches=1
 MASTER_PORT: 12357
 core: caverns
-seed: 1234
 gpu_list: [0]
 kind: cnn
-launch_wandb: false        # set true (and configure wandb/) to log the run
+seed: 5
+launch_wandb: true
 
 defaults:
   - engine: multiring/segmentation
-  - data/dataset@data: multiring_sparse3d
+  - data/multiring@data: sparse_dataset
   - model/multiring@model: segmentation_model
-  - tasks/train/multiring@tasks.train: segmentation
+  - tasks/train/multiring@tasks.train: multiring_seg
   - loss@tasks.train.loss: set_ce_dice
   - scheduler@tasks.train.scheduler: cosine_annealing
   - optimizers@tasks.train.optimizers: adam_amsgrad
