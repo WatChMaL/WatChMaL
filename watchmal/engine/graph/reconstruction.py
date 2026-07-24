@@ -203,9 +203,12 @@ class ReconstructionEngine(BaseEngine):
                 if self.wandb_run is not None:
 
                     self.wandb_run.log(
-                        {'train_batch_' + k: v for k, v in outputs.items()} | 
+                        {'train_batch_' + k: v for k, v in outputs.items()} |
                         {'train_batch_' + k: v for k, v in metrics.items()}
                     )
+
+                # --- Analysis-compatible CSV (one row per training step) --- #
+                self.tracker.train_step(self.iteration + step, self.epoch, metrics)
 
                 # --- Keep track of metrics --- #
                 self._accumulate_metrics(metrics_epoch_history, metrics)
@@ -448,11 +451,15 @@ class ReconstructionEngine(BaseEngine):
                 # --- Model Saving --- #
                 if checkpointing: # if checkpointing the model is saved at the end of each validation epoch
                     self.save_state()
-                            
-                if metrics_epoch_history["loss"] < self.best_validation_loss:
+
+                saved_best = metrics_epoch_history["loss"] < self.best_validation_loss
+                if saved_best:
                     log.info(" ... Best validation loss so far!")
                     self.best_validation_loss = metrics_epoch_history["loss"]
                     self.save_state(suffix="_BEST")
+
+                # --- Analysis-compatible CSV (one row per validation) --- #
+                self.tracker.validation(self.iteration, self.epoch, metrics_epoch_history, saved_best)
 
 
             # --- Early stopping --- #
@@ -460,7 +467,7 @@ class ReconstructionEngine(BaseEngine):
                 if stop_flag.item():
                     if self.rank == 0:
                         log.info("Early stopping triggered.")
-                        self.wandb_run.log({'early_stopped': True})
+                        self.tracker.wandb_log({'early_stopped': True})
                     if self.is_distributed: # Ensure we stop on all processes. Barrier has to be called from all of the network (processes)
                         torch.distributed.barrier()
                     break

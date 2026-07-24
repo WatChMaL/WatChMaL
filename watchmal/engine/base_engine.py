@@ -22,6 +22,7 @@ from torch.utils.data import DataLoader
 # watchmal imports
 from watchmal.dataset.samplers.samplers import DistributedSamplerWrapper
 from watchmal.utils.logging_utils import setup_logging
+from watchmal.utils.tracking import RunTracker
 
 log = setup_logging(__name__)
 
@@ -126,6 +127,7 @@ class BaseEngine(ABC):
         dump_path,
         wandb_run=None,
         dataset=None,
+        logging_csv=True,
     ):
         """
         Parameters
@@ -144,10 +146,18 @@ class BaseEngine(ABC):
             If set, subclasses may use it for logging (e.g. save_state can log artifacts).
         dataset : optional
             Pre-built dataset instance (for graph-style pipeline). If None, set later via set_dataset or via config-based configure_data_loaders.
+        logging_csv : bool
+            Whether to write the analysis-compatible CSV logs (default True). CSV stays an
+            option; wandb is enabled independently by whether `wandb_run` is set.
         """
         self.dump_path = dump_path
         self.wandb_run = wandb_run
         self.rank = rank
+        # Unified tracker: analysis-compatible CSV (default on) + optional wandb. Every
+        # engine logs through this, so all model families share the same tracking options.
+        self.tracker = RunTracker(
+            dump_path=dump_path, rank=rank, wandb_run=wandb_run, csv_enabled=logging_csv
+        )
         self.device = torch.device(device)
         self.model = model
         self.target_key = target_key
