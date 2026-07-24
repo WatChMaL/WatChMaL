@@ -23,9 +23,9 @@ already hold) and **job submission** (`sbatch`, queued by SLURM).
 
 | Script                     | Purpose                                                                       | Execution          | When to Use                                                       |
 | -------------------------- | ----------------------------------------------------------------------------- | ------------------ | ---------------------------------------------------------------- |
-| `run_in_container.sh`      | Host launcher: binds your repo + data, picks the image + task, runs one of the in-container scripts below | Direct bash        | Interactive container runs (single- or multi-ring)               |
-| `train_sr_in_container.sh` | In-container half for a **single-ring** task (GAT classification by default)  | (not run directly) | Selected via `RUN_SCRIPT` in `run_in_container.sh`               |
-| `train_mr_in_container.sh` | In-container half for **multi-ring** segmentation                             | (not run directly) | Selected via `RUN_SCRIPT` in `run_in_container.sh`               |
+| `run_in_container.sh`      | Host launcher: `--hk`/`--t2k` picks the partition (images + data paths), `--mr`/`--sr` picks the task; binds your repo + data and runs the matching in-container script | Direct bash        | Interactive container runs (single- or multi-ring)               |
+| `train_sr_in_container.sh` | In-container half for a **single-ring** task (GAT classification by default)  | (not run directly) | Selected by `--sr` in `run_in_container.sh`                       |
+| `train_mr_in_container.sh` | In-container half for **multi-ring** segmentation                             | (not run directly) | Selected by `--mr` in `run_in_container.sh`                       |
 
 ### Job submission (SLURM)
 
@@ -37,33 +37,34 @@ already hold) and **job submission** (`sbatch`, queued by SLURM).
 
 ## Choosing an image: single-ring vs multi-ring
 
-There is no single image that covers everything — the multi-ring and single-ring stacks
-need different CUDA / library builds. Pick the image (and matching task script) for your
-model family; full list in
+You no longer edit the script to pick an image — `run_in_container.sh` selects it from two
+flags: `--hk`/`--t2k` (partition = which cluster's images + reference data) and
+`--mr`/`--sr` (task). There is no single image that covers everything: multi-ring needs
+`spconv`, single-ring needs PyG. Full image list in
 [docs/cclyon_available_containers.md](../../docs/cclyon_available_containers.md).
 
-| Task                          | In-container script        | Image                                                      | Notes                                                                 |
-| ----------------------------- | -------------------------- | ---------------------------------------------------------- | -------------------------------------------------------------------- |
-| **Multi-ring** (sparse 3D CNN) | `train_mr_in_container.sh` | `/sps/t2k/melbaz/env/ml_image.sif`                         | Ships **spconv**. Older CUDA/torch. Also runs single-ring models.    |
-| **Single-ring** (GAT/GCN, PyG) | `train_sr_in_container.sh` | either — see the GPU note below                            | PyG image is PyTorch 2.11 + CUDA 13.0 + **PyG**. No spconv.          |
+| Flags        | In-container script        | Image                                                      | Notes                                                             |
+| ------------ | -------------------------- | ---------------------------------------------------------- | ---------------------------------------------------------------- |
+| `--hk --mr`  | `train_mr_in_container.sh` | `/sps/hyperk/zhu/CAVERNS/env/ml_image.sif`                 | Ships **spconv**. Also runs single-ring.                         |
+| `--hk --sr`  | `train_sr_in_container.sh` | `/sps/hyperk/zhu/CAVERNS/env/ml_image.sif`                 | Same image; runs single-ring too.                               |
+| `--t2k --mr` | `train_mr_in_container.sh` | `/sps/t2k/melbaz/env/ml_image.sif`                         | Ships **spconv**. Older CUDA/torch. Also runs single-ring.       |
+| `--t2k --sr` | `train_sr_in_container.sh` | `/sps/t2k/eleblevec/containers/pytorch_pyg_cu130_v1.1.sif` | PyTorch 2.11 + CUDA 13.0 + **PyG**. **H100 only** (see below).   |
 
-You select the pair inside `run_in_container.sh` (the `RUN_SCRIPT`, `IMAGE`, and
-`BIND_DATA` lines are commented in pairs — flip them together).
+Defaults are `--hk --mr` (so a bare `bash run_in_container.sh` runs multi-ring on the
+hyperk image).
 
-> ⚠️ **Single-ring: the image depends on which GPU you get.** CC-Lyon's **V100** nodes do
-> not support CUDA 13.0, so `pytorch_pyg_cu130_v1.1.sif` will **not** run there.
+> ⚠️ **`--t2k --sr` defaults to the CUDA 13.0 image, which does NOT run on V100.** CC-Lyon's
+> **V100** nodes do not support CUDA 13.0, so `pytorch_pyg_cu130_v1.1.sif` fails there. The
+> script prints this warning whenever you pass `--t2k --sr`.
 >
-> | Your GPU | Single-ring image to use                                                       |
-> | -------- | ------------------------------------------------------------------------------ |
-> | **V100** | `/sps/t2k/melbaz/env/ml_image.sif` only (older CUDA — also handles single-ring) |
-> | **H100** | either image works; prefer `pytorch_pyg_cu130_v1.1.sif` (newer torch + PyG)    |
+> If you are on a **V100**, edit the `t2k_sr)` case in `run_in_container.sh` and set:
 >
-> This is why `run_in_container.sh` ships with `RUN_SCRIPT=train_sr_in_container.sh` (single-ring)
-> but `IMAGE=/sps/t2k/melbaz/env/ml_image.sif` — that pairing is the one that runs
-> everywhere. Switch the image to the PyG one only once you know you are on an H100.
+> ```bash
+> IMAGE=/sps/t2k/melbaz/env/ml_image.sif   # older CUDA — also handles single-ring
+> ```
 >
-> **Multi-ring is unaffected**: `ml_image.sif` is the only image shipping `spconv`, so it
-> is always the multi-ring choice regardless of GPU.
+> On **H100** the default PyG image is preferred (newer torch + PyG). The `--hk` images and
+> **all multi-ring** runs are unaffected (`ml_image.sif` is the only one shipping `spconv`).
 
 ---
 
@@ -74,42 +75,40 @@ You select the pair inside `run_in_container.sh` (the `RUN_SCRIPT`, `IMAGE`, and
 
 Two-script pattern:
 
-- `run_in_container.sh` runs on the **host**: it binds your repo + data (+ index list for
-  single-ring) into the image, chooses the image and the in-container task script, and
-  controls wandb via env vars (`LAUNCH_WANDB`, `WANDB_MODE`, key file).
+- `run_in_container.sh` runs on the **host**: parses `--hk`/`--t2k` and `--mr`/`--sr`,
+  binds your repo + data (+ index list for single-ring) into the chosen image, and controls
+  wandb via env vars (`LAUNCH_WANDB`, `WANDB_MODE`, key file).
 - `train_sr_in_container.sh` / `train_mr_in_container.sh` run **inside** the image: they
   set matplotlib/hydra (and `SPCONV_ALGO` for multi-ring) writable dirs, then launch
   `main.py` with the right config (`gat_classification_container` for single-ring,
   `multiring_segmentation_train` for multi-ring).
 
-To switch task, edit the paired settings near the top of `run_in_container.sh`:
+Usage:
 
 ```bash
-# --- single-ring (default) ---
-RUN_SCRIPT="${SCRIPT_DIR}/train_sr_in_container.sh"
-BIND_DATA=/sps/hyperk/Datasets/graph_datasets:/workspace/work/data
-IMAGE=/sps/t2k/melbaz/env/ml_image.sif                          # V100-safe default
-# IMAGE=/sps/t2k/eleblevec/containers/pytorch_pyg_cu130_v1.1.sif  # H100 only
+bash run_in_container.sh [--hk|--t2k] [--mr|--sr] [extra hydra overrides...]
 
-# --- multi-ring: comment the three lines above and use these instead ---
-# RUN_SCRIPT="${SCRIPT_DIR}/train_mr_in_container.sh"
-# BIND_DATA="/sps/t2k/melbaz/Simulation/output:/workspace/work/data"
-# IMAGE=/sps/t2k/melbaz/env/ml_image.sif
+  --hk | --hyperk   hyperk-partition images + data paths (default)
+  --t2k             t2k-partition images + data paths
+  --mr              multi-ring segmentation fit (default)
+  --sr              single-ring (GAT) fit
+```
+
+Examples (flags can be in any order; anything else is forwarded verbatim to `main.py`):
+
+```bash
+bash run_in_container.sh                              # = --hk --mr
+bash run_in_container.sh --t2k --sr                   # single-ring, t2k PyG image (H100)
+bash run_in_container.sh --hk --mr gpu_list=[0,1]     # multi-ring on 2 GPUs
+bash run_in_container.sh --t2k --mr tasks.train.epochs=10
 ```
 
 The repo location is auto-detected from the script's own path (override with
 `NEUNET_ROOT`). The single-ring datasets also read a train/val/test index list from a
-second bind, `BIND_INDEX` (`/sps/t2k/eleblevec/NeuNetSoft/index_lists` ->
-`/workspace/work/index_lists`); the `*_container.yaml` dataset configs already point at
-those in-container mount points (see
+second bind, `BIND_INDEX` (mounted to `/workspace/work/index_lists`), added automatically
+only for `--sr`; multi-ring does not use it. The `*_container.yaml` dataset configs already
+point at those in-container mount points (see
 [docs/cclyon_user_specific_paths.md](../../docs/cclyon_user_specific_paths.md)).
-
-Run it, optionally appending extra Hydra overrides:
-
-```bash
-./run_in_container.sh                       # single-ring (default) or multi-ring, per your edits
-./run_in_container.sh tasks.train.epochs=10 # extra Hydra overrides are forwarded to main.py
-```
 
 ---
 

@@ -1,8 +1,16 @@
 # Tutorial Launch Scripts - Quick Start Guide
 
-🐳 **Using containers ?** For apptainer-based launching — required for multi-ring  
-segmentation (`spconv` only ships in an image) and for the smoke test — see the  
-[container README](container/README.md). and the `container` folder.
+🐳 **Using containers ?** For apptainer-based launching — required for multi-ring
+segmentation (`spconv` only ships in an image) and for the smoke test — see the
+[container README](container/README.md) and the `container/` folder. Quick start: the
+launcher picks the image + data from a partition flag (`--hk`/`--t2k`) and a task flag
+(`--mr`/`--sr`); extra args are forwarded to `main.py`:
+
+```bash
+bash container/run_in_container.sh [--hk|--t2k] [--mr|--sr] [extra hydra overrides...]
+# e.g. multi-ring on the hyperk image, 2 GPUs (both flags default so they can be omitted):
+bash container/run_in_container.sh --hk --mr gpu_list=[0,1]
+```
 
 > These are the shipped reference scripts — don't edit them in place. Copy them to your own  
 > `launch/` folder with `bash setup/make_dirs.sh` and customize there (see the main README,  
