@@ -307,6 +307,47 @@ class BaseEngine(ABC):
             return tensor
         return tensor
 
+    # ------------------------------------------------------------------ #
+    # CNN-family DDP adapters (same collectives as get_reduced/get_gathered,
+    # but with the original CNN-core return types: python floats / numpy). They
+    # live on the shared base so every engine family reduces/gathers through one
+    # definition site. get_reduced/get_gathered keep tensors (graph/MR loops call
+    # them only when distributed); get_synchronized_* handle the non-distributed
+    # case internally and are what the CNN reconstruction loop uses.
+    # ------------------------------------------------------------------ #
+    def get_synchronized_outputs(self, output_dict):
+        """
+        Gather per-process output tensors to rank 0 (concatenated) and return numpy arrays.
+        Non-distributed: just detach/cpu/numpy each tensor.
+        """
+        global_output_dict = {}
+        for name, tensor in output_dict.items():
+            if self.is_distributed:
+                if self.rank == 0:
+                    tensor_list = [torch.zeros_like(tensor, device=self.device) for _ in range(self.n_gpus)]
+                    torch.distributed.gather(tensor, tensor_list)
+                    global_output_dict[name] = torch.cat(tensor_list).detach().cpu().numpy()
+                else:
+                    torch.distributed.gather(tensor, dst=0)
+            else:
+                global_output_dict[name] = tensor.detach().cpu().numpy()
+        return global_output_dict
+
+    def get_synchronized_metrics(self, metric_dict):
+        """
+        Reduce (sum then divide by n_gpus) per-process metric tensors to rank 0 and return
+        python floats. Non-distributed: just .item() each tensor.
+        """
+        global_metric_dict = {}
+        for name, tensor in zip(metric_dict.keys(), metric_dict.values()):
+            if self.is_distributed:
+                torch.distributed.reduce(tensor, 0)
+                if self.rank == 0:
+                    global_metric_dict[name] = tensor.item() / self.n_gpus
+            else:
+                global_metric_dict[name] = tensor.item()
+        return global_metric_dict
+
     def backward(self):
         """Backward pass using the loss computed for the current mini-batch."""
         self.optimizer.zero_grad()

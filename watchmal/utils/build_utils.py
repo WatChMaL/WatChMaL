@@ -15,9 +15,15 @@ from watchmal.utils.logging_utils_caverns import setup_logging
 log = setup_logging(__name__)
 
 
-def build_model(model_config, device, use_ddp=False):
+def build_model(model_config, device, use_ddp=False, find_unused_parameters=True):
     """
-    Build the model and wrap it with SynBatchNorm and  data_config if using torch DDP
+    Build the model and wrap it with SyncBatchNorm + DistributedDataParallel if using DDP.
+
+    find_unused_parameters : bool
+        Passed to DDP. Default True is the safe superset (True never errors on models with
+        unused parameters, only adds a little overhead; False can raise at runtime). Set
+        it to False from the config for a small speed-up on models known to use every
+        parameter every forward (e.g. plain CNNs / ResNets).
     """
     model = instantiate(model_config)
     nb_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -32,7 +38,7 @@ def build_model(model_config, device, use_ddp=False):
         model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
 
         # Wrap the model with DistributedDataParallel mode
-        model = DDP(model, device_ids=[device], find_unused_parameters=True)
+        model = DDP(model, device_ids=[device], find_unused_parameters=find_unused_parameters)
 
     return model, nb_parameters
 
