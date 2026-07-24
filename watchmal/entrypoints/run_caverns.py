@@ -60,8 +60,9 @@ def run(rank, gpu_list, dataset, wandb_run, hydra_config, global_hydra_config):
     restrict_logging_to_rank0(rank)
 
     # Instantiate the model (for each process if many)
-    # Seed with the run-wide value un-offset: the engine captures it at construction and
-    # uses it wherever the ranks must agree - sampler ordering, multi-ring train/val split.
+    # One seed for the whole run, set once. The engine captures it at construction
+    # (self.seed = torch.initial_seed()) and every rank holds the same value, so sampler
+    # ordering and the multi-ring train/val split agree across ranks.
     torch.manual_seed(hydra_config.seed)
 
     model, nb_params = build_model(
@@ -71,17 +72,6 @@ def run(rank, gpu_list, dataset, wandb_run, hydra_config, global_hydra_config):
     )
     if wandb_run is not None:
         wandb_run.log({'nb_params': nb_params})
-
-    # A model constructor calling torch.manual_seed() would quietly take over the run's
-    # randomness and make the configured seed a no-op from here on
-    # Catch it and restore the intended stream.
-    if torch.initial_seed() != hydra_config.seed:
-        log.warning(
-            f"Model construction reseeded the global RNG (expected {hydra_config.seed}, "
-            f"found {torch.initial_seed()}). Restoring the configured seed - remove the "
-            f"torch.manual_seed() call from the model."
-        )
-        torch.manual_seed(hydra_config.seed)
 
     # Instantiate the engine (for each process if many)
     # Pass pre-built dataset if it exists (in_memory case)
@@ -95,11 +85,6 @@ def run(rank, gpu_list, dataset, wandb_run, hydra_config, global_hydra_config):
         wandb_run=wandb_run,
         dataset=dataset
     )
-
-    # From here on, offset by rank. Anything that *should* differ between ranks - dropout,
-    # augmentation, and the DataLoader workers, whose seeds torch derives from this stream
-    # now are different.
-    torch.manual_seed(hydra_config.seed + rank)
 
     for task, task_config in hydra_config.tasks.items():
 
