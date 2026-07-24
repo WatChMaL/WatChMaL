@@ -14,13 +14,14 @@ import torch
 from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import DataLoader
 
-import wandb
-
+# wandb is an OPTIONAL dependency (see requirements-tracking.txt). It is imported lazily
+# where it is actually used (save_state), so a run with no wandb_run - i.e. CSV-only
+# tracking - never needs the package installed.
 # torch_geometric is imported lazily in build_loader, see there.
 
 # watchmal imports
 from watchmal.dataset.samplers.samplers import DistributedSamplerWrapper
-from watchmal.utils.logging_utils_caverns import setup_logging
+from watchmal.utils.logging_utils import setup_logging
 
 log = setup_logging(__name__)
 
@@ -329,6 +330,7 @@ class BaseEngine(ABC):
         log.info(f"Saved state as: {filename}")
 
         if self.wandb_run is not None and self.rank == 0 and suffix != "_LASTGOOD":
+            import wandb  # optional dependency; only needed when a wandb run is active
             artifact = wandb.Artifact(name=f"model-and-opti-checkpoints-{self.wandb_run.id}", type="model-and-opti")
             artifact.add_file(filename)
             artifact.metadata["checkpoints_dir"] = filename
