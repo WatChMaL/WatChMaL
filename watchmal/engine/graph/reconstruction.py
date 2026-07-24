@@ -18,6 +18,7 @@ import torch
 from watchmal.dataset.samplers.samplers import SubsetSequentialSampler
 from watchmal.utils.logging_utils_caverns import setup_logging
 from watchmal.utils.early_stopping import EarlyStopping
+from watchmal.utils.banner import show_training_banner
 
 from watchmal.engine.base_engine import BaseEngine
 
@@ -320,7 +321,13 @@ class ReconstructionEngine(BaseEngine):
         start_run_time = datetime.now()
         #log.info(f"Engine : {self.rank} | Dataloaders : {self.data_loaders}")
         if self.rank == 0:
-            log.info( f"\033[1;96m********** 🚀 Starting training for {epochs} epochs 🚀 **********\033[0m")
+            n_params = sum(p.numel() for p in self.module.parameters() if p.requires_grad)
+            show_training_banner(
+                engine="graph/reconstruction",
+                device=self.device,
+                params=n_params,
+                epochs=epochs,
+            )
         
 
         # initialize epoch and iteration counters

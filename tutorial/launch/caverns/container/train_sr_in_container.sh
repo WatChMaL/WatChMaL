@@ -3,6 +3,7 @@
 # Hydra path management: cwd is the bound repo root (/workspace/work/ml, set by
 # the launcher's --pwd), so no host/cluster path is needed here.
 hydra_searchpath="$(pwd)/tutorial/config/caverns"
+export NO_COLOR=1
 
 # ---- matplotlib / hydra ----
 export MPLCONFIGDIR=/tmp/mpl

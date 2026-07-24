@@ -4,6 +4,7 @@
 # the launcher's --pwd), so no host/cluster path is needed here.
 hydra_searchpath="$(pwd)/tutorial/config/caverns"
 
+export NO_COLOR=1
 # ---- matplotlib / spconv / hydra ----
 export MPLCONFIGDIR=/tmp/mpl
 export MPLBACKEND=Agg
