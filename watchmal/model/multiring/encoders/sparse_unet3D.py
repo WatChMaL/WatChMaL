@@ -6,13 +6,13 @@ This script defines:
 - SubMBlock: A residual block with two submanifold sparse convolutions.
 - Down: A downsampling block with a strided sparse convolution.
 - Up: An upsampling block with a sparse inverse convolution and skip connection.
-- SparseUNet3D: The main UNet architecture that processes sparse voxel data and produces multi-level features at memory and voxel levels.
+- SparseUNet3D: The main UNet architecture that processes sparse voxel data and produces multi-level features at bottleneck and voxel levels.
 The SparseUNet3D takes as input a batch of sparse voxel data (coordinates and features) and produces:
 - full: The final sparse tensor after the UNet.
 - full_feat_all: The features of the final sparse tensor.
 - full_idx_all: The coordinates of the final sparse tensor.
-- mem_feat_list: A list of memory features regrouped by event.
-- mem_coord_list: A list of memory coordinates regrouped by event.
+- bottleneck_feat_list: A list of (projected) deepest-level features regrouped by event.
+- bottleneck_coord_list: A list of deepest-level coordinates regrouped by event.
 - voxel_feat_list: A list of voxel features regrouped by event.
 - voxel_idx_list: A list of voxel coordinates regrouped by event.
 """
@@ -112,22 +112,32 @@ class SparseUNet3D(nn.Module):
     """
     Coords: [N,4]=[b,z,y,x] or [N,5]=[b,t,z,y,x]. For 4D, time is folded into a composite batch.
     Returns:
-      - mem_feat_list:  List[[U_b, d_mem]]
-      - mem_coord_list: List[[U_b, 3]]
+      - bottleneck_feat_list:  List[[U_b, c_bottleneck]]  (deepest down-conv level, raw)
+      - bottleneck_coord_list: List[[U_b, 3]]
       - voxel_feat_list: List[[V_b, c_out]]
       - voxel_idx_list:  List[[V_b, 3]]
+
+    Design note ("memory" -> "bottleneck"): the encoder previously exposed a learned
+    projection of an intermediate level chosen by `mem_level` to a fixed width `d_mem`
+    ("memory tokens"). That indirection was dropped: the head now consumes the deepest
+    down-conv level directly as the decoder source, so the exposed width is exactly
+    `c_bottleneck = channels[-1]` (no projection, no extra hyper-parameters). Consequence:
+    when a head feeds these features straight to a `d_model` decoder (voxel_attention=False),
+    it needs `channels[-1] == d_model` (asserted head-side). `mem_level`/`d_mem`/`d_bottleneck`
+    are kept only so older configs still instantiate; they are ignored.
     """
     def __init__(
         self,
         c_in: int = 5,
         c_stem: int = 64,
         channels: Tuple[int, ...] = (96, 160, 256),
-        mem_level: int = 2,
-        d_mem: int = 256,
+        d_bottleneck=None,  # deprecated/ignored; bottleneck width is channels[-1]
+        mem_level=None,     # deprecated/ignored (kept so old configs still instantiate)
+        d_mem=None,         # deprecated/ignored
     ):
         super().__init__()
         self.channels = tuple(channels)
-        self.mem_level = int(mem_level)
+        self.c_bottleneck = self.channels[-1]  # deepest down-conv width
 
         self.stem = SubMBlock(c_in, c_stem, key="subm1")
 
@@ -150,7 +160,6 @@ class SparseUNet3D(nn.Module):
             c_in_up = c_out
 
         self.out_proj = SubMConv3d(c_in_up, c_stem, 1, bias=False, indice_key="subm1")
-        self.mem_proj = nn.Linear(self.channels[self.mem_level - 1], d_mem)
 
     @staticmethod
     def _build_sparse(feats: torch.Tensor,
@@ -189,9 +198,9 @@ class SparseUNet3D(nn.Module):
             cur = blk(d(cur))
             levels.append(cur)
 
-        mem = levels[self.mem_level]
-        mem_feat_all = self.mem_proj(mem.features)
-        mem_idx_all = mem.indices
+        bottleneck = levels[-1]
+        bn_feat_all = bottleneck.features          # raw deepest-conv features [.,c_bottleneck]
+        bn_idx_all = bottleneck.indices
 
         cur = levels[-1]
         for k, d in enumerate(self.up_skip_levels):
@@ -202,14 +211,14 @@ class SparseUNet3D(nn.Module):
         full_feat_all = full.features
 
         comp_vox = full_idx_all[:, 0]
-        comp_mem = mem_idx_all[:, 0]
+        comp_bn = bn_idx_all[:, 0]
 
         return {
             "full": full,
             "full_feat": full_feat_all,
             "full_idx": full_idx_all[:, 1:],
-            "mem_feat_list": self._regroup_by_batch(mem_feat_all, comp_mem, batch_size),
-            "mem_coord_list": self._regroup_by_batch(mem_idx_all[:, 1:], comp_mem, batch_size),
+            "bottleneck_feat_list": self._regroup_by_batch(bn_feat_all, comp_bn, batch_size),
+            "bottleneck_coord_list": self._regroup_by_batch(bn_idx_all[:, 1:], comp_bn, batch_size),
             "voxel_feat_list": self._regroup_by_batch(full_feat_all, comp_vox, batch_size),
             "voxel_idx_list": self._regroup_by_batch(full_idx_all[:, 1:], comp_vox, batch_size),
         }

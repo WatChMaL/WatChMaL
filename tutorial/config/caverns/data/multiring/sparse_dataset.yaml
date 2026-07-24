@@ -1,0 +1,22 @@
+dataset:
+  kind: sparse_cnn
+  variant: 3d
+  target_3d: watchmal.dataset.multiring.sparse_cnn.HyperKSparseCNN3D
+  params:
+    base_dir: /workspace/work/data
+    min_charge: 0.01
+    cache_in_ram: true
+    time_bin_ns: 10.0
+
+    grid:
+      axis_limit: 4000.0
+      grid_size: 120
+
+    num_batches: 740
+    feat_norm: standard
+    feat_norm_indices: [0, 1, 2, 3, 4]
+    stats_max_events: 10000000
+    max_parents: 5
+
+    keep_in_digit: true
+    add_meta: false

@@ -61,6 +61,7 @@ class QueryPerVoxelSoftmaxHead(nn.Module):
         alpha: float = 1.5,
         n_iter: int = 50,
         ensure_sum_one: bool = True,
+        count_mode: bool = False,
     ):
         super().__init__()
         self.pe = SinPE(pe_bands, d_out=d_model)
@@ -72,6 +73,7 @@ class QueryPerVoxelSoftmaxHead(nn.Module):
 
         self.n_queries = n_queries + 1
 
+        self.d_model = int(d_model)
         self.voxel_attention = voxel_attention
         self.vox_to_dec = nn.Linear(c_vox, d_model)
 
@@ -80,6 +82,7 @@ class QueryPerVoxelSoftmaxHead(nn.Module):
         self.alpha = alpha
         self.n_iter = n_iter
         self.ensure_sum_one = ensure_sum_one
+        self.count_mode = bool(count_mode)
 
     def _empty_event(self, vox_f: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Zero placeholders (Z, Pi, H) for an event with no voxels/memory."""
@@ -97,10 +100,10 @@ class QueryPerVoxelSoftmaxHead(nn.Module):
         H_list: List[torch.Tensor] = []
 
         voxel_idx_list = enc.get("voxel_idx_list", None)
+        bottleneck_feat_list = enc.get("bottleneck_feat_list", None)
+        bottleneck_coord_list = enc.get("bottleneck_coord_list", None)
 
-        for idx, (mem_f, mem_c, vox_f) in enumerate(
-            zip(enc["mem_feat_list"], enc["mem_coord_list"], enc["voxel_feat_list"])
-        ):
+        for idx, vox_f in enumerate(enc["voxel_feat_list"]):
 
             if vox_f.numel() == 0:
                 z, pi, h = self._empty_event(vox_f)
@@ -111,17 +114,30 @@ class QueryPerVoxelSoftmaxHead(nn.Module):
                 if voxel_idx_list is None:
                     raise KeyError("Expected enc['voxel_idx_list'] when voxel_attention=True.")
                 vox_idx = voxel_idx_list[idx]                 # [V,3] (z,y,x)
-                mem_for_dec = self.vox_to_dec(vox_f)          # [V,D]
+                dec_src = self.vox_to_dec(vox_f)              # [V,D]
                 pe_for_dec = self.pe(vox_idx.float(), grid)   # [V,D]
             else:
-                if mem_f.numel() == 0:
+                if bottleneck_feat_list is None or bottleneck_coord_list is None:
+                    raise KeyError("Expected enc['bottleneck_*_list'] when voxel_attention=False.")
+                bn_f = bottleneck_feat_list[idx]              # [U, c_bottleneck]
+                bn_c = bottleneck_coord_list[idx]
+                if bn_f.numel() == 0:
                     z, pi, h = self._empty_event(vox_f)
                     Z_list.append(z); Pi_list.append(pi); H_list.append(h)
                     continue
-                mem_for_dec = mem_f                           # [U,D]
-                pe_for_dec = self.pe(mem_c.float(), grid)     # [U,D]
+                # With voxel_attention=False the raw bottleneck features are fed straight
+                # to the decoder (no projection), so their width must equal d_model.
+                # This requires encoder channels[-1] == head d_model; assert here to fail
+                # with a clear message instead of a cryptic shape error inside the decoder.
+                assert bn_f.shape[-1] == self.d_model, (
+                    f"bottleneck feature width ({bn_f.shape[-1]}) != head d_model "
+                    f"({self.d_model}); set encoder channels[-1] == d_model, or enable "
+                    f"voxel_attention."
+                )
+                dec_src = bn_f
+                pe_for_dec = self.pe(bn_c.float(), grid)       # [U,D]
 
-            H = self.dec(mem_for_dec, pe_for_dec)             # [N+1,D]
+            H = self.dec(dec_src, pe_for_dec)                 # [N+1,D]
 
             E = self.vox_to_mask(vox_f)                       # [V,Cm]
             P = self.q_to_mask(H)                             # [N+1,Cm]
@@ -141,4 +157,38 @@ class QueryPerVoxelSoftmaxHead(nn.Module):
             Pi_list.append(Pi)
             H_list.append(H)
 
-        return {"Z_list": Z_list, "Pi_list": Pi_list, "H_list": H_list}
+        out = {"Z_list": Z_list, "Pi_list": Pi_list, "H_list": H_list}
+        if self.count_mode:
+            out["LogLambda_list"] = Z_list
+        return out
+
+class VertexEnergyRegressionHead(nn.Module):
+    """Optional aux head from the encoder bottleneck of the UNET regressing vertex energy, direction, and PID."""
+
+    def __init__(self, c_in: int, n_particles: int = 5, n_targets: int = 7,
+                 n_classes: int = 2, hidden: int = 256, pool: str = "mean"):
+        super().__init__()
+        self.n_particles = int(n_particles)
+        self.n_targets = int(n_targets)
+        self.n_classes = int(n_classes)
+        self.pool = str(pool)
+        self.trunk = nn.Sequential(
+            nn.Linear(c_in, hidden), nn.ReLU(inplace=True),
+            nn.Linear(hidden, hidden), nn.ReLU(inplace=True),
+        )
+        self.reg_head = nn.Linear(hidden, self.n_particles * self.n_targets)
+        self.pid_head = nn.Linear(hidden, self.n_particles * self.n_classes)
+
+    def forward(self, enc: Dict[str, Any], batch: Dict[str, Any]) -> Dict[str, Any]:
+        reg_list: List[torch.Tensor] = []
+        pid_list: List[torch.Tensor] = []
+        for f in enc["bottleneck_feat_list"]:
+            if f.numel() == 0:
+                reg_list.append(f.new_zeros((self.n_particles, self.n_targets)))
+                pid_list.append(f.new_zeros((self.n_particles, self.n_classes)))
+                continue
+            pooled = f.max(dim=0).values if self.pool == "max" else f.mean(dim=0)
+            h = self.trunk(pooled)
+            reg_list.append(self.reg_head(h).view(self.n_particles, self.n_targets))
+            pid_list.append(self.pid_head(h).view(self.n_particles, self.n_classes))
+        return {"vtx_ene_pred_list": reg_list, "pid_logits_list": pid_list}
