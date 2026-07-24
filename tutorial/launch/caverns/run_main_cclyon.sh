@@ -67,7 +67,6 @@ echo "=========================================="
 cd $NeuNet_folder_path
 source $MINICONDA_DIR/bin/activate $PYTHON_ENV_NAME
 
-
 # add -c job aat the end to launch a dry run
 # (main config will be displayed & no training will be performed), 
 python \

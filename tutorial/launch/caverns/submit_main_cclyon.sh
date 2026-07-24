@@ -26,13 +26,15 @@
 #SBATCH --partition=gpu_v100                       # Partition: gpu, htc, etc.
 #SBATCH --ntasks=1                           # Number of parallel processes
 #SBATCH --cpus-per-task=5                    # CPUs per task
-#SBATCH --gres=gpu:2                   # GPU: v100:1, a100:1, etc.
+#SBATCH --gres=gpu:1                   # GPU: v100:1, a100:1, etc.
 #SBATCH --mem=50G                            # Memory required
-#SBATCH --time=0-00:30:00                    # Time limit (days-hours:minutes:seconds)
+#SBATCH --time=0-01:00:00                    # Time limit (days-hours:minutes:seconds)
 
 # ============================================================================
 # Training Configuration - EDIT THESE
 # ============================================================================
+CONDA_ENV_NAME=pt28_cuda129
+MINICONDA_PATH=/sps/t2k/eleblevec/miniconda3/
 
 # Path to WatChMaL repository — auto-detected: SLURM_SUBMIT_DIR when submitted
 # with sbatch (so RUN `sbatch` FROM THE REPO ROOT), script location otherwise.
@@ -54,7 +56,7 @@ config_name=gat_vertex_regression
 # For single GPU: 'gpu_list=[0]'
 # For multiple GPUs: 'gpu_list=[0,1]'
 # For CPU: 'gpu_list=[]'
-gpu_list='gpu_list=[0,1]'
+gpu_list='gpu_list=[0]'
 
 # Indicate master port in case of multi gpus training
 # MASTER_PORT=12357
@@ -75,6 +77,8 @@ echo "=========================================="
 cd $NeuNet_folder_path
 export HYDRA_FULL_ERROR=1
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+
+source ${MINICONDA_PATH}/bin/activate ${CONDA_ENV_NAME}
 
 python \
     main.py \

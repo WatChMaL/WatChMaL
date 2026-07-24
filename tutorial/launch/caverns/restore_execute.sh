@@ -22,7 +22,8 @@
 # ============================================================================
 # Restore Configuration - EDIT THESE
 # ============================================================================
-
+CONDA_ENV_NAME=pt28_cuda129
+MINICONDA_PATH=/sps/t2k/eleblevec/miniconda3/
 # Path to WatChMaL repository — auto-detected from this script's location
 # (override by exporting NEUNET_ROOT).
 NeuNet_folder_path="${NEUNET_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)}"
@@ -59,8 +60,7 @@ echo "=========================================="
 cd $NeuNet_folder_path
 export HYDRA_FULL_ERROR=1
 
-# Activate conda environment (adjust path and name, or activate beforehand)
-# source /path/to/miniconda3/bin/activate <your_env>
+source ${MINICONDA_PATH}/bin/activate ${CONDA_ENV_NAME}
 
 python \
     main.py \
