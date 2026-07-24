@@ -1,0 +1,49 @@
+# Tutorial config for VanillaGAT model - Regression task
+# This config demonstrates how to use the GraphAttentionNetwork with vanilla attention for graph regression
+#
+# Launch (same pattern as tutorial/launch/caverns/run_main_cclyon.sh: --config-path points at
+# main/, and hydra.searchpath adds the tutorial/config/caverns root so the group defaults resolve):
+#   python main.py \
+#       --config-path /ABS/PATH/TO/tutorial/config/caverns/main --config-name gat_vertex_regression \
+#       hydra.searchpath=[/ABS/PATH/TO/tutorial/config/caverns]
+# Set your dataset paths (split_path + graph_folder_path) in
+#   tutorial/config/caverns/data/dataset/20inch_pmt_knn5_vertex_regression.yaml
+
+MASTER_PORT: 12355
+core: caverns
+seed: 1234
+gpu_list: []  # Set to [0, 1, ...] to use specific GPUs
+
+kind: gnn
+launch_wandb: False  # Set to True if you want to use wandb logging
+
+defaults:
+    # Wandb configuration (only used if launch_wandb: True)
+    - wandb: tutorial
+    - model: vanilla_gat_vertex_regressor
+    
+    - engine: gnn_regressor
+    
+    # Dataset configuration - using tutorial dataset config
+    - data/dataset@data.dataset: 20inch_pmt_knn5_vertex_regression
+    - data/transforms@data.transforms: 20inch_pmt_vertex_regression
+    
+    # Training configuration
+    - tasks/train: gnn_train
+    - sampler@tasks.train.data_loaders.train.sampler_config: subset_random
+    - sampler@tasks.train.data_loaders.validation.sampler_config: subset_sequential
+    
+    - loss@tasks.train.loss: mse
+    - optimizers@tasks.train.optimizers: adam
+    
+    - scheduler@tasks.train.scheduler: reduce_lr_on_plateau
+    - scheduler@tasks.train.early_stopping: early_stopping
+    
+    - tasks/restore_best_state: restore_best
+    
+    # Evaluation configuration
+    - tasks/evaluate: gnn_evaluate
+    - sampler@tasks.evaluate.data_loaders.test.sampler_config: subset_sequential
+    - loss@tasks.evaluate.loss: mse
+    
+    - _self_

@@ -1,18 +1,26 @@
 """
 Main file used for running the code
+
+This is the single entry point for both cores. Everything up to the worker spawn is
+core-agnostic; the per-core startup lives in watchmal/entrypoints/run_<core>.py and is
+selected by the optional top-level `core` key, which defaults to the watchmal core so
+existing configs are unaffected.
+
+The worker functions share one signature -
+`run(rank, gpu_list, dataset, wandb_run, hydra_config, global_hydra_config)` - so the
+spawn below is uniform; the watchmal worker ignores `dataset`/`wandb_run` (it builds
+datasets in the engine and has no wandb integration), while the caverns worker uses
+them (in-memory dataset prebuilt here, wandb run initialised here).
 """
 
 # hydra imports
 import hydra
-from omegaconf import OmegaConf, open_dict
-from hydra.utils import instantiate, to_absolute_path
+from omegaconf import OmegaConf
+from hydra.utils import to_absolute_path
 from hydra.core.hydra_config import HydraConfig
-from hydra.core.utils import configure_log
 
 # torch imports
 import torch
-from torch.nn.parallel import DistributedDataParallel as DDP
-
 import torch.multiprocessing as mp
 
 # generic imports
@@ -23,8 +31,32 @@ from watchmal.utils.logging_utils import get_git_version
 
 log = logging.getLogger(__name__)
 
+CORES = ("watchmal", "caverns")
 
-@hydra.main(config_path='config/', config_name='resnet_train', version_base="1.1")
+
+def select_run(core):
+    """
+    Return the worker function of the requested core.
+
+    The import is done here rather than at module level so that a run only pulls in the
+    modules of the core it actually uses.
+
+    Args:
+        core ... name of the core to run, one of CORES
+
+    Returns:
+        the core's `run(rank, gpu_list, dataset, wandb_run, hydra_config, global_hydra_config)`
+    """
+    if core == "watchmal":
+        from watchmal.entrypoints.run_watchmal import run
+    elif core == "caverns":
+        from watchmal.entrypoints.run_caverns import run
+    else:
+        raise ValueError(f"Unknown core '{core}', expected one of {list(CORES)}")
+    return run
+
+
+@hydra.main(config_path='tutorial/config/watchmal', config_name='resnet_train', version_base="1.1")
 def main(config):
     """
     Run model using given config, spawn worker subprocesses as necessary
@@ -35,106 +67,68 @@ def main(config):
     log.info(f"Using the following git version of WatChMaL repository: {get_git_version(os.path.dirname(to_absolute_path(__file__)))}")
     log.info(f"Running with the following config:\n{OmegaConf.to_yaml(config)}")
 
+    core = config.get("core", "watchmal")
+    run = select_run(core)
+    log.info(f"Running with the '{core}' core")
+
+    global_hydra_config = HydraConfig.get()
+
+    # Seed policy is core-aware and settled here, before the spawn, so every rank shares
+    # the same value. The watchmal core auto-generates one if none is given (upstream
+    # behaviour; every shipped watchmal config uses seed: null); the caverns core
+    # requires one.
+    if config.get("seed", None) is None:
+        if core == "caverns":
+            log.error("No seed provided. The caverns core requires an explicit top-level `seed in the main config file")
+            raise SystemExit(1)
+        config.seed = torch.seed()
+        log.info(f"No seed provided; generated seed {config.seed}")
+
     if config.gpu_list is None:
         config.gpu_list = []
-    ngpus = len(config.gpu_list)
-    is_distributed = ngpus > 1
-    
-    # Initialize process group env variables
-    if is_distributed:
-        os.environ['MASTER_ADDR'] = 'localhost'
+    gpu_list = config.gpu_list
+    ngpus = len(gpu_list)
 
-        master_port = config.get("MASTER_PORT", 12355)
-            
-        # Automatically select port based on base gpu
-        master_port += config.gpu_list[0]
-        os.environ['MASTER_PORT'] = str(master_port)
-
-    # create run directory
-    os.makedirs(config.dump_path, exist_ok=True)
-    log.info(f"Output directory: {config.dump_path}")
-
-    # initialize seed
-    if config.seed is None:
-        config.seed = torch.seed()
-    torch.manual_seed(config.seed)
-    
-    if is_distributed:
-        log.info("Using multiprocessing...")
-        devids = [f"cuda:{x}" for x in config.gpu_list]
-        log.info(f"Using DistributedDataParallel on these devices: {devids}")
-        mp.spawn(main_worker_function, nprocs=ngpus, args=(config, HydraConfig.get()))
+    # wandb is a caverns feature for now; imported lazily so the watchmal core never needs it.
+    if config.get("launch_wandb", False) or ('WANDB_SWEEP_ID' in os.environ):
+        import wandb
+        wandb_conf = config.get("wandb", None)
+        if wandb_conf is None:
+            raise SystemExit(
+                "\nlaunch_wandb is set (or WANDB_SWEEP_ID is in the environment) but the "
+                "config has no `wandb` section to initialise from.\n"
+            )
+        wandb_run = wandb.init(**OmegaConf.to_container(wandb_conf, resolve=True))
+        # A wandb sweep overrides config values; fold them back in.
+        from watchmal.utils.build_utils import merge_config
+        config = merge_config(config, wandb.config)
+        wandb.config.update(OmegaConf.to_container(config))
     else:
-        log.info("Only one device found, not using multiprocessing...")
-        main_worker_function(0, config)
+        wandb_run = None
 
-
-def main_worker_function(rank, config, hydra_config=None):
-    """
-    Instantiate model on a particular GPU, and perform train/evaluation tasks as specified
-
-    Args:
-        rank            ... rank of process among all spawned processes (in multiprocessing mode)
-        config          ... hydra config specified in the @hydra.main annotation
-        hydra_config    ... HydraConfig object for logging in multiprocessing
-    """
-    ngpus = len(config.gpu_list)
-    is_distributed = ngpus > 1
-    if is_distributed:
-        # Spawned process needs to configure the job logging configuration
-        configure_log(hydra_config.job_logging, hydra_config.verbose)
-    if ngpus == 0:
-        device = torch.device("cpu")
+    # In-memory (pyg) datasets are built once here so each spawned worker does not
+    # reload them; every other dataset (all watchmal ones, which carry no `kind`) is
+    # built by the engine.
+    data_config = config.get("data", None)
+    dataset_config = data_config.get("dataset", None) if data_config is not None else None
+    dataset_kind = dataset_config.get("kind", "") if dataset_config is not None else ""
+    if 'in_memory' in dataset_kind:
+        if 'pyg_in_memory' in dataset_kind:
+            from watchmal.dataset.graph.data_utils import get_dataset
+            dataset = get_dataset(data_config)
+        else:
+            raise ValueError(f"Unknown in_memory dataset kind: {dataset_kind}")
     else:
-        # Infer rank from gpu and ngpus, rank is position in gpu list
-        device = torch.device(f"cuda:{config.gpu_list[rank]}")
-        torch.cuda.set_device(device)
-        if is_distributed:
-            # Set up pytorch distributed processing
-            torch.distributed.init_process_group('nccl', init_method='env://', world_size=ngpus, rank=rank, device_id=device)
+        dataset = None
 
-    log.info(f"Running main worker function rank {rank} on device: {device}")
-
-    # Instantiate model and engine
-    model = instantiate(config.model).to(device)
-
-    # Configure the device to be used for model training and inference
-    if is_distributed:
-        # Convert model batch norms to synchbatchnorm
-        model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
-        model = DDP(model, device_ids=[device])
-
-    # Instantiate the engine
-    engine = instantiate(config.engine, model=model, rank=rank, device=device, dump_path=config.dump_path)
-    
-    # Configure automatic mixed precision
-    engine.configure_amp(config.get("amp", False))
-    for task, task_config in config.tasks.items():
-        with open_dict(task_config):
-            # Configure data loaders
-            if 'data_loaders' in task_config:
-                engine.configure_data_loaders(config.data, task_config.pop("data_loaders"), is_distributed, config.seed)
-            # Configure optimizers
-            if 'optimizers' in task_config:
-                engine.configure_optimizers(task_config.pop("optimizers"))
-            # Configure scheduler
-            if 'scheduler' in task_config:
-                engine.configure_scheduler(task_config.pop("scheduler"))
-            # Configure loss
-            if 'loss' in task_config:
-                engine.configure_loss(task_config.pop("loss"))
-
-    # Perform tasks
-    for task, task_config in config.tasks.items():
-        if is_distributed:
-            # Before each task, ensure GPUs are in sync to avoid e.g. loading a state before a GPU finished training
-            torch.distributed.barrier()
-        getattr(engine, task)(**task_config)
-
-    if is_distributed:
-        torch.distributed.destroy_process_group()
+    if ngpus > 1:
+        log.info(f"Using DistributedDataParallel on devices: {[f'cuda:{x}' for x in gpu_list]}")
+        mp.spawn(run, nprocs=ngpus,
+                 args=(gpu_list, dataset, wandb_run, config, global_hydra_config))
+    else:
+        log.info("Single device, not using multiprocessing")
+        run(0, gpu_list, dataset, wandb_run, config, global_hydra_config)
 
 
 if __name__ == '__main__':
-    # pylint: disable=no-value-for-parameter
     main()

@@ -1,0 +1,10 @@
+# Tutorial restore best state config
+# This config restores the best checkpoint from training
+# The "best" checkpoint is automatically determined based on validation metrics
+
+# Checkpoint name: set to null to auto-detect the best checkpoint
+# If you want a specific checkpoint, set the name here (e.g., "checkpoint_epoch_50.pth")
+name: null
+
+# Note: The checkpoint file is automatically found in the output directory
+# from your training run. Make sure you've run training before using this config.

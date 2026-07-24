@@ -1,0 +1,60 @@
+# Tutorial dataset config using PyGInMemory20inchDataset
+# This config is for fully processed graph datasets (with edges already computed).
+# The referenced example graphs were pre-built with KNN k=5 edges (hence "knn5" in
+# the config name) — if your graphs use different edges, rename your copy accordingly.
+# 
+# Usage: Replace the paths below with your actual dataset paths
+
+kind: "pyg_in_memory"
+
+# Path to the .npz file containing train/val/test indices
+# Format: {'train_idxs': array, 'val_idxs': array, 'test_idxs': array}
+# split_path: /path/to/your/index_list.npz
+split_path: /sps/t2k/eleblevec/NeuNetSoft/index_lists/train50_val100_test150.npz
+
+# Set to True if your dataset is fully processed (has edges pre-computed)
+fully_processed: True
+
+# When fully_processed is True, set this to null
+# If you need to recompute edges, you would set compute_edges_parameters here
+compute_edges_parameters: null
+
+# Mandatory, length should be equal to the number of targets in the dataset
+target_names: ['mu-', 'e-']  # Example for binary classification
+# target_names: ['energy']  # Example for energy regression
+# target_names: ['vtx_x', 'vtx_y', 'vtx_z']  # Example for vertex regression
+
+# Signal key used for plotting purposes
+signal_key: 'e-'
+
+dataset_parameters:
+  # --- Hydra arguments ---
+  _target_: watchmal.dataset.graph.pyg_in_memory_20inch_pmt.PyGInMemory20inchDataset
+
+  graph_file_names:
+    - data.pt
+
+  # --- Path to your graph dataset folder ---
+  # For a single dataset:
+  # graph_folder_path: /path/to/your/graph/dataset/folder
+  
+  # For multiple datasets to concatenate (uncomment and use list format):
+  # graph_folder_path:
+  #   - /path/to/dataset/1
+  #   - /path/to/dataset/2
+  graph_folder_path:
+    - /sps/hyperk/Datasets/graph_datasets/debug/e-_10_train_tq_edges_xyz_label_eventType_knn5
+    - /sps/hyperk/Datasets/graph_datasets/debug/e-_10_train_tq_edges_xyz_label_eventType_knn5
+    - /sps/hyperk/Datasets/graph_datasets/debug/e-_10_train_tq_edges_xyz_label_eventType_knn5
+    - /sps/hyperk/Datasets/graph_datasets/debug/e-_10_train_tq_edges_xyz_label_eventType_knn5
+    - /sps/hyperk/Datasets/graph_datasets/debug/e-_10_train_tq_edges_xyz_label_eventType_knn5
+    - /sps/hyperk/Datasets/graph_datasets/debug/e-_10_train_tq_edges_xyz_label_eventType_knn5
+    - /sps/hyperk/Datasets/graph_datasets/debug/e-_10_train_tq_edges_xyz_label_eventType_knn5
+    - /sps/hyperk/Datasets/graph_datasets/debug/e-_10_train_tq_edges_xyz_label_eventType_knn5
+    - /sps/hyperk/Datasets/graph_datasets/debug/e-_10_train_tq_edges_xyz_label_eventType_knn5
+    - /sps/hyperk/Datasets/graph_datasets/debug/e-_10_train_tq_edges_xyz_label_eventType_knn5
+    - /sps/hyperk/Datasets/graph_datasets/debug/e-_10_train_tq_edges_xyz_label_eventType_knn5
+    - /sps/hyperk/Datasets/graph_datasets/debug/e-_10_train_tq_edges_xyz_label_eventType_knn5
+    - /sps/hyperk/Datasets/graph_datasets/debug/e-_10_train_tq_edges_xyz_label_eventType_knn5
+    - /sps/hyperk/Datasets/graph_datasets/debug/mu-_10_train_tq_edges_xyz_label_eventType_knn5
+    - /sps/hyperk/Datasets/graph_datasets/debug/mu-_10_train_tq_edges_xyz_label_eventType_knn5

@@ -51,7 +51,7 @@ The minimal command will simply provide a single config file. For example:
 ```
 python main.py --config-name=resnet_train
 ```
-will load the configuration from `config/resnet_train.yaml`.
+will load the configuration from `tutorial/config/watchmal/resnet_train.yaml`.
 
 ## Configuration
 
@@ -68,11 +68,11 @@ for controlling the configuration.
 
 Full Hydra documentation can be found here: https://hydra.cc/docs/intro/
 
-The default directory for config files is the `config` directory.
+The default directory for config files is the `tutorial/config/watchmal` directory.
 This can be changed using the `--config-path` option, but this is rarely necessary.
 Related config options are collected together into config groups, using subdirectories that contain config files with
 different sets of config options.
-For example, the `config/data/` directory contains YAML files for different configurations of data to use in training.
+For example, the `tutorial/config/watchmal/data/` directory contains YAML files for different configurations of data to use in training.
 
 Configuration groups can set a `_target_` key with a value that refers to a python class or method that is automatically
 instantiated, allowing new features to be introduced simply by creating the relevant classes or methods, or using
@@ -87,7 +87,7 @@ Hydra will then compose the full configuration from the specified files.
 Command line options can be used to override parameters e.g. `tasks.train.epochs=50`,
 add parameters using `+` (e.g. `+tasks.train.epochs=50`), or remove parameters using `~` (e.g. `~tasks.train.epochs`).
 Similarly, config groups can be set by command line, e.g. `tasks/train=train_resnet` will get the train task's config
-from the `config/tasks/train/train_resnet.yaml` file.
+from the `tutorial/config/watchmal/tasks/train/train_resnet.yaml` file.
 
 ### WatChMaL configuration
 
@@ -167,10 +167,10 @@ defaults:
 ```
 The top-level options are set directly, while all remaining configuration is defined through the "defaults" list, which
 provides a list of config group files to compose the full configuration. E.g. the `data` configuration will load the
-`config/data/iwcd_short.yaml` file, with sub-config group `dataset` from `config/data/dataset/iwcd_cnn_short.yaml`.
+`tutorial/config/watchmal/data/iwcd_short.yaml` file, with sub-config group `dataset` from `tutorial/config/watchmal/data/dataset/iwcd_cnn_short.yaml`.
 
 This example configuration performs three tasks:
-* The `train` task that trains the model (configured through the `config/tasks/train/train_resnet.yaml` file).
+* The `train` task that trains the model (configured through the `tutorial/config/watchmal/tasks/train/train_resnet.yaml` file).
 * The `restore_best_state` task that loads the state that had the best validation loss during training.
 * The `evaluate` task that evaluates the model.
 
@@ -180,7 +180,7 @@ Lines in the configuration defaults list like
 ```
     - optimizers@tasks.train.optimizers: adam
 ```
-indicate that the  `config/optimizers/adam.yaml` file should define the subconfig of `tasks.train.optimizers`.
+indicate that the  `tutorial/config/watchmal/optimizers/adam.yaml` file should define the subconfig of `tasks.train.optimizers`.
 
 The full composed configuration for the above example could then look something like
 

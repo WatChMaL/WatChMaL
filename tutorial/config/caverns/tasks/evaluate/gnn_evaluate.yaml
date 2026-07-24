@@ -1,0 +1,24 @@
+# Tutorial evaluation config
+# This config is used for evaluating trained models on test data
+
+# Prefix for output plot names
+# All plots and metrics will be saved with this prefix
+prefix_for_plot_names: tutorial_eval_
+
+# Report interval: how often to log evaluation progress
+report_interval: 1
+
+# Batch logging: if True, logs predictions for each batch (memory intensive)
+# Set to False for standard evaluation
+batch_log: False
+
+# Data loader configuration for test set
+data_loaders:
+  test:
+    split_key: test_idxs   # Key in split_path .npz file for test indices
+    is_graph: True         # Set to True for graph datasets
+    drop_last: False      # Keep all samples for evaluation (no dropping)
+    
+    pin_memory: True       # Faster data transfer to GPU
+    num_workers: 0         # Set to 0 for evaluation (or increase for speed)
+    batch_size: 10        # Batch size for evaluation (can be larger than training)

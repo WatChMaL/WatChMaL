@@ -1,0 +1,48 @@
+# WCTE e-/mu- classification with the hierarchical mPMT GAT.
+# WCTE is a small Water Cherenkov detector instrumented with multi-PMT (mPMT)
+# modules; each event ships as a PAIR of graphs (PMT-level + mPMT-level) and the
+# HierarchicalGAT model attends within each mPMT, then across mPMTs.
+#
+# Launch (same pattern as the other examples: --config-path points at main/, and
+# hydra.searchpath adds the tutorial/config/caverns root so the group defaults resolve):
+#   python main.py \
+#       --config-path /ABS/PATH/TO/tutorial/config/caverns/main --config-name wcte_mpmt_gat_classification \
+#       hydra.searchpath=[/ABS/PATH/TO/tutorial/config/caverns]
+# Set your dataset paths (split_path + pyg_data_folder_path) in
+#   tutorial/config/caverns/data/dataset/wcte_mpmt_classification.yaml
+
+MASTER_PORT: 12356
+core: caverns
+seed: 1234
+gpu_list: [0]  # set to [] to run on CPU
+
+kind: pyg_in_memory
+launch_wandb: True  # Set to True (and configure wandb/wcte.yaml) to log the run
+
+defaults:
+    # Wandb configuration (only used if launch_wandb: True)
+    - wandb: wcte
+
+    - model: mpmt_gat_pooling
+
+    - engine: gnn_classifier
+
+    # Dataset configuration - WCTE mPMT paired graphs
+    - data/dataset@data.dataset: wcte_mpmt_classification
+    - data/transforms@data.transforms: wcte_mpmt_classification
+
+    # Training configuration
+    - tasks/train: gnn_train
+    - sampler@tasks.train.data_loaders.train.sampler_config: subset_random
+    - sampler@tasks.train.data_loaders.validation.sampler_config: subset_random
+
+    - loss@tasks.train.loss: cross_entropy
+    - optimizers@tasks.train.optimizers: adam_lr1e-3
+
+    - tasks/restore_best_state: restore_best
+
+    # Evaluation configuration
+    - tasks/evaluate: gnn_evaluate
+    - sampler@tasks.evaluate.data_loaders.test.sampler_config: subset_sequential
+
+    - _self_

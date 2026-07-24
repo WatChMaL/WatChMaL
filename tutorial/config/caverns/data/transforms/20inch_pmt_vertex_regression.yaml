@@ -1,0 +1,58 @@
+# Tutorial transform config for regression tasks
+# This config includes common transforms for graph regression
+
+transforms:
+
+  # Add graph-level features (e.g., number of hits)
+  # This adds features to the data object that can be used by models
+  AddFeaturesInData:
+    _target_: watchmal.dataset.graph.pyg_transformations.AddFeaturesInData
+    charge_index: 1  # Index of charge feature in node features
+    feature_names: 
+      - 'n_hits'  # Add number of hits as a graph-level feature
+      - 'event_total_charge'  # Uncomment to add total charge
+    
+    # Normalization bounds for the added features
+    # max_vals: [6000.]  # Max value for n_hits
+    # min_vals: [120.]   # Min value for n_hits
+    
+    # If using event_total_charge, uncomment and adjust:
+    max_vals: [6000., 12000]
+    min_vals: [120., 140]
+
+  # Normalize node features and targets
+  # This applies normalization (and optionally log) to both features and targets
+  Normalize:
+    _target_: watchmal.dataset.graph.pyg_transformations.Normalize
+
+    eps: !!float 1e-12  # Small epsilon to avoid division by zero
+    
+    # For each node feature, specify if log should be applied
+    # Example: [True] means log only the first feature (typically charge)
+    # Adjust based on your node features
+    apply_log: [True, False, False, False, False] # Log transform for charge (first feature)
+  
+    # Normalization parameters for node features: [max_values], [min_values]
+    # Adjust these based on your data statistics
+    feat_norm: 
+      - [1900, 1000, 3242.96, 3242.96, 3296.47]  # Max values for each feature
+      - [550, 0.01, -3242.96, -3242.96, -3296.47]  # Min values for each feature
+
+    # Normalization parameters for regression targets
+    # Adjust these based on your target variable ranges
+    # Example for energy regression (in MeV):
+    # target_norm:
+      # - [1000.511]  # Max value for target (e.g., max energy)
+      # - [100.511]   # Min value for target (e.g., min energy)
+    
+    # Example for vertex regression (x, y, z coordinates):
+    target_norm:
+      - [3242.96, 3242.96, 3296.47]  # Max values for vtx_x, vtx_y, vtx_z
+      - [-3242.96, -3242.96, -3296.47]  # Min values for vtx_x, vtx_y, vtx_z
+
+  # Convert data types and wrap into dictionary format
+  ConvertAndToDict:
+    _target_: watchmal.dataset.graph.pyg_transformations.ConvertAndToDict
+
+    feature_to_type: float32  # Node features data type
+    target_to_type: float32   # Targets data type (float32 for regression)

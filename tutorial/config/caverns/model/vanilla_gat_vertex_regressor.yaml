@@ -1,0 +1,11 @@
+_target_: watchmal.model.gat.GraphAttentionNetwork
+
+hidden_channels: 20
+num_heads: 4
+num_layers: 3
+in_channels: 5
+out_channels: 3
+
+use_nhits: True
+use_event_total_charge: True
+attention_type: 'vanilla'  # Options: 'vanilla' or 'concat_and_wo_mlp'

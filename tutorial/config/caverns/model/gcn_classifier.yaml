@@ -1,0 +1,5 @@
+_target_: watchmal.model.gcns.BaseGCN
+in_feat: 2
+h_feat: 16
+num_classes: 2
+dropout: 0.1

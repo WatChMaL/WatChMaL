@@ -1,0 +1,28 @@
+# Multi-ring segmentation training (sparse 3D U-Net + query-transformer head).
+#
+# Launch (same pattern as tutorial/launch/caverns/run_main_cclyon.sh: --config-path points at
+# main/, and hydra.searchpath adds the tutorial/config/caverns root so the group defaults below
+# resolve). Set your dataset path:
+#   python main.py \
+#       --config-path /ABS/PATH/TO/tutorial/config/caverns/main --config-name multiring_segmentation_train \
+#       hydra.searchpath=[/ABS/PATH/TO/tutorial/config/caverns] \
+#       data.dataset.params.base_dir=/path/to/your/multiring_dataset
+#
+# For a quick smoke test: add  tasks.train.epochs=1 data.dataset.params.num_batches=1
+MASTER_PORT: 12357
+core: caverns
+seed: 1234
+gpu_list: [0]
+kind: cnn
+launch_wandb: false        # set true (and configure wandb/) to log the run
+
+defaults:
+  - engine: multiring/segmentation
+  - data/dataset@data: multiring_sparse3d
+  - model/multiring@model: segmentation_model
+  - tasks/train/multiring@tasks.train: segmentation
+  - loss@tasks.train.loss: set_ce_dice
+  - scheduler@tasks.train.scheduler: cosine_annealing
+  - optimizers@tasks.train.optimizers: adam_amsgrad
+  - wandb@wandb: multiring
+  - _self_

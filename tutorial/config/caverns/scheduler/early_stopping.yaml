@@ -1,0 +1,6 @@
+
+_target_: watchmal.utils.early_stopping.EarlyStopping
+patience: 50
+min_delta: 0.
+
+# 0.003 is to high

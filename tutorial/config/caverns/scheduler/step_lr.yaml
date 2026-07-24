@@ -1,0 +1,5 @@
+_target_: torch.optim.lr_scheduler.StepLR
+
+step_size: 1 # apply every 1 epochs
+gamma: 0.5 # new_lr = gamma * current_lr
+  

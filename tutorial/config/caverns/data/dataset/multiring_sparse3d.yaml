@@ -1,0 +1,30 @@
+dataset:
+  variant: 3d
+  target_3d: watchmal.dataset.multiring.sparse_cnn.HyperKSparseCNN3D
+  params:
+    # Directory containing your multi-ring HDF5 files (searched recursively for
+    # file_name_pattern). CHANGE THIS to your dataset location.
+    base_dir: /workspace/work/data/1_4rings_random_vertex_mix_muon_electron_2
+    file_name_pattern: wcsim_output_multihit_with_digi_hit_and_trigger.h5
+
+    min_charge: 0.01
+    cache_in_ram: true
+
+    grid:
+      axis_limit: 4000.0
+      grid_size: 120
+
+    # null = use every file under base_dir; set an int to cap the number of files
+    # (e.g. 1 for a quick smoke test).
+    num_batches: 1
+
+    # Feature normalization. Stats are cached next to the data by default; on a
+    # read-only data dir, set stats_cache_path to a writable location to persist them.
+    feat_norm: standard
+    feat_norm_indices: [0, 1, 2, 3, 4]
+    stats_max_events: 10000000
+    # stats_cache_path: /path/to/writable/feature_stats.npz
+
+    max_parents: 5
+    keep_in_digit: true
+    add_meta: false
