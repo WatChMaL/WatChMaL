@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 import importlib
+import logging
 import random
 
 import matplotlib.pyplot as plt
@@ -54,6 +55,10 @@ def collate_sparse(samples: List[Dict[str, Any]]) -> Dict[str, Any]:
         v = m.get("voxel_parent_frac")
         if v is not None and not torch.is_tensor(v):
             m["voxel_parent_frac"] = torch.from_numpy(np.asarray(v, dtype=np.float32))
+
+        v = m.get("voxel_parent_npe")
+        if v is not None and not torch.is_tensor(v):
+            m["voxel_parent_npe"] = torch.from_numpy(np.asarray(v, dtype=np.float32))
 
         v = m.get("voxel_parent_id")
         if v is not None and not torch.is_tensor(v):
@@ -142,7 +147,11 @@ def build_model_from_train_output(
         raise FileNotFoundError(f"Checkpoint not found: {ckpt}")
     state = torch.load(str(ckpt), map_location="cpu")
     state_dict = state["state_dict"] if isinstance(state, dict) and "state_dict" in state else state
-    model.load_state_dict(state_dict, strict=True)
+    missing, unexpected = model.load_state_dict(state_dict, strict=False)
+    if missing or unexpected:
+        logging.getLogger(__name__).info(
+            f"load_state_dict non-strict: missing={list(missing)}, unexpected={list(unexpected)}"
+        )
     model.eval()
     return model
 

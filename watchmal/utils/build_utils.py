@@ -37,11 +37,18 @@ def build_model(model_config, device, use_ddp=False):
     return model, nb_parameters
 
 
-def build_segmentation_model(encoder, head, wrapper):
-    """Build a segmentation model by instantiating encoder, head, and wrapper from Hydra configs."""
+def build_segmentation_model(encoder, head, wrapper, aux_head=None):
+    """Build a segmentation model from Hydra configs. aux_head is optional (default
+    None); if its c_in is null it is filled from the encoder."""
     enc = instantiate(encoder)
     hd = instantiate(head)
-    return instantiate(wrapper, encoder=enc, head=hd)
+    aux = None
+    if aux_head is not None:
+        aux_kwargs = {}
+        if "c_in" not in aux_head or aux_head.get("c_in", None) is None:
+            aux_kwargs["c_in"] = enc.c_bottleneck
+        aux = instantiate(aux_head, **aux_kwargs)
+    return instantiate(wrapper, encoder=enc, head=hd, aux_head=aux)
 
 
 def merge_config(hydra_config, wandb_config):

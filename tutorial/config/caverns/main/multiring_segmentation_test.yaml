@@ -20,10 +20,13 @@ hydra:
 engine:
   _target_: watchmal.engine.multiring.segmentation.MultiRingSegEngine
   target_key: voxel_parent_frac
-  train_output_dir: /path/to/your/training/run
+  train_output_dir: /workspace/work/ml/outputs/2026-02-22/19-08-11
+
   dataset_overrides:
-    base_dir: /path/to/your/multiring_dataset
+    base_dir: /workspace/work/data
     file_name_pattern: wcsim_output_multihit_with_digi_hit_and_trigger.h5
+    num_batches: 1
+
 
 # Model and dataset are rebuilt from the training run's saved .hydra/config.yaml.
 model:
@@ -34,6 +37,7 @@ model:
 
 data:
   dataset:
+    kind: sparse_cnn
     _target_: watchmal.engine.multiring.segmentation.build_dataset_from_train_output
     train_output_dir: ${engine.train_output_dir}
     dataset_overrides: ${engine.dataset_overrides}
@@ -47,20 +51,34 @@ tasks:
         max_events: 100
     diagnostic:
       enabled:
+        - event_display
         - dice_vs_angle
         - ring_count_confusion
         - charge_profile_mean
+        - alpha_vs_energy
+        - qratio_vs_energy
+        - charge_profile_events_e
+        - charge_profile_events_m
+
       out_dir: img
       stats:
         start_at: 0
         max_events: 10000
+
+      event_display:
+        n_events: 30
+        start_at: 0
+        max_voxels: 8000
+        poisson_fluctuate_pred: true
+        poisson_seed: 0
+        
       plots:
         dice_vs_angle: { nbins: 18 }
         ring_count_confusion: { normalize: true }
 
 MASTER_PORT: 12357
 core: caverns
-seed: 1234
 gpu_list: [0]
 kind: cnn
+seed: 5
 launch_wandb: false

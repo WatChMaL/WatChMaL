@@ -101,9 +101,11 @@ class MultiRingSegEngine(BaseEngine):
         # Segmentation-specific state
         self.data_config = None
         self.early_stopping = None
+        _hist_keys = ("loss", "loss_ce", "loss_dice", "loss_reg",
+                      "loss_vtx", "loss_dir", "loss_ene", "loss_pid")
         self.history = {
-            "train": {"loss": [], "loss_ce": [], "loss_dice": []},
-            "val": {"loss": [], "loss_ce": [], "loss_dice": []},
+            "train": {k: [] for k in _hist_keys},
+            "val": {k: [] for k in _hist_keys},
         }
         self.val_subset = None
         self.test_subset = None
@@ -117,6 +119,15 @@ class MultiRingSegEngine(BaseEngine):
         self.dataset_overrides = to_container(dataset_overrides)
 
         log.info(f"File sharing strategy set to {mp.get_sharing_strategy()}")
+
+    def _load_model_state_dict(self, state_dict):
+        """Non-strict override: the optional auxiliary head (and evolving heads) mean a
+        checkpoint may not carry every parameter, or may carry extras. Load what matches
+        and report the rest instead of erroring, keeping strict loading for other engines."""
+        missing, unexpected = self.module.load_state_dict(state_dict, strict=False)
+        if missing or unexpected:
+            log.info(f"restore_state non-strict: missing={list(missing)}, "
+                     f"unexpected={list(unexpected)}")
 
     def configure_early_stopping(self, early_stopping_config):
         self.early_stopping = instantiate(early_stopping_config)
@@ -368,7 +379,7 @@ class MultiRingSegEngine(BaseEngine):
         return img_dir
 
     def _append_epoch_history(self, split, metrics_mean):
-        for k in ("loss", "loss_ce", "loss_dice"):
+        for k in self.history[split]:
             if k in metrics_mean:
                 self.history[split][k].append(float(metrics_mean[k]))
 
@@ -397,6 +408,16 @@ class MultiRingSegEngine(BaseEngine):
             ylabel="Dice penalty (mean per epoch)",
             title="Train/Val Dice penalty",
         )
+        for key, label in (("loss_reg", "Regression (total)"), ("loss_vtx", "Vertex MSE"),
+                           ("loss_dir", "Direction MSE"), ("loss_ene", "Energy MSE (GeV)"),
+                           ("loss_pid", "PID cross-entropy")):
+            save_loss(
+                img_dir / f"train_val_{key}.png",
+                self.history["train"].get(key, []),
+                self.history["val"].get(key, []),
+                ylabel=f"{label} (mean per epoch)",
+                title=f"Train/Val {label}",
+            )
 
     # ------------------------------------------------------------------ #
     # Train / validate
@@ -697,3 +718,47 @@ class MultiRingSegEngine(BaseEngine):
             self.wandb_run.log({f"test/{k}": v for k, v in summary.items()})
 
         return summary
+
+
+
+class MultiRingSegmenter:
+    """
+    Trained run in, rings out.
+
+    Builds the model, the voxelizer and the digitizer from a training output
+    directory, then hands them to RingSegmentor, which owns the segmentation
+    itself.
+    """
+
+    def __init__(self, train_output_dir: str, cfg: Dict[str, Any], device: Optional[str] = None):
+        from watchmal.engine.multiring.digitizer import build_digitizer
+        from watchmal.dataset.multiring.voxelizer import Voxelizer
+        from watchmal.engine.multiring.ring_extraction import RingConfig, RingSegmentor
+
+        cfg = dict(cfg or {})
+        self.device = torch.device(device or ("cuda" if torch.cuda.is_available() else "cpu"))
+        self.min_charge = float(cfg.get("min_charge", 0.01))
+
+        model = build_model_from_train_output(train_output_dir, device=str(self.device))
+        voxelizer = Voxelizer.from_train_output(train_output_dir, cfg.get("stats_cache_path"))
+        digitizer = build_digitizer(
+            str(cfg["digitizer_mapping_path"]),
+            seed=int(cfg.get("poisson_seed", 0)),
+            use_optimized_lut=bool(cfg.get("use_optimized_lut", True)),
+            lut_crossovers_path=str(cfg.get("lut_crossovers_path", "")),
+            lut_q_base=float(cfg.get("lut_q_base", 9.652)),
+            lut_n_base=int(cfg.get("lut_n_base", 9)),
+            lut_spacing=float(cfg.get("lut_spacing", 1.003)),
+        )
+
+        ring_cfg = RingConfig.from_mapping(cfg)
+        ring_cfg.seed = int(cfg.get("poisson_seed", 0))
+        self.segmentor = RingSegmentor(model, voxelizer, digitizer, ring_cfg,
+                                       device=str(self.device))
+        self.model = model
+        self.voxelizer = voxelizer
+        self.digitizer = digitizer
+
+    def segment(self, xyz, q, t, tube_ids):
+        """Hits arrays -> list of Ring."""
+        return self.segmentor.rings(xyz, q, t, tube_ids, min_charge=self.min_charge)

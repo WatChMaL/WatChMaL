@@ -1,0 +1,23 @@
+epochs: 70
+val_interval: 10
+checkpointing: false
+
+diagnostic:
+  # enabled: ["event_display", "dice_vs_angle", "ring_count_confusion", "qratio_vs_energy", "alpha_vs_energy", "charge_profile_mean"]
+  enabled: []
+  out_dir: "img"
+
+data_loaders:
+  train:
+    batch_size: 128
+    num_workers: 2
+    split: 0.95
+    cache_refresh_epochs: 20
+
+  validation:
+    batch_size: 128
+    num_workers: 0
+
+# loss and scheduler are composed as group defaults in main/multiring_segmentation_train.yaml
+# (loss@tasks.train.loss: set_ce_dice, scheduler@tasks.train.scheduler: cosine_annealing).
+

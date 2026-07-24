@@ -16,24 +16,11 @@ import torch
 from torch.utils.data import Dataset, get_worker_info
 
 os.environ["SPCONV_ALGO"] = "native"
-from spconv.pytorch.utils import PointToVoxel
+
+from watchmal.dataset.multiring.voxelizer import Voxelizer, VoxelGridConfig
 
 log = logging.getLogger("watchmal.dataset.sparse_cnn")
 log.setLevel(logging.INFO)
-
-
-@dataclass
-class VoxelGridConfig:
-    axis_limit: float = 4000.0
-    grid_size: int = 60
-
-    @property
-    def voxel_size(self) -> float:
-        return (2.0 * self.axis_limit) / float(self.grid_size)
-
-    @property
-    def origin(self) -> np.ndarray:
-        return np.array([-self.axis_limit, -self.axis_limit, -self.axis_limit], dtype=np.float32)
 
 
 def _rotate_xy_inplace(xyz: np.ndarray, angle: float):
@@ -71,9 +58,12 @@ class _BaseSparseDataset(Dataset):
         keep_in_digit: bool = True,
         augmentation: bool = True,
         add_meta: bool = False,
+        add_targets: bool = False,
+        emit_npe: bool = False,
         stats_cache_path: Optional[str] = None,
         max_open_files_per_worker: int = 8,
         file_name_pattern: Optional[str] = "wcsim_output_multihit_with_digi_hit.h5",
+        dedup_mode: str = "first",
         **_: Any,
     ) -> None:
         super().__init__()
@@ -94,7 +84,16 @@ class _BaseSparseDataset(Dataset):
         self.keep_in_digit = bool(keep_in_digit)
         self.augmentation = bool(augmentation)
         self.add_meta = bool(add_meta)
+        self.add_targets = bool(add_targets)
+        # opt-in: also emit raw per-parent true-PE counts (voxel_parent_npe) for
+        # the Poisson count-regression objective (see loss_set_poisson).
+        self.emit_npe = bool(emit_npe)
         self.max_open_files_per_worker = int(max(1, max_open_files_per_worker))
+        dedup_mode = str(dedup_mode).lower()
+        if dedup_mode not in ("first", "merge"):
+            raise ValueError(f"dedup_mode must be 'first' or 'merge', got {dedup_mode!r}")
+        self.dedup_mode = dedup_mode
+        log.info(f"dedup_mode = {self.dedup_mode}")
 
         files = sorted(
             glob.glob(
@@ -137,6 +136,7 @@ class _BaseSparseDataset(Dataset):
             pre_dir = os.path.join(self.base_dir, "precomputed_features")
             stats_cache_path = os.path.join(pre_dir, f"feature_stats_{h}.npz")
         self._stats_cache_path = stats_cache_path
+        self._vx = Voxelizer(self.grid, self.feat_norm, self.feat_norm_idx)
 
         if self.feat_norm != "none" and len(self.feat_norm_idx) > 0:
             if not self._try_load_feature_stats():
@@ -381,35 +381,43 @@ class _BaseSparseDataset(Dataset):
         photon_ids_flat: np.ndarray,
         photon_ptr: np.ndarray,
         hit_primary_slots: np.ndarray,
-    ) -> np.ndarray:
+    ):
+        """Returns (pid_digi, frac_digi).
+
+        pid_digi  : (n_digi,) int64 — dominant slot per digi hit (argmax, for voxel_parent_id)
+        frac_digi : (n_digi, n_slots) float32 — true photon fracs per slot per digi hit
+        """
         n_digi = int(digi_q.shape[0])
         pid_digi = np.zeros((n_digi,), dtype=np.int64)
         if n_digi == 0 or photon_ptr.size != n_digi + 1:
-            return pid_digi
+            return pid_digi, None
 
-        n_hits = int(hit_primary_slots.shape[0])
+        n_hits   = int(hit_primary_slots.shape[0])
+        n_slots  = int(hit_primary_slots.max()) + 1 if hit_primary_slots.size > 0 else 1
+        frac_digi = np.zeros((n_digi, n_slots), dtype=np.float32)
+
         for di in range(n_digi):
             p0, p1 = int(photon_ptr[di]), int(photon_ptr[di + 1])
             if p1 <= p0:
+                frac_digi[di, 0] = 1.0   # no photon info → background
                 continue
             pids = photon_ids_flat[p0:p1]
             good = (pids >= 0) & (pids < n_hits)
             if not np.any(good):
+                frac_digi[di, 0] = 1.0
                 continue
             slots = hit_primary_slots[pids[good]]
             if slots.size == 0:
+                frac_digi[di, 0] = 1.0
                 continue
-            bc = np.bincount(slots.astype(np.int64), minlength=int(hit_primary_slots.max()) + 1)
-            pid_digi[di] = int(np.argmax(bc))
-        return pid_digi
+            bc = np.bincount(slots.astype(np.int64), minlength=n_slots).astype(np.float32)
+            pid_digi[di]  = int(np.argmax(bc))
+            frac_digi[di] = bc / bc.sum()
+
+        return pid_digi, frac_digi
 
     def _voxel_centers(self, indices_zyx: np.ndarray) -> np.ndarray:
-        v = self.grid.voxel_size
-        z = indices_zyx[:, 0].astype(np.float32)
-        y = indices_zyx[:, 1].astype(np.float32)
-        x = indices_zyx[:, 2].astype(np.float32)
-        xyz = np.stack([x, y, z], axis=1)
-        return (self.grid.origin + (xyz + 0.5) * v).astype(np.float32)
+        return self._vx.voxel_centers(indices_zyx)
 
     def _voxelize_spconv_3d(
         self,
@@ -422,125 +430,18 @@ class _BaseSparseDataset(Dataset):
         max_points_per_voxel: int = 64,
         max_voxels: Optional[int] = None,
     ) -> Tuple[np.ndarray, Dict[str, np.ndarray]]:
-        feat_list = [
-            xyz.astype(np.float32),
-            q.reshape(-1, 1).astype(np.float32),
-            t.reshape(-1, 1).astype(np.float32),
-        ]
-
-        idx_q = 3
-        idx_t = 4
-        next_idx = 5
-
-        n_groups = 0
-        idx_pid = None
-        if parent_ids is not None and parent_ids.size > 0:
-            parent_ids = parent_ids.astype(np.int64, copy=False)
-            n_groups = int(parent_ids.max()) + 1
-            feat_list.append(parent_ids.reshape(-1, 1).astype(np.float32))
-            idx_pid = next_idx
-            next_idx += 1
-
-        have_map = (tube_ids is not None) and (tube_ids.size == xyz.shape[0])
-        idx_tube = None
-        if have_map:
-            feat_list.append(tube_ids.reshape(-1, 1).astype(np.float32))
-            idx_tube = next_idx
-            next_idx += 1
-
-        have_pe = (pe_counts is not None) and (pe_counts.size == xyz.shape[0])
-        idx_pe = None
-        if have_pe:
-            feat_list.append(pe_counts.reshape(-1, 1).astype(np.float32))
-            idx_pe = next_idx
-            next_idx += 1
-
-        points = np.concatenate(feat_list, axis=1)
-        v = float(self.grid.voxel_size)
-        L = float(self.grid.axis_limit)
-        vxl = PointToVoxel(
-            vsize_xyz=[v, v, v],
-            coors_range_xyz=[-L, -L, -L, L, L, L],
-            num_point_features=points.shape[1],
-            max_num_points_per_voxel=int(max_points_per_voxel),
-            max_num_voxels=int(max_voxels if max_voxels is not None else max(1, min(points.shape[0], self.grid.grid_size ** 3))),
+        return self._vx.voxelize(
+            xyz, q, t,
+            parent_ids=parent_ids,
+            tube_ids=tube_ids,
+            pe_counts=pe_counts,
+            max_points_per_voxel=max_points_per_voxel,
+            max_voxels=max_voxels,
         )
 
-        pt = torch.from_numpy(points.astype(np.float32))
-        voxels, coors, num_points = vxl(pt)
-        M, T, _ = voxels.shape
-
-        if M == 0:
-            out = {
-                "coords_zyx": np.zeros((0, 3), dtype=np.int32),
-                "voxel_parent_id": np.zeros((0,), dtype=np.int64),
-                "voxel_parent_frac": np.zeros((0, n_groups), dtype=np.float32),
-                "voxel_parent_num_groups": np.array(n_groups, dtype=np.int64),
-                "voxel_num_points": np.zeros((0,), dtype=np.int32),
-            }
-            if have_map:
-                out["voxel_best_tube"] = np.zeros((0,), dtype=np.int32)
-            if have_pe:
-                out["voxel_n_pe_sum"] = np.zeros((0,), dtype=np.float32)
-            return np.zeros((0, 2), dtype=np.float32), out
-
-        mask = (torch.arange(T, device=voxels.device)[None, :] < num_points[:, None])
-
-        q_vals = voxels[..., 3]
-        t_vals = voxels[..., 4]
-        q_sums = (q_vals * mask.to(q_vals.dtype)).sum(dim=1)
-        counts = num_points.to(t_vals.dtype).clamp_min_(1)
-        t_mean = ((t_vals * mask.to(t_vals.dtype)).sum(dim=1) / counts).unsqueeze(1)
-        feats_out = torch.cat([q_sums.unsqueeze(1), t_mean], dim=1).cpu().numpy().astype(np.float32)
-        coords_zyx = coors.int().cpu().numpy().astype(np.int32)
-
-        voxel_pid = np.zeros((M,), dtype=np.int64)
-        frac = np.zeros((M, n_groups), dtype=np.float32)
-        if idx_pid is not None and n_groups > 0:
-            pid_vals = voxels[..., idx_pid]
-            q_np = q_vals.cpu().numpy()
-            pid_np = pid_vals.cpu().numpy().astype(np.int64)
-            mask_np = mask.cpu().numpy()
-            for vi in range(M):
-                p = pid_np[vi][mask_np[vi]]
-                qv = q_np[vi][mask_np[vi]]
-                tot = float(qv.sum())
-                if tot > 0.0:
-                    bc = np.bincount(p, weights=qv, minlength=n_groups)
-                    frac[vi, :] = (bc / tot).astype(np.float32)
-                    voxel_pid[vi] = int(np.argmax(bc))
-
-        extra: Dict[str, np.ndarray] = {
-            "coords_zyx": coords_zyx,
-            "voxel_parent_id": voxel_pid,
-            "voxel_parent_frac": frac,
-            "voxel_parent_num_groups": np.array(n_groups, dtype=np.int64),
-            "voxel_num_points": num_points.cpu().numpy().astype(np.int32, copy=False),
-        }
-
-        if have_map and idx_tube is not None:
-            tid = voxels[..., idx_tube].masked_fill(~mask, -1)
-            bestj = torch.argmax(q_vals.masked_fill(~mask, float("-inf")), dim=1)
-            extra["voxel_best_tube"] = tid[torch.arange(M, device=voxels.device), bestj].to(torch.int32).cpu().numpy()
-
-        if have_pe and idx_pe is not None:
-            pe_vals = voxels[..., idx_pe]
-            pe_sums = (pe_vals * mask.to(pe_vals.dtype)).sum(dim=1)
-            extra["voxel_n_pe_sum"] = pe_sums.cpu().numpy().astype(np.float32, copy=False)
-
-        return feats_out, extra
-
     def _apply_norm(self, feats: np.ndarray):
-        if self._mean is None:
-            return feats
-        cols = self.feat_norm_idx
-        x = feats[:, cols]
-        if self.feat_norm == "standard":
-            x = (x - self._mean) / np.clip(self._std, 1e-6, None)
-        elif self.feat_norm == "minmax":
-            x = (x - self._fmin) / np.clip(self._fmax - self._fmin, 1e-6, None)
-        feats[:, cols] = x
-        return feats
+        self._vx.set_stats(mean=self._mean, std=self._std, fmin=self._fmin, fmax=self._fmax)
+        return self._vx.apply_norm(feats)
 
     def _accum_stats(self, feats: np.ndarray, s: Dict[str, np.ndarray]):
         if feats.shape[0] == 0:
@@ -664,18 +565,40 @@ class HyperKSparseCNN3D(_BaseSparseDataset):
             key = digi_hits_raw["tube_id"].astype(np.int64, copy=False)
             time = digi_hits_raw["time_ns"].astype(np.float64, copy=False)
 
-            order = np.lexsort((time, key))
-            first = np.r_[True, key[order][1:] != key[order][:-1]]
-            keep_idx = np.sort(order[first]).astype(np.int64, copy=False)
-
-            digi_hits = digi_hits_raw[keep_idx]
-
-            chunks = [
-                photon_ids_flat_raw[int(photon_ptr_raw[j]):int(photon_ptr_raw[j + 1])]
-                for j in keep_idx
-            ]
-            photon_ids_flat = np.concatenate(chunks).astype(np.int64, copy=False) if chunks else np.zeros((0,), dtype=np.int64)
-            photon_ptr = np.r_[0, np.cumsum([len(c) for c in chunks])].astype(np.int64)
+            if self.dedup_mode == "first":
+                order = np.lexsort((time, key))
+                first = np.r_[True, key[order][1:] != key[order][:-1]]
+                keep_idx = np.sort(order[first]).astype(np.int64, copy=False)
+                digi_hits = digi_hits_raw[keep_idx]
+                chunks = [
+                    photon_ids_flat_raw[int(photon_ptr_raw[j]):int(photon_ptr_raw[j + 1])]
+                    for j in keep_idx
+                ]
+                photon_ids_flat = np.concatenate(chunks).astype(np.int64, copy=False) if chunks else np.zeros((0,), dtype=np.int64)
+                photon_ptr = np.r_[0, np.cumsum([len(c) for c in chunks])].astype(np.int64)
+            else:
+                order = np.lexsort((time, key))
+                sorted_hits = digi_hits_raw[order]
+                sorted_key = key[order]
+                new_run = np.r_[True, sorted_key[1:] != sorted_key[:-1]]
+                run_start = np.where(new_run)[0]
+                run_end = np.r_[run_start[1:], len(sorted_key)]
+                n_runs = len(run_start)
+                digi_hits = np.empty(n_runs, dtype=digi_hits_raw.dtype)
+                chunks: List[np.ndarray] = []
+                lens: List[int] = []
+                for r in range(n_runs):
+                    s, e = int(run_start[r]), int(run_end[r])
+                    digi_hits[r] = sorted_hits[s]   # earliest in run
+                    digi_hits[r]["charge_pe"] = float(sorted_hits[s:e]["charge_pe"].sum())
+                    total = 0
+                    for j in order[s:e]:
+                        j = int(j)
+                        chunks.append(photon_ids_flat_raw[int(photon_ptr_raw[j]):int(photon_ptr_raw[j + 1])])
+                        total += int(photon_ptr_raw[j + 1] - photon_ptr_raw[j])
+                    lens.append(total)
+                photon_ids_flat = np.concatenate(chunks).astype(np.int64, copy=False) if chunks else np.zeros((0,), dtype=np.int64)
+                photon_ptr = np.r_[0, np.cumsum(lens)].astype(np.int64)
         else:
             digi_hits = digi_hits_raw
             photon_ids_flat = np.zeros((0,), dtype=np.int64)
@@ -705,22 +628,43 @@ class HyperKSparseCNN3D(_BaseSparseDataset):
             q_label = q_label * mask_used.astype(np.float32)
 
         pid_hits, top_tids, top_pdgs, top_info = self._assign_primary_hits(
-            hits, parts, q_label, topk=self.max_parents, return_info=self.add_meta
+            hits, parts, q_label, topk=self.max_parents, return_info=(self.add_meta or self.add_targets)
         )
-        pid_digi = self._assign_primary_digis(q, photon_ids_flat, photon_ptr, pid_hits)
+        pid_digi, frac_digi = self._assign_primary_digis(q, photon_ids_flat, photon_ptr, pid_hits)
 
         tube_ids = tubes if self.add_meta else None
-        feats3, extra3 = self._voxelize_spconv_3d(xyz, q, t, parent_ids=pid_digi, tube_ids=tube_ids)
+        pe_counts = digi_n_photons if self.emit_npe else None
+        feats3, extra3 = self._voxelize_spconv_3d(xyz, q, t, parent_ids=pid_digi, tube_ids=tube_ids, pe_counts=pe_counts)
+
+        if frac_digi is not None and "voxel_best_tube" in extra3 and tubes is not None:
+            tube_best_q    = {}
+            tube_best_frac = {}
+            for di in range(len(q)):
+                tid = int(tubes[di])
+                qi  = float(q[di])
+                if tid not in tube_best_q or qi > tube_best_q[tid]:
+                    tube_best_q[tid]    = qi
+                    tube_best_frac[tid] = frac_digi[di]
+            vt      = extra3["voxel_best_tube"]
+            n_slots = frac_digi.shape[1]
+            vpf     = np.zeros((len(vt), n_slots), dtype=np.float32)
+            for vi, tid in enumerate(vt):
+                if int(tid) in tube_best_frac:
+                    vpf[vi] = tube_best_frac[int(tid)]
+            extra3["voxel_parent_frac"] = vpf
 
         coords_zyx = extra3["coords_zyx"]
         voxel_parent_np = extra3["voxel_parent_id"]
         voxel_parent_frac = extra3["voxel_parent_frac"]
+        voxel_parent_npe = extra3.get("voxel_parent_npe", None) if self.emit_npe else None
 
         mv = feats3[:, 0] >= self.min_charge
         feats3 = feats3[mv]
         coords_zyx = coords_zyx[mv]
         voxel_parent_np = voxel_parent_np[mv]
         voxel_parent_frac = voxel_parent_frac[mv]
+        if voxel_parent_npe is not None:
+            voxel_parent_npe = voxel_parent_npe[mv]
 
         voxel_best_tube = extra3["voxel_best_tube"][mv] if (self.add_meta and "voxel_best_tube" in extra3) else None
 
@@ -743,6 +687,14 @@ class HyperKSparseCNN3D(_BaseSparseDataset):
         elif voxel_parent_frac.shape[1] > G_full:
             voxel_parent_frac = voxel_parent_frac[:, :G_full]
 
+        if voxel_parent_npe is not None:
+            voxel_parent_npe = voxel_parent_npe.astype(np.float32, copy=False)
+            if voxel_parent_npe.shape[1] < G_full:
+                pad = np.zeros((voxel_parent_npe.shape[0], G_full - voxel_parent_npe.shape[1]), dtype=np.float32)
+                voxel_parent_npe = np.concatenate([voxel_parent_npe, pad], axis=1)
+            elif voxel_parent_npe.shape[1] > G_full:
+                voxel_parent_npe = voxel_parent_npe[:, :G_full]
+
         meta = {
             "voxel_parent_id": voxel_parent,
             "voxel_parent_frac": voxel_parent_frac,
@@ -752,7 +704,10 @@ class HyperKSparseCNN3D(_BaseSparseDataset):
             "origin": self.grid.origin.copy(),
         }
 
-        if self.add_meta:
+        if voxel_parent_npe is not None:
+            meta["voxel_parent_npe"] = voxel_parent_npe
+
+        if self.add_meta or self.add_targets:
             vertex = np.array([parts["vtx_x"][0], parts["vtx_y"][0], parts["vtx_z"][0]], dtype=np.float32) if len(parts) > 0 else np.zeros((3,), dtype=np.float32)
             if self.augmentation and top_info:
                 for d in top_info:
@@ -766,6 +721,25 @@ class HyperKSparseCNN3D(_BaseSparseDataset):
                 v2 = _rotate_xy_vec3(np.array([vertex[0], vertex[1], 0.0], dtype=np.float32), rot_angle)
                 vertex[0], vertex[1] = v2[0], v2[1]
 
+            P = self.max_parents
+            parent_dir = np.zeros((P, 3), dtype=np.float32)
+            parent_energy_mev = np.zeros((P,), dtype=np.float32)
+            parent_pdg = np.zeros((P,), dtype=np.int64)
+            parent_valid = np.zeros((P,), dtype=np.float32)
+            for j, info in enumerate(top_info[:P]):
+                parent_dir[j] = np.asarray(info.get("dir", (0.0, 0.0, 0.0)), dtype=np.float32)
+                parent_energy_mev[j] = float(info.get("energy_mev", 0.0))
+                parent_pdg[j] = int(info.get("pdg", 0))
+                parent_valid[j] = 1.0
+            meta.update({
+                "vertex": vertex,
+                "parent_dir": parent_dir,
+                "parent_energy_mev": parent_energy_mev,
+                "parent_pdg": parent_pdg,
+                "parent_valid": parent_valid,
+            })
+
+        if self.add_meta:
             pmt_n_photons = {}
             for tube_id, nph in zip(tubes.tolist(), digi_n_photons.tolist()):
                 tube_id = int(tube_id)

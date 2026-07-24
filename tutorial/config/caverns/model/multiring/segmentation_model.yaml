@@ -8,9 +8,7 @@ encoder:
   _target_: watchmal.model.multiring.encoders.sparse_unet3D.SparseUNet3D
   c_in: 5
   c_stem: 32
-  channels: [64, 64, 64]
-  mem_level: 3
-  d_mem: 64
+  channels: [64, 64, 64]   # ~2.3M trainable params; bottleneck width = channels[-1]
 
 head:
   _target_: watchmal.model.multiring.heads.query_transformer.QueryPerVoxelSoftmaxHead
