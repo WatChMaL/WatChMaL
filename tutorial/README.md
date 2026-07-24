@@ -1,11 +1,7 @@
-# WatChMaL | CAVERNS
+# Notice : 
+The scripts under tutorial/ are for smoke runs only. No data is moved to a `tmp` folder for fast I/O operations. When launching your own run you should **really** incorporate a `cp` phase to copy your MC from disk to your cluster scratch in the launching scripts.
 
-Framework for training, testing and using machine-learning models for Water Cherenkov
-detectors: graph neural networks (classification / regression) and a sparse 3D CNN for
-multi-ring segmentation. Configuration is composed with [Hydra](https://hydra.cc); runs
-are driven by a single entry point, `main.py`.
-
-## Contents
+# Contents
 
 **[Part 1 — Quickstart](#part-1--quickstart)** — get the software running
 
