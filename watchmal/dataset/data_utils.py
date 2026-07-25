@@ -72,8 +72,10 @@ def get_data_loader(dataset, batch_size, sampler, num_workers, is_distributed, i
     if is_distributed:
         ngpus = torch.distributed.get_world_size()
 
-        batch_size = int(batch_size/ngpus)
-        
+        # Floor at 1 so a global batch_size smaller than the GPU count cannot collapse the
+        # per-GPU batch to 0 (which makes the DataLoader raise). Matches the graph loader.
+        batch_size = max(int(batch_size/ngpus), 1)
+
         sampler = DistributedSamplerWrapper(sampler=sampler, seed=seed)
 
     if is_graph:

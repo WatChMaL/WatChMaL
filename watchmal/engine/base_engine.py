@@ -37,6 +37,7 @@ def build_loader(
         is_distributed=False,
         batch_size=2,
         num_workers=0,
+        sampler_drop_last=True,
         **kwargs
 ):
     """
@@ -69,7 +70,9 @@ def build_loader(
     if ( is_distributed ) and ( split_key not in ['test_idxs']) :
         ngpus = torch.distributed.get_world_size()
         batch_size = max(batch_size // ngpus, 1) # If using mp, ensure that the batch size is at least 1 per GPU.
-        sampler = DistributedSamplerWrapper(sampler=sampler, seed=seed)
+        # drop_last=True for training (equal step counts across ranks); False for
+        # validation so no val event is silently excluded from the metric.
+        sampler = DistributedSamplerWrapper(sampler=sampler, seed=seed, drop_last=sampler_drop_last)
 
     # Use dataset-provided collate if present (e.g. _dataset_collate()), unless caller passed collate_fn in kwargs
     collate_fn = dataset._dataset_collate() if hasattr(dataset, "_dataset_collate") and callable(getattr(dataset, "_dataset_collate")) else None
@@ -312,6 +315,9 @@ class BaseEngine(ABC):
                 is_distributed=self.is_distributed,
                 batch_size=loader_config.get("batch_size", 2),
                 num_workers=loader_config.get("num_workers", 0),
+                # Only the training split drops its tail (equal step counts across ranks);
+                # validation pads instead so every val event is included in the metric.
+                sampler_drop_last=(name == "train"),
                 **{k: v for k, v in loader_config.items() if k not in ("split_key", "sampler_config", "seed", "batch_size", "num_workers", "is_graph")},
             )
             log.info(f"Data loader {name} built.")

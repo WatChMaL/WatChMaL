@@ -78,6 +78,7 @@ tasks:
 
 MASTER_PORT: 12357
 core: caverns
+find_unused_parameters: True  # graph/MR models can leave params unused each forward; opt in explicitly
 gpu_list: [0]
 kind: cnn
 seed: 5

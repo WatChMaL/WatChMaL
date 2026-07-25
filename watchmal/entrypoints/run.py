@@ -85,7 +85,7 @@ def run(rank, gpu_list, dataset, wandb_run, hydra_config, global_hydra_config):
         model_config=hydra_config.model,
         device=device,
         use_ddp=is_distributed,
-        find_unused_parameters=hydra_config.get("find_unused_parameters", True),
+        find_unused_parameters=hydra_config.get("find_unused_parameters", False),
     )
     if wandb_run is not None:
         wandb_run.log({'nb_params': nb_params})

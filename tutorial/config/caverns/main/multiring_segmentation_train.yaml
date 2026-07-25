@@ -11,6 +11,7 @@
 # For a quick smoke test: add  tasks.train.epochs=1 data.dataset.params.num_batches=1
 MASTER_PORT: 12357
 core: caverns
+find_unused_parameters: True  # graph/MR models can leave params unused each forward; opt in explicitly
 gpu_list: [0]
 kind: cnn
 seed: 5

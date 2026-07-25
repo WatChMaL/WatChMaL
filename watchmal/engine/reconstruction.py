@@ -324,6 +324,16 @@ class ReconstructionEngine(BaseEngine):
         accumulated_metrics = self.get_synchronized_metrics(accumulated_metrics)
         all_outputs = self.get_synchronized_outputs(all_outputs)
         if self.rank == 0:
+            # Deduplicate events keyed by their saved indices. Under DDP the test set is
+            # sharded with padding (DistributedSampler, drop_last=False) so no event is
+            # dropped, but the padding repeats a few tail events across ranks; removing
+            # them here makes multi-GPU evaluation match a single-GPU run event-for-event.
+            if "indices" in all_outputs:
+                _, unique_pos = np.unique(all_outputs["indices"], return_index=True)
+                n_dup = len(all_outputs["indices"]) - len(unique_pos)
+                if n_dup > 0:
+                    log.info(f"Removing {n_dup} duplicated (padded) test events before saving")
+                    all_outputs = {k: v[unique_pos] for k, v in all_outputs.items()}
             # Save overall evaluation results
             log.info("Saving Data...")
             for k, v in all_outputs.items():
