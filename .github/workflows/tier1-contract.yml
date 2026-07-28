@@ -1,89 +1,16 @@
-# =============================================================================
 # TIER 1 - IMPORT & CONFIG CONTRACT
 #
-# GOAL
-#   Prove that the unified core is actually wired together: that every module
-#   imports, that every config composes and points at code that exists, and that
-#   a config's engine and its tasks fit each other. This tier answers: "would
-#   this revision get past start-up on a cluster?"
-#
-#   It is the closest thing this branch has to an execution environment. The
-#   single-core merge (one BaseEngine, one worker, one entrypoint) was validated
-#   only with `compileall` and has never been run - so these checks are not
-#   "coverage", they are the first machine verification of the merge itself.
-#
-# WHY IT EXISTS SEPARATELY FROM TIER 0
-#   It needs the framework installed, so it costs minutes rather than seconds and
-#   it can fail for reasons that have nothing to do with the code (a wheel, an
-#   index outage). Keeping it apart means a dependency problem here never hides
-#   the cheap, always-meaningful Tier 0 signal, and either tier can be made a
-#   required PR check independently.
-#
-# WHAT IT PROTECTS, CONCRETELY
-#   1. Import-smoke   - every module under watchmal/ and analysis/ imports, one
-#                       test per module so a failure names the module. This is
-#                       what proves the re-parented engine hierarchy still
-#                       resolves.
-#   2. Dependency boundary - wandb, torch_geometric and spconv are optional BY
-#                       DESIGN: CSV tracking must work without wandb, and an
-#                       image or multi-ring run must not need PyG. That is only
-#                       testable in an environment where they are genuinely
-#                       absent, which is what the `core` job below is.
-#   3. Engine contract - every BaseEngine subclass answers to the API the worker
-#                       calls on it. The expected method list and constructor
-#                       arguments are read out of watchmal/entrypoints/run.py by
-#                       AST, so the check is a statement ABOUT the entrypoint,
-#                       not a second copy of it that can drift.
-#   4. Config contract - every entry config composes the way the launch scripts
-#                       compose it, every `_target_` in the composed result
-#                       imports, and the top-level keys the entrypoints read by
-#                       attribute are present (a missing key raises on a hydra
-#                       config, it does not return None).
-#   5. Conformance triangle - a config's `tasks:` must be callable on the engine
-#                       that same config selects, with parameters that engine
-#                       accepts. Nothing else covers this edge, and it is the one
-#                       that breaks when the two config trees merge: `train()`
-#                       takes `num_val_batches` on the image side and not on the
-#                       graph side, and the multi-ring inference task is `test`,
-#                       not `evaluate`.
-#
-# THE JOB MATRIX IS THE TEST
-#   core  - installs requirements.txt and NOTHING else. If it goes red because
-#           something now needs wandb or PyG, the optional-dependency boundary
-#           has been breached and the fix belongs in the source. Do NOT fix it by
-#           adding packages to this job.
-#   graph - adds requirements-graph.txt (torch_geometric). This is the job where
-#           `_target_` resolution for the graph configs actually happens; in the
-#           core job those are reported as skipped, never as passing.
-#   Modules needing a dependency that is absent are SKIPPED, not failed - which
-#   is what lets one suite run in several dependency environments.
-#
-# SCOPE (current, deliberate)
-#   The hydra checks gate on the caverns config tree only; the ex-watchmal tree
-#   is excluded via TIER1_EXCLUDED_CONFIG_TREES in tests/discovery.py, because it
-#   is inherited from upstream and scheduled to be reworked. Tier 0 still parses
-#   it. A transitional check fails the day that tree disappears, which is the
-#   signal to delete the exclusion and gate the whole tree for free.
-#
-# NOT COVERED HERE (needs a GPU, data, or heavy wheels - keep manual or nightly)
-#   nccl / real multi-GPU DDP; spconv CUDA kernels and the multi-ring container;
-#   the compiled PyG extensions (see requirements-graph-extensions.txt); real
-#   detector data; wandb network behaviour; any end-to-end training run.
-#
-# SURVIVING THE CORE UNIFICATION
-#   Every subject is discovered: modules by walking the package, configs by
-#   globbing, config trees by shape rather than by name, engines as subclasses of
-#   BaseEngine, and the worker->engine contract by reading run.py. Class renames,
-#   a merged config tree and retired shim modules are all names and locations -
-#   never behaviours - so nothing here needs an edit when they land. Checks that
-#   only make sense mid-merge are tagged `@pytest.mark.transitional` with a
-#   RETIRES_WITH constant, and the last step of each job prints them, so the CI
-#   log doubles as the remaining-unification checklist.
-#
-# LOCAL EQUIVALENT
-#   pytest tests/tier1
-#   pytest -m transitional --collect-only -q     # what is left to unify
-# =============================================================================
+# Goal: would this revision get past start-up on a cluster? The single-core merge was only
+#   ever compileall-checked, so this is its first machine verification.
+# Covers: every module imports; the optional-dependency boundary (the `core` job installs
+#   requirements.txt and NOTHING else - it going red means wandb/PyG leaked into shared
+#   code, so fix the source, never this file); every engine answers to the API run.py
+#   calls on it; every caverns entry config composes, resolves its `_target_`s and carries
+#   the keys the entrypoints read; a config's tasks are callable on the engine it selects.
+#   Missing optional deps SKIP, never pass silently. Not covered: nccl/multi-GPU DDP,
+#   spconv, the compiled PyG extensions, real data, wandb network, any training run.
+# Local: pytest tests/tier1
+#        pytest -m transitional --collect-only -q   # what is left to unify
 
 name: Tier 1 - import & config contract
 

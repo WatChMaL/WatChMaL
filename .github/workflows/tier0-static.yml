@@ -1,62 +1,16 @@
-# =============================================================================
 # TIER 0 - STATIC CHECKS
 #
-# GOAL
-#   Prove that the repository is internally consistent as *text*, before anything
-#   is installed or executed. This tier answers one question: "can this revision
-#   be read, parsed and resolved at all?"
-#
-# WHY IT EXISTS SEPARATELY FROM TIER 1
-#   It has no dependency on the framework: pyyaml, ruff and pytest, nothing else.
-#   That makes it the one gate that still reports something useful when the
-#   dependencies do not install, when torch changes its wheel layout, or when a
-#   contributor has a broken environment. It runs in ~30 s, so it can gate every
-#   push without anyone resenting it. Tier 1 is the opposite trade: it installs
-#   the framework and proves the config contract, and it costs minutes.
-#
-# WHAT IT PROTECTS, CONCRETELY
-#   1. Syntax        - `compileall` over the whole tree. Until now this was the
-#                      ONLY validation the single-core merge ever had, run by
-#                      hand; here it cannot be forgotten.
-#   2. Undefined names - ruff's error-only ruleset (E9, F63, F7, F82). F821 is
-#                      the one class of bug `compileall` structurally cannot see,
-#                      and it is the exact failure mode of a large re-parenting
-#                      refactor: a method renamed on the base class while a
-#                      subclass still calls the old name. The merge moved ~10
-#                      methods between classes. Style rules are deliberately NOT
-#                      selected - this is a correctness gate, not a bikeshed.
-#   3. Config syntax - every YAML under tutorial/ parses. ~110 config files drive
-#                      this framework and none of them was ever machine-checked;
-#                      a stray tab used to surface after the cluster queue wait.
-#   4. Config targets - every in-repo `_target_` names a class or function that
-#                      actually exists, matched by AST against the module files.
-#                      A renamed class behind a `_target_` produces a perfectly
-#                      valid Python program that dies at instantiation time.
-#
-# SCOPE NOTE
-#   Unlike Tier 1, this tier covers EVERY config tree, including the ex-watchmal
-#   one that Tier 1 does not gate on yet - parsing is free and catches real rot.
-#   Three pre-existing broken `_target_`s in that tree are ledgered in
-#   tests/data/known_broken_targets.txt: they are expected to fail, a NEW broken
-#   target fails the build, and FIXING a ledgered one also fails the build so the
-#   ledger line gets deleted in the same PR.
-#
-# WHAT IT DELIBERATELY DOES NOT DO
-#   No import, no hydra composition, no training. A module that imports a package
-#   that is not installed is invisible here - that is Tier 1's job.
-#
-# SURVIVING THE CORE UNIFICATION
-#   Nothing here names a module, a class or a config: files are globbed and both
-#   sides of every comparison are discovered at runtime. Merging the two config
-#   trees, renaming engine classes or deleting the shim modules changes nothing
-#   in this workflow - and Tier 0 gets *more* valuable during a mass rename,
-#   since that is precisely what produces undefined names and stale `_target_`s.
-#
-# LOCAL EQUIVALENT
-#   python -m compileall -q watchmal analysis main.py
-#   ruff check watchmal analysis main.py     # settings from pyproject.toml
-#   pytest tests/tier0
-# =============================================================================
+# Goal: is this revision consistent as *text*? pytest + pyyaml + ruff only, ~30 s, so it
+#   is the gate that still reports when the framework's dependencies cannot be installed.
+# Covers: syntax (compileall); undefined names (ruff E9/F63/F7/F82 - F821 is the failure
+#   mode of a re-parenting refactor and compileall cannot see it); every YAML under
+#   tutorial/ parses; every in-repo `_target_` names something that exists (AST, no
+#   imports). ALL config trees - upstream's 3 stale targets are ledgered in
+#   tests/data/known_broken_targets.txt (a new one fails; fixing one also fails, so the
+#   ledger line goes in the same PR). Not covered: imports, hydra composition, execution.
+# Local: python -m compileall -q watchmal analysis main.py
+#        ruff check watchmal analysis main.py   # settings from pyproject.toml
+#        pytest tests/tier0
 
 name: Tier 0 - static checks (syntax, YAML, config targets)
 
