@@ -42,7 +42,9 @@ def _cat_dim(key: str) -> int:
 
 
 def _load(path: Path):
-    obj = torch.load(path, map_location="cpu", mmap=True, weights_only=False)
+    # str(), not Path: torch < 2.6 raises "f must be a string filename in order to use
+    # mmap argument" - and the cluster containers are exactly that old.
+    obj = torch.load(str(path), map_location="cpu", mmap=True, weights_only=False)
     if not isinstance(obj, tuple) or len(obj) < 2:
         raise SystemExit(f"{path}: not a collated InMemoryDataset file (got {type(obj)})")
     data, slices = obj[0], obj[1]
