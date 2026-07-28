@@ -26,8 +26,6 @@ wheels/
 *.egg
 
 # PyInstaller
-#  Usually these files are written by a python script from a template
-#  before PyInstaller builds the exe, so as to inject date/other infos into it.
 *.manifest
 *.spec
 
@@ -120,8 +118,11 @@ __MACOSX/
 /config/
 /launch/
 
-# internal working notes / agent reports, never shipped (same status as the merge drafts)
+# internal working notes / agent reports
 /claude_report/
+
+# macOS-local dev/test deps (CPU/MPS torch, no CUDA) - wrong for the Linux+CUDA cluster,
+/local-mac-requirements.txt
 
 # plotting/viz kept local, not shipped — belongs in a separate WatChMaL viz repo.
 # The graph engines import it lazily and skip plotting when it is absent.
