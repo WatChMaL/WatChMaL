@@ -34,6 +34,7 @@ import os
 import time
 
 # watchmal imports
+from watchmal.utils.banner import loading_banner
 from watchmal.utils.logging_utils import setup_logging
 from watchmal.utils.build_utils import build_model
 from watchmal.utils.distributed_utils import ddp_setup, restrict_logging_to_rank0
@@ -44,6 +45,19 @@ sleep_time = 5
 # Rendez-vous port used when a config does not set MASTER_PORT. The actual port is this
 # value offset by the first GPU index (see below).
 DEFAULT_MASTER_PORT = 12355
+
+
+def _engine_label(hydra_config) -> str:
+    """Short, human-readable engine name for the banner, e.g. 'graph/classification'.
+
+    Derived from the engine's own `_target_` so it follows any renaming, rather than
+    being a second copy of the family list.
+    """
+    target = str(hydra_config.engine.get("_target_", "")) if "engine" in hydra_config else ""
+    parts = [p for p in target.split(".") if p]
+    if len(parts) > 3 and parts[0] == "watchmal" and parts[1] == "engine":
+        return "/".join(parts[2:-1])
+    return parts[-1] if parts else "engine"
 
 
 def run(rank, gpu_list, dataset, wandb_run, hydra_config, global_hydra_config):
@@ -103,43 +117,64 @@ def run(rank, gpu_list, dataset, wandb_run, hydra_config, global_hydra_config):
         dump_path = str(dump_path) + "/"
     os.makedirs(dump_path, exist_ok=True)
 
-    # ---- engine ---- #
-    engine = instantiate(
-        config=hydra_config.engine,
-        model=model,
-        rank=rank,
+    # ---- engine + per-task configuration ---- #
+    # Everything below is the slow part of a start-up: for several families the engine
+    # constructor builds the dataset, and setup_data_loaders reads the split files. The
+    # banner animates on rank 0 for exactly that stretch, with the terminal split so
+    # the run's own log output keeps scrolling above it. Its status line says what is
+    # being waited on; it is drawn only, never logged, so nothing reaches main.log or
+    # wandb. On other ranks, and whenever stdout is not a TTY, every call is a no-op.
+    with loading_banner(
+        engine=_engine_label(hydra_config),
         device=device,
-        dump_path=dump_path,
-        wandb_run=wandb_run,
-        dataset=dataset,
-    )
+        params=nb_params,
+        enabled=(rank == 0),
+    ) as banner:
 
-    engine.configure_amp(hydra_config.get("amp", False))
+        banner.set_status("instantiating engine")
+        engine = instantiate(
+            config=hydra_config.engine,
+            model=model,
+            rank=rank,
+            device=device,
+            dump_path=dump_path,
+            wandb_run=wandb_run,
+            dataset=dataset,
+        )
 
-    # ---- per-task configuration ---- #
-    for task, task_config in hydra_config.tasks.items():
+        banner.set_status("configuring precision")
+        engine.configure_amp(hydra_config.get("amp", False))
 
-        with open_dict(task_config):
+        for task, task_config in hydra_config.tasks.items():
 
-            if 'data_loaders' in task_config:
-                engine.setup_data_loaders(
-                    hydra_config.data,
-                    task_config.pop("data_loaders"),
-                    is_distributed,
-                    hydra_config.seed,
-                )
+            with open_dict(task_config):
 
-            if 'optimizers' in task_config:
-                engine.configure_optimizers(task_config.pop("optimizers"))
+                if 'data_loaders' in task_config:
+                    banner.set_status(f"building data loaders for '{task}'")
+                    engine.setup_data_loaders(
+                        hydra_config.data,
+                        task_config.pop("data_loaders"),
+                        is_distributed,
+                        hydra_config.seed,
+                    )
 
-            if 'scheduler' in task_config:
-                engine.configure_scheduler(task_config.pop("scheduler"))
+                if 'optimizers' in task_config:
+                    banner.set_status(f"configuring optimizer for '{task}'")
+                    engine.configure_optimizers(task_config.pop("optimizers"))
 
-            if 'loss' in task_config:
-                engine.configure_loss(task_config.pop("loss"))
+                if 'scheduler' in task_config:
+                    banner.set_status(f"configuring scheduler for '{task}'")
+                    engine.configure_scheduler(task_config.pop("scheduler"))
 
-            if 'early_stopping' in task_config:
-                engine.configure_early_stopping(task_config.pop('early_stopping'))
+                if 'loss' in task_config:
+                    banner.set_status(f"configuring loss for '{task}'")
+                    engine.configure_loss(task_config.pop("loss"))
+
+                if 'early_stopping' in task_config:
+                    banner.set_status(f"configuring early stopping for '{task}'")
+                    engine.configure_early_stopping(task_config.pop('early_stopping'))
+
+        banner.set_status("ready")
 
     # ---- run tasks ---- #
     for task, task_config in hydra_config.tasks.items():

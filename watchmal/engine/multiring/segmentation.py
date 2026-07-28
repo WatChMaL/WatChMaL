@@ -32,7 +32,7 @@ from watchmal.engine.base_engine import BaseEngine
 from watchmal.dataset.multiring.sparse_cnn import VoxelGridConfig, HyperKSparseCNN3D
 from watchmal.dataset.samplers.batch_file_sampler import BatchFileSampler
 from watchmal.utils.logging_utils_caverns import setup_logging
-from watchmal.utils.banner import show_training_banner
+# banner moved to the entrypoint (watchmal/entrypoints/run.py)
 from watchmal.utils.multiring_sparse_helpers import (
     LoaderCfg,
     TestLoaderCfg,
@@ -524,14 +524,9 @@ class MultiRingSegEngine(BaseEngine):
 
         start_run_time = datetime.now()
         log.info(f"Engine : {self.rank} | Dataloaders : {self.data_loaders}")
-        if self.rank == 0:
-            n_params = sum(p.numel() for p in self.module.parameters() if p.requires_grad)
-            show_training_banner(
-                engine="multiring/segmentation",
-                device=self.device,
-                params=n_params,
-                epochs=epochs,
-            )
+        # The banner now runs in watchmal/entrypoints/run.py, animating *during* engine
+        # construction and data-loader setup instead of after them - by the time train()
+        # starts there is nothing left to wait for.
 
         self.iteration = 1
 
