@@ -214,11 +214,24 @@ class BaseEngine(ABC):
         self.early_stopping = instantiate(early_stopping_config)
 
     def configure_amp(self, amp_enabled: bool = False):
-        """Configure automatic mixed precision (AMP). No-op unless on CUDA."""
-        from torch.amp import GradScaler
+        """Configure automatic mixed precision (AMP). No-op unless on CUDA.
+
+        The GradScaler import is deliberately inside the enabled branch: the worker
+        calls this method on every run of every family, and `torch.amp.GradScaler` only
+        exists in recent torch releases, so importing it eagerly would make an
+        AMP-disabled run fail on older cluster containers for no reason. The fallback
+        covers those containers when AMP *is* requested.
+        """
         self.use_amp = bool(amp_enabled) and (self.device.type == "cuda")
         if self.use_amp:
-            self.scaler = GradScaler("cuda")
+            try:
+                from torch.amp import GradScaler
+
+                self.scaler = GradScaler("cuda")
+            except ImportError:  # older torch: no torch.amp.GradScaler
+                from torch.cuda.amp import GradScaler
+
+                self.scaler = GradScaler()
         if self.rank == 0:
             log.info(f"AMP enabled: {self.use_amp}")
 

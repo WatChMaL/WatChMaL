@@ -6,10 +6,13 @@ To add :
 - get_gathered
 """
 
+import inspect
 import logging
 import os
 
 from torch.distributed import init_process_group
+
+log = logging.getLogger(__name__)
 
 
 def restrict_logging_to_rank0(rank, level=logging.WARNING):
@@ -51,9 +54,13 @@ def ddp_setup(rank, world_size, master_port, device=None, backend="nccl"):
         rank: Unique identifier of each process
         world_size: Total number of processes
         master_port: Port used for the rendez-vous, as a string
-        device: Optional torch.device passed to init_process_group. The watchmal
-            core sets it so NCCL binds the right GPU up front; the caverns core
-            leaves it None and relies on torch.cuda.set_device beforehand.
+        device: Optional torch.device passed to init_process_group as `device_id`, so
+            NCCL binds the right GPU eagerly (which avoids some init hangs). This
+            argument only exists in newer torch releases: older cluster containers
+            raise `TypeError: init_process_group() got an unexpected keyword argument
+            'device_id'`. It is therefore passed only when the installed torch accepts
+            it - the fallback is exactly what the caverns core always did, i.e. rely on
+            the `torch.cuda.set_device(device)` the worker calls beforehand.
         backend: Process-group backend. Defaults to "nccl", which is what every real
             (multi-GPU) run uses. It is a parameter so the distributed layer can also
             be exercised on CPU with "gloo" - that is the only way the collectives
@@ -62,7 +69,17 @@ def ddp_setup(rank, world_size, master_port, device=None, backend="nccl"):
     os.environ["MASTER_ADDR"] = "localhost"
     os.environ["MASTER_PORT"] = str(master_port)
 
-    kwargs = {} if device is None else {"device_id": device}
+    kwargs = {}
+    if device is not None:
+        if "device_id" in inspect.signature(init_process_group).parameters:
+            kwargs["device_id"] = device
+        elif rank == 0:
+            log.warning(
+                "This torch build's init_process_group() has no `device_id` argument; "
+                "falling back to torch.cuda.set_device() only. Harmless - it is an "
+                "eager-binding optimisation - but upgrade the container to get it."
+            )
+
     init_process_group(
         backend=backend, init_method='env://', rank=rank, world_size=world_size, **kwargs
     )
