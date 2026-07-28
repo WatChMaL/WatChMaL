@@ -17,7 +17,7 @@ name: Tier 0 - static checks (syntax, YAML, config targets)
 on:
   pull_request:
   push:
-    branches: [master, "feat/**"]
+    branches: ["feat/**"]
   workflow_dispatch:
 
 concurrency:
