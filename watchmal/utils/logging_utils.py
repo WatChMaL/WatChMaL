@@ -1,8 +1,60 @@
+"""
+Canonical logging helpers for the (single, unified) WatChMaL core.
+
+This module owns CSVLog, get_git_version and the setup_logging helpers. The former
+`logging_utils_caverns.py` used to hold a byte-identical copy of CSVLog/get_git_version
+plus the setup_logging helpers; it is now a thin re-export shim of this module, so both
+import paths keep working during and after the merge.
+"""
+
 import subprocess
 import csv
 import logging
 
 log = logging.getLogger(__name__)
+
+
+def setup_logging(name: str):
+    """Return a plain module logger and let the logging config own the handlers.
+
+    Under Hydra, records propagate up to the root logger, whose handlers write
+    BOTH the console output and <run_dir>/main.log (hydra job_logging config).
+    Do not attach a StreamHandler here or set propagate=False: the first
+    duplicates every console line, the second cuts the loggers off from the
+    root logger and leaves main.log empty.
+    """
+    logger = logging.getLogger(name)
+    logger.setLevel(logging.INFO)  # Set the minimum logging level
+    return logger
+
+
+class DisplayFilter(logging.Filter):
+    """A custom filter which enables or disables logging based on a flag."""
+    def __init__(self, display=True):
+        super().__init__()
+        self.display = display
+
+    def filter(self, record):
+        """Determines if the specified record is to be logged."""
+        return self.display
+
+
+def setup_logging_with_filter(name: str):
+    logger = setup_logging(name)
+
+    # Logger-level filter: applied before propagation, so it also gates what
+    # reaches the root logger's console/main.log handlers.
+    display_filter = DisplayFilter()
+    logger.addFilter(display_filter)
+
+    # Function to change display setting dynamically
+    def set_display(display):
+        display_filter.display = display
+
+    # Attach the function to the logger object
+    logger.set_display = set_display
+
+    return logger
 
 
 class CSVLog:

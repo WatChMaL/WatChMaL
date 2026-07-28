@@ -15,9 +15,17 @@ from watchmal.utils.logging_utils_caverns import setup_logging
 log = setup_logging(__name__)
 
 
-def build_model(model_config, device, use_ddp=False):
+def build_model(model_config, device, use_ddp=False, find_unused_parameters=False):
     """
-    Build the model and wrap it with SynBatchNorm and  data_config if using torch DDP
+    Build the model and wrap it with SyncBatchNorm + DistributedDataParallel if using DDP.
+
+    find_unused_parameters : bool
+        Passed to DDP. Default is False (strict, best practice): DDP then errors loudly if
+        a parameter gets no gradient, which surfaces bugs and avoids the per-step
+        graph-traversal overhead of True. Models that legitimately leave parameters unused
+        on some forwards (e.g. certain GAT / pooling / multi-head graph models, or an
+        optional auxiliary head) must opt in with a top-level `find_unused_parameters: True`
+        in their config.
     """
     model = instantiate(model_config)
     nb_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -32,7 +40,7 @@ def build_model(model_config, device, use_ddp=False):
         model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
 
         # Wrap the model with DistributedDataParallel mode
-        model = DDP(model, device_ids=[device], find_unused_parameters=True)
+        model = DDP(model, device_ids=[device], find_unused_parameters=find_unused_parameters)
 
     return model, nb_parameters
 

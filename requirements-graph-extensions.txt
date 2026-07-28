@@ -1,0 +1,27 @@
+# COMPILED PyG extensions, needed by part of the graph family only.
+#
+# Split out of requirements-graph.txt on purpose: torch_geometric itself is pure Python
+# and installs anywhere with a plain `pip install`, whereas these two are C++/CUDA
+# extensions that must match the exact torch build, and are published on the PyG wheel
+# index rather than PyPI:
+#
+#   pip install -r requirements-graph-extensions.txt \
+#       -f https://data.pyg.org/whl/torch-$(python -c 'import torch; print(torch.__version__)').html
+#
+# Without a matching wheel, pip falls back to a source build (slow, needs a toolchain),
+# which is why per-PR CI installs requirements-graph.txt but not this file: the modules
+# below are then reported as skipped rather than failed.
+#
+# Who needs them, as of this writing:
+#   torch_scatter -> watchmal/model/no_conv_mlp.py, mPMT_gat_pooling.py, mPMT_gat_augmem.py
+#   torch_cluster -> watchmal/dataset/gnn/gnn_dataset.py,
+#                    watchmal/dataset/graph/h5_datatools_format_dataset.py
+# The WCTE mPMT GAT config (tutorial/config/caverns/main/wcte_mpmt_gat_classification.yaml)
+# cannot run without them.
+#
+# Both have pure-torch equivalents in recent torch_geometric
+# (torch_geometric.utils.scatter, torch_geometric.nn.pool.knn_graph); moving to those
+# would remove the compiled dependency entirely and let CI cover these modules.
+
+torch_scatter
+torch_cluster

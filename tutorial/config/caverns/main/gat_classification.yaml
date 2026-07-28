@@ -11,6 +11,7 @@
 
 MASTER_PORT: 12356
 core: caverns
+find_unused_parameters: True  # graph/MR models can leave params unused each forward; opt in explicitly
 seed: 1234
 gpu_list: []  # Set to [0, 1, ...] to use specific GPUs
 

@@ -1,0 +1,9 @@
+# Optional dependencies for the transformer model family (Swin, T2T-ViT, ViT).
+#
+# NOT required by the base framework: these models are reached only through their hydra
+# `_target_` (watchmal/model/SwinTransformer.py, T2TViTransformer*.py, vitransformer.py),
+# so a resnet, graph or multi-ring run never imports them.
+#
+#   pip install -r requirements-transformer.txt
+
+timm

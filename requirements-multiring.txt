@@ -1,0 +1,21 @@
+# Optional dependencies for the multi-ring (MR) segmentation subsystem.
+#
+# NOT required by the base framework or by the watchmal / graph cores. Install these
+# only to run multi-ring configs (core: caverns, engine: multiring/segmentation) — a
+# plain `python main.py --config-name=resnet_train` does not need them, because the MR
+# modules are imported solely through their Hydra `_target_`.
+#
+#   pip install -r requirements-multiring.txt
+#
+# spconv: sparse 3D convolutions + PointToVoxel (the encoder and voxelizer require it).
+#         Install the CUDA build matching your toolkit, e.g. `pip install spconv-cu120`
+#         (or spconv-cu118 / spconv-cu126 ...). There is no generic `spconv` wheel for GPU.
+# scipy:  Hungarian matching (scipy.optimize.linear_sum_assignment) in the set losses.
+#
+# spconv-cu120
+scipy
+
+# Optional extra: the `diagnostic_multiring` submodule adds training diagnostic plots.
+# It is lazy-imported and OFF by default (tasks.train.diagnostic.enabled: []), so it is
+# not needed for normal runs. To enable it, add it as a git submodule and turn it on in
+# the config.

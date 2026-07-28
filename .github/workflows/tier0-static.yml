@@ -1,0 +1,55 @@
+# TIER 0 - STATIC CHECKS
+#
+# Goal: is this revision consistent as *text*? pytest + pyyaml + ruff only, ~30 s, so it
+#   is the gate that still reports when the framework's dependencies cannot be installed.
+# Covers: syntax (compileall); undefined names (ruff E9/F63/F7/F82 - F821 is the failure
+#   mode of a re-parenting refactor and compileall cannot see it); every YAML under
+#   tutorial/ parses; every in-repo `_target_` names something that exists (AST, no
+#   imports). ALL config trees - upstream's 3 stale targets are ledgered in
+#   tests/data/known_broken_targets.txt (a new one fails; fixing one also fails, so the
+#   ledger line goes in the same PR). Not covered: imports, hydra composition, execution.
+# Local: python -m compileall -q watchmal analysis main.py
+#        ruff check watchmal analysis main.py   # settings from pyproject.toml
+#        pytest tests/tier0
+
+name: Tier 0 - static checks (syntax, YAML, config targets)
+
+on:
+  pull_request:
+  push:
+    branches: [master, "feat/**"]
+  workflow_dispatch:
+
+concurrency:
+  group: tier0-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  static:
+    name: static analysis (no framework dependency)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      # Deliberately NOT installing requirements.txt: this tier must keep working
+      # when the framework's dependencies cannot be installed.
+      - name: Install check tools only
+        run: pip install pyyaml pytest ruff
+
+      - name: Syntax - every module compiles
+        run: python -m compileall -q watchmal analysis main.py
+
+      - name: Undefined names - ruff error-only ruleset
+        run: ruff check watchmal analysis main.py
+
+      - name: Config files parse, and their targets exist
+        run: pytest tests/tier0
+        env:
+          PYTHONPATH: .

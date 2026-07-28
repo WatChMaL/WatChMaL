@@ -1,0 +1,14 @@
+# Optional dependencies for the graph / GNN family (GCN, GAT, mPMT hierarchical GAT).
+#
+# NOT required by the base framework: the image (CNN) and multi-ring families never
+# import torch_geometric. Every PyG import in the tree is either inside a module that is
+# only reached through a graph `_target_` (watchmal/dataset/graph/*, watchmal/model/gat.py,
+# gcns.py, ...) or lazy (watchmal/dataset/data_utils.py, watchmal/engine/base_engine.py),
+# so a plain resnet or multi-ring run works with this file uninstalled.
+#
+#   pip install -r requirements-graph.txt
+#
+# torch_geometric is pure Python; this repo uses no torch_scatter / torch_sparse, so no
+# compiled PyG extension is needed and the CPU wheel installs cleanly.
+
+torch_geometric
