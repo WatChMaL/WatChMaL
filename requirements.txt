@@ -5,3 +5,7 @@ h5py
 numpy
 uproot
 matplotlib
+# needed by analysis/ (classification.py: sklearn metrics; regression.py: tabulate),
+# alongside matplotlib and uproot above
+scikit-learn
+tabulate

@@ -15,7 +15,8 @@ Uniform engine contract served here:
   - setup_data_loaders(data, loaders, is_distributed, seed) is the one data entry point
   - a barrier is raised between tasks so train -> restore_best_state -> evaluate is safe
     under DDP
-  - MASTER_PORT is offset by the first GPU index (collision avoidance on shared nodes)
+  - MASTER_PORT (optional, defaults to DEFAULT_MASTER_PORT) is offset by the first GPU
+    index (collision avoidance on shared nodes)
 """
 
 # hydra imports
@@ -40,6 +41,10 @@ from watchmal.utils.distributed_utils import ddp_setup, restrict_logging_to_rank
 log = setup_logging(__name__)
 sleep_time = 5
 
+# Rendez-vous port used when a config does not set MASTER_PORT. The actual port is this
+# value offset by the first GPU index (see below).
+DEFAULT_MASTER_PORT = 12355
+
 
 def run(rank, gpu_list, dataset, wandb_run, hydra_config, global_hydra_config):
 
@@ -63,8 +68,10 @@ def run(rank, gpu_list, dataset, wandb_run, hydra_config, global_hydra_config):
     # ---- distributed init ---- #
     if is_distributed:
         # Offset the port by the first GPU index to avoid collisions between concurrent
-        # jobs sharing a node.
-        master_port = int(hydra_config.MASTER_PORT) + int(gpu_list[0])
+        # jobs sharing a node. MASTER_PORT is optional: a config that omits it (every
+        # config in the watchmal tree does, and some ship gpu_list with 2+ entries) gets
+        # the default rather than an AttributeError at rendez-vous time.
+        master_port = int(hydra_config.get("MASTER_PORT", DEFAULT_MASTER_PORT)) + int(gpu_list[0])
         ddp_setup(rank, world_size=ngpus, master_port=master_port, device=device)
         configure_log(global_hydra_config.job_logging, global_hydra_config.verbose)
 

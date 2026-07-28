@@ -43,7 +43,7 @@ def restrict_logging_to_rank0(rank, level=logging.WARNING):
         handler.addFilter(rank_filter)
 
 
-def ddp_setup(rank, world_size, master_port, device=None):
+def ddp_setup(rank, world_size, master_port, device=None, backend="nccl"):
     """
     Initialise the process group for a DDP worker.
 
@@ -54,11 +54,15 @@ def ddp_setup(rank, world_size, master_port, device=None):
         device: Optional torch.device passed to init_process_group. The watchmal
             core sets it so NCCL binds the right GPU up front; the caverns core
             leaves it None and relies on torch.cuda.set_device beforehand.
+        backend: Process-group backend. Defaults to "nccl", which is what every real
+            (multi-GPU) run uses. It is a parameter so the distributed layer can also
+            be exercised on CPU with "gloo" - that is the only way the collectives
+            (reduce / gather) can be tested anywhere without a GPU, e.g. in CI.
     """
     os.environ["MASTER_ADDR"] = "localhost"
     os.environ["MASTER_PORT"] = str(master_port)
 
     kwargs = {} if device is None else {"device_id": device}
     init_process_group(
-        backend="nccl", init_method='env://', rank=rank, world_size=world_size, **kwargs
+        backend=backend, init_method='env://', rank=rank, world_size=world_size, **kwargs
     )

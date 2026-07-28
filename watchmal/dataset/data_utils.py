@@ -16,8 +16,12 @@ import random
 # WatChMaL imports
 from watchmal.dataset.samplers.watchmal_core_sampler import DistributedSamplerWrapper
 
-# pyg imports
-from torch_geometric.loader import DataLoader as PyGDataLoader
+# torch_geometric is an OPTIONAL dependency (see requirements-graph.txt): it is needed
+# only by the graph / GNN family. It is imported lazily inside get_data_loader (below,
+# guarded by is_graph) rather than at module scope, because this module is on the import
+# path of the CNN engine - watchmal/engine/reconstruction.py imports it - so an eager
+# import here would make every image run hard-require PyG. Same policy as
+# base_engine.py::build_loader.
 
 
 def get_data_loader(dataset, batch_size, sampler, num_workers, is_distributed, is_gpu, seed, is_graph=False,
@@ -79,6 +83,10 @@ def get_data_loader(dataset, batch_size, sampler, num_workers, is_distributed, i
         sampler = DistributedSamplerWrapper(sampler=sampler, seed=seed)
 
     if is_graph:
+        # Local import: see the note at the top of the module - keeps PyG out of the
+        # image/multi-ring import path.
+        from torch_geometric.loader import DataLoader as PyGDataLoader
+
         return PyGDataLoader(dataset, sampler=sampler, batch_size=batch_size, num_workers=num_workers)
     else:
         return DataLoader(dataset, sampler=sampler, batch_size=batch_size, num_workers=num_workers, drop_last=drop_last,
