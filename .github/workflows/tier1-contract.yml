@@ -15,9 +15,10 @@
 name: Tier 1 - import & config contract
 
 on:
+  # PRs only. Adding `push` here as well made every push to a PR branch run each
+  # workflow twice: the push event builds the branch head, the pull_request event
+  # builds the merge commit. The merge commit is the one that matters, so keep that.
   pull_request:
-  push:
-    branches: ["feat/**"]
   workflow_dispatch:
 
 concurrency:

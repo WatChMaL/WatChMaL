@@ -79,18 +79,19 @@ def merge_config(hydra_config, wandb_config):
         # key_name = ['root_file_path'] e.g.
         key_name = list_of_keys[-1] 
 
-        # define the intial location 
-        location = hydra_config 
+        # define the intial location
+        location = hydra_config
 
-        # Update the location based on the directory structure
+        # Descend to the PARENT of the key being set, and let a missing key raise so it
+        # is reported rather than created. A single-segment key ("seed") has the config
+        # itself as its parent - descending into it would leave `location` holding the
+        # *value*, and the assignment below would then fail with "'int' object does not
+        # support item assignment", killing any sweep that tunes a top-level key.
         try:
-            if len(list_of_keys) == 1:
-                i = list_of_keys[0]
+            for i in list_of_keys[0:-1]:
                 location = location[i]
-            else:
-                for i in list_of_keys[0:-1]:
-                    location = location[i]
-            
+            location[key_name]  # existence check; KeyError/ConfigAttributeError if absent
+
         except Exception as e:
             log.debug(f"{list_of_keys} not found ({e})")
             not_found_keys.append(key)

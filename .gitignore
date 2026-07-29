@@ -130,3 +130,6 @@ __MACOSX/
 
 # local index lists (scratch, like /config and /launch)
 /index_list/
+
+# demonstration plots (regenerate with setup/demo_determinism.py)
+/plots/

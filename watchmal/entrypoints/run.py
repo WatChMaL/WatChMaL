@@ -35,6 +35,7 @@ import time
 
 # watchmal imports
 from watchmal.utils.banner import loading_banner
+from watchmal.utils.determinism import configure_determinism
 from watchmal.utils.logging_utils import setup_logging
 from watchmal.utils.build_utils import build_model
 from watchmal.utils.distributed_utils import ddp_setup, restrict_logging_to_rank0
@@ -69,6 +70,16 @@ def run(rank, gpu_list, dataset, wandb_run, hydra_config, global_hydra_config):
         for k in list(os.environ.keys()):
             if k.startswith('WANDB_'):
                 log.info(f"wandb env var {k}: {os.getenv(k)}")
+
+    # ---- determinism ---- #
+    # Before the device is touched: CUBLAS_WORKSPACE_CONFIG has to be set before the
+    # CUDA context exists. A no-op unless `deterministic: True` is in the config.
+    configure_determinism(
+        enabled=hydra_config.get("deterministic", False),
+        seed=hydra_config.get("seed", None),
+        warn_only=hydra_config.get("deterministic_warn_only", False),
+        rank=rank,
+    )
 
     # ---- device ---- #
     if ngpus == 0:
