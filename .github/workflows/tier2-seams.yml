@@ -1,0 +1,51 @@
+# TIER 2 - UNIT TESTS ON THE MERGE SEAMS
+#
+# Goal: do the pieces the merge welded together still behave? Tiers 0/1 prove the repo
+#   parses, imports and composes; none of that can tell whether a reduced metric is
+#   right. These are the checks for the failures that produce WRONG NUMBERS rather than
+#   errors - and every one of them is a place where two cores' code was fused.
+# Covers: the tracking layer against `analysis/read.py` (both the 1-epoch and multi-epoch
+#   branches, and the per-rank file layout); the DDP collectives on gloo at world_size=2,
+#   where the two return-type conventions could be crossed silently; sampler determinism
+#   and rank disjointness; config-driven find_unused_parameters reaching DDP; wandb sweep
+#   folding; event-index uniqueness across a concatenated dataset (rows vanish from the
+#   saved outputs otherwise); and split-file sanity. Not covered: nccl, real data, any
+#   training run - the two end-to-end smoke tests need local datasets and SKIP here.
+# Local: pytest tests/tier2          (plus the smoke runs, if WATCHMAL_SMOKE_DATA is set)
+
+name: Tier 2 - merge seams (metrics, DDP, indexing)
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: tier2-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  seams:
+    name: seams (CPU, gloo, no data)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install torch (CPU wheels)
+        run: pip install torch --index-url https://download.pytorch.org/whl/cpu
+
+      # torch_geometric is needed here: the concatenation and dataset-indexing checks
+      # import watchmal.dataset.graph.*. No compiled PyG extension is required.
+      - name: Install framework requirements
+        run: pip install -r requirements.txt -r requirements-graph.txt pytest
+
+      - name: Merge-seam tests
+        run: pytest tests/tier2
+        env:
+          PYTHONPATH: .
