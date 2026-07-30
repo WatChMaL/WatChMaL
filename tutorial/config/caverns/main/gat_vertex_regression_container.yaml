@@ -12,7 +12,15 @@
 
 MASTER_PORT: 12357
 core: caverns
+find_unused_parameters: True  # graph/MR models can leave params unused each forward; opt in explicitly
 seed: 1234
+
+# Fully deterministic mode: same config + same seed -> identical numbers on this
+# machine (deterministic kernels only, no cuDNN autotuning, python/numpy RNGs seeded).
+# Costs some speed, and raises if an op has no deterministic implementation - set
+# deterministic_warn_only: True to downgrade that to a warning. See
+# watchmal/utils/determinism.py.
+deterministic: False
 gpu_list: []  # Set to [0, 1, ...] to use specific GPUs
 
 kind: gnn

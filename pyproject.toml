@@ -1,0 +1,28 @@
+# Tool configuration only - WatChMaL is not (yet) a pip-installable package, so there is
+# deliberately no [project] or [build-system] table here. This file exists so that the
+# checks run identically in CI and on a laptop: `pytest` and `ruff check` pick their
+# settings up from here, with no flags to keep in sync with the workflow files.
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["tests"]
+# --strict-markers: an unregistered marker is an error, not a silent typo that makes a
+# test vanish from every selection.
+addopts = "--strict-markers"
+markers = [
+    "transitional: asserts something that is only true mid-merge. MUST carry a module-level RETIRES_WITH constant naming the step that kills it. `pytest -m transitional` prints the remaining unification work.",
+    "graph: needs torch_geometric (requirements-graph.txt); skipped when it is absent.",
+    "multiring: needs spconv (requirements-multiring.txt); skipped when it is absent.",
+]
+
+[tool.ruff]
+target-version = "py311"
+
+[tool.ruff.lint]
+# Errors only, on purpose. This is a correctness gate, not a style gate: F821
+# (undefined name) is the exact failure mode of a large re-parenting refactor - a method
+# renamed on the base class while a subclass still calls the old name - and it is the one
+# thing `python -m compileall` structurally cannot see. Style rules (F401 unused-import
+# and friends) are excluded so the gate never turns into a bikeshed and never blocks a PR
+# for a cosmetic reason.
+select = ["E9", "F63", "F7", "F82"]

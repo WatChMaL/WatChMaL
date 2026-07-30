@@ -15,9 +15,17 @@ from watchmal.utils.logging_utils_caverns import setup_logging
 log = setup_logging(__name__)
 
 
-def build_model(model_config, device, use_ddp=False):
+def build_model(model_config, device, use_ddp=False, find_unused_parameters=False):
     """
-    Build the model and wrap it with SynBatchNorm and  data_config if using torch DDP
+    Build the model and wrap it with SyncBatchNorm + DistributedDataParallel if using DDP.
+
+    find_unused_parameters : bool
+        Passed to DDP. Default is False (strict, best practice): DDP then errors loudly if
+        a parameter gets no gradient, which surfaces bugs and avoids the per-step
+        graph-traversal overhead of True. Models that legitimately leave parameters unused
+        on some forwards (e.g. certain GAT / pooling / multi-head graph models, or an
+        optional auxiliary head) must opt in with a top-level `find_unused_parameters: True`
+        in their config.
     """
     model = instantiate(model_config)
     nb_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -32,7 +40,7 @@ def build_model(model_config, device, use_ddp=False):
         model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
 
         # Wrap the model with DistributedDataParallel mode
-        model = DDP(model, device_ids=[device], find_unused_parameters=True)
+        model = DDP(model, device_ids=[device], find_unused_parameters=find_unused_parameters)
 
     return model, nb_parameters
 
@@ -71,18 +79,19 @@ def merge_config(hydra_config, wandb_config):
         # key_name = ['root_file_path'] e.g.
         key_name = list_of_keys[-1] 
 
-        # define the intial location 
-        location = hydra_config 
+        # define the intial location
+        location = hydra_config
 
-        # Update the location based on the directory structure
+        # Descend to the PARENT of the key being set, and let a missing key raise so it
+        # is reported rather than created. A single-segment key ("seed") has the config
+        # itself as its parent - descending into it would leave `location` holding the
+        # *value*, and the assignment below would then fail with "'int' object does not
+        # support item assignment", killing any sweep that tunes a top-level key.
         try:
-            if len(list_of_keys) == 1:
-                i = list_of_keys[0]
+            for i in list_of_keys[0:-1]:
                 location = location[i]
-            else:
-                for i in list_of_keys[0:-1]:
-                    location = location[i]
-            
+            location[key_name]  # existence check; KeyError/ConfigAttributeError if absent
+
         except Exception as e:
             log.debug(f"{list_of_keys} not found ({e})")
             not_found_keys.append(key)

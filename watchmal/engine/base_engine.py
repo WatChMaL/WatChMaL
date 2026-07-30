@@ -14,13 +14,15 @@ import torch
 from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import DataLoader
 
-import wandb
-
+# wandb is an OPTIONAL dependency (see requirements-tracking.txt). It is imported lazily
+# where it is actually used (save_state), so a run with no wandb_run - i.e. CSV-only
+# tracking - never needs the package installed.
 # torch_geometric is imported lazily in build_loader, see there.
 
 # watchmal imports
 from watchmal.dataset.samplers.samplers import DistributedSamplerWrapper
-from watchmal.utils.logging_utils_caverns import setup_logging
+from watchmal.utils.logging_utils import setup_logging
+from watchmal.utils.tracking import RunTracker
 
 log = setup_logging(__name__)
 
@@ -35,6 +37,7 @@ def build_loader(
         is_distributed=False,
         batch_size=2,
         num_workers=0,
+        sampler_drop_last=True,
         **kwargs
 ):
     """
@@ -67,7 +70,9 @@ def build_loader(
     if ( is_distributed ) and ( split_key not in ['test_idxs']) :
         ngpus = torch.distributed.get_world_size()
         batch_size = max(batch_size // ngpus, 1) # If using mp, ensure that the batch size is at least 1 per GPU.
-        sampler = DistributedSamplerWrapper(sampler=sampler, seed=seed)
+        # drop_last=True for training (equal step counts across ranks); False for
+        # validation so no val event is silently excluded from the metric.
+        sampler = DistributedSamplerWrapper(sampler=sampler, seed=seed, drop_last=sampler_drop_last)
 
     # Use dataset-provided collate if present (e.g. _dataset_collate()), unless caller passed collate_fn in kwargs
     collate_fn = dataset._dataset_collate() if hasattr(dataset, "_dataset_collate") and callable(getattr(dataset, "_dataset_collate")) else None
@@ -125,6 +130,7 @@ class BaseEngine(ABC):
         dump_path,
         wandb_run=None,
         dataset=None,
+        logging_csv=True,
     ):
         """
         Parameters
@@ -143,10 +149,18 @@ class BaseEngine(ABC):
             If set, subclasses may use it for logging (e.g. save_state can log artifacts).
         dataset : optional
             Pre-built dataset instance (for graph-style pipeline). If None, set later via set_dataset or via config-based configure_data_loaders.
+        logging_csv : bool
+            Whether to write the analysis-compatible CSV logs (default True). CSV stays an
+            option; wandb is enabled independently by whether `wandb_run` is set.
         """
         self.dump_path = dump_path
         self.wandb_run = wandb_run
         self.rank = rank
+        # Unified tracker: analysis-compatible CSV (default on) + optional wandb. Every
+        # engine logs through this, so all model families share the same tracking options.
+        self.tracker = RunTracker(
+            dump_path=dump_path, rank=rank, wandb_run=wandb_run, csv_enabled=logging_csv
+        )
         self.device = torch.device(device)
         self.model = model
         self.target_key = target_key
@@ -186,6 +200,54 @@ class BaseEngine(ABC):
         self.optimizer = None
         self.scheduler = None
 
+        # Automatic Mixed Precision (used by the CNN reconstruction loop via
+        # configure_amp(); the graph / multi-ring loops simply never enable it).
+        self.use_amp = False
+        self.scaler = None
+
+        # Optional early stopping (graph / multi-ring loops use it; the CNN loop ignores
+        # it). Held on the base so the single worker can configure any engine uniformly.
+        self.early_stopping = None
+
+    def configure_early_stopping(self, early_stopping_config):
+        """Instantiate an early-stopping helper from a hydra config."""
+        self.early_stopping = instantiate(early_stopping_config)
+
+    def configure_amp(self, amp_enabled: bool = False):
+        """Configure automatic mixed precision (AMP). No-op unless on CUDA.
+
+        The GradScaler import is deliberately inside the enabled branch: the worker
+        calls this method on every run of every family, and `torch.amp.GradScaler` only
+        exists in recent torch releases, so importing it eagerly would make an
+        AMP-disabled run fail on older cluster containers for no reason. The fallback
+        covers those containers when AMP *is* requested.
+        """
+        self.use_amp = bool(amp_enabled) and (self.device.type == "cuda")
+        if self.use_amp:
+            try:
+                from torch.amp import GradScaler
+
+                self.scaler = GradScaler("cuda")
+            except ImportError:  # older torch: no torch.amp.GradScaler
+                from torch.cuda.amp import GradScaler
+
+                self.scaler = GradScaler()
+        if self.rank == 0:
+            log.info(f"AMP enabled: {self.use_amp}")
+
+    def setup_data_loaders(self, data_config, loaders_config, is_distributed, seed):
+        """
+        Uniform data-loader entry point called by the worker for every engine family.
+
+        Default (graph / multi-ring) path: build the dataset then the loaders in two
+        steps. The CNN engine overrides this method with its own single-step
+        get_data_loader path. Keeping one entry-point signature is what lets the single
+        worker configure any engine without knowing its family; the two dataset pipelines
+        stay separate underneath.
+        """
+        self.configure_dataset(data_config)
+        self.configure_data_loaders(loaders_config)
+
     def configure_loss(self, loss_config):
         """Instantiate loss from a hydra config."""
         self.criterion = instantiate(loss_config)
@@ -212,21 +274,23 @@ class BaseEngine(ABC):
         self.target_names = list(dataset_config.target_names)
         log.info(f"dataset: {dataset[0]}")
 
-    @abstractmethod
     def configure_dataset(self, data_config):
         """
-        Configure the dataset from data_config. Must set:
-        - self.dataset: the dataset instance
-        - self.split_path: path to split indices file
-        - self.is_pyg: bool indicating if using PyG loader
-        - self.target_names: list of target names (optional)
-        
+        Configure the dataset from data_config. Graph / multi-ring engines override this
+        to set self.dataset / self.split_path / self.is_pyg / self.target_names. The CNN
+        engine builds its loaders directly in setup_data_loaders and never calls this, so
+        the default just signals misuse rather than being abstract (which would force a
+        stub on the CNN engine).
+
         Parameters
         ----------
         data_config : DictConfig or dict
             Configuration containing dataset parameters, split_path, etc.
         """
-        pass
+        raise NotImplementedError(
+            f"{self.__class__.__name__} does not implement configure_dataset(); its data "
+            f"loaders are built in setup_data_loaders()."
+        )
 
     def configure_data_loaders(self, loaders_config):
         """
@@ -264,6 +328,9 @@ class BaseEngine(ABC):
                 is_distributed=self.is_distributed,
                 batch_size=loader_config.get("batch_size", 2),
                 num_workers=loader_config.get("num_workers", 0),
+                # Only the training split drops its tail (equal step counts across ranks);
+                # validation pads instead so every val event is included in the metric.
+                sampler_drop_last=(name == "train"),
                 **{k: v for k, v in loader_config.items() if k not in ("split_key", "sampler_config", "seed", "batch_size", "num_workers", "is_graph")},
             )
             log.info(f"Data loader {name} built.")
@@ -295,6 +362,47 @@ class BaseEngine(ABC):
                 return torch.cat(gather_list, dim=0)
             return tensor
         return tensor
+
+    # ------------------------------------------------------------------ #
+    # CNN-family DDP adapters (same collectives as get_reduced/get_gathered,
+    # but with the original CNN-core return types: python floats / numpy). They
+    # live on the shared base so every engine family reduces/gathers through one
+    # definition site. get_reduced/get_gathered keep tensors (graph/MR loops call
+    # them only when distributed); get_synchronized_* handle the non-distributed
+    # case internally and are what the CNN reconstruction loop uses.
+    # ------------------------------------------------------------------ #
+    def get_synchronized_outputs(self, output_dict):
+        """
+        Gather per-process output tensors to rank 0 (concatenated) and return numpy arrays.
+        Non-distributed: just detach/cpu/numpy each tensor.
+        """
+        global_output_dict = {}
+        for name, tensor in output_dict.items():
+            if self.is_distributed:
+                if self.rank == 0:
+                    tensor_list = [torch.zeros_like(tensor, device=self.device) for _ in range(self.n_gpus)]
+                    torch.distributed.gather(tensor, tensor_list)
+                    global_output_dict[name] = torch.cat(tensor_list).detach().cpu().numpy()
+                else:
+                    torch.distributed.gather(tensor, dst=0)
+            else:
+                global_output_dict[name] = tensor.detach().cpu().numpy()
+        return global_output_dict
+
+    def get_synchronized_metrics(self, metric_dict):
+        """
+        Reduce (sum then divide by n_gpus) per-process metric tensors to rank 0 and return
+        python floats. Non-distributed: just .item() each tensor.
+        """
+        global_metric_dict = {}
+        for name, tensor in zip(metric_dict.keys(), metric_dict.values()):
+            if self.is_distributed:
+                torch.distributed.reduce(tensor, 0)
+                if self.rank == 0:
+                    global_metric_dict[name] = tensor.item() / self.n_gpus
+            else:
+                global_metric_dict[name] = tensor.item()
+        return global_metric_dict
 
     def backward(self):
         """Backward pass using the loss computed for the current mini-batch."""
@@ -329,6 +437,7 @@ class BaseEngine(ABC):
         log.info(f"Saved state as: {filename}")
 
         if self.wandb_run is not None and self.rank == 0 and suffix != "_LASTGOOD":
+            import wandb  # optional dependency; only needed when a wandb run is active
             artifact = wandb.Artifact(name=f"model-and-opti-checkpoints-{self.wandb_run.id}", type="model-and-opti")
             artifact.add_file(filename)
             artifact.metadata["checkpoints_dir"] = filename

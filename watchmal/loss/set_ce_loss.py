@@ -28,13 +28,14 @@ Optionnal poisson=True:
 from __future__ import annotations
 from typing import Dict, Any, List
 import logging
+import numpy as np
 import torch
 from scipy.optimize import linear_sum_assignment
 
 log = logging.getLogger(__name__)
 _LOG_LAMBDA_MAX = 30.0
 
-def _sanitised_cost(cost: torch.Tensor, where: str) -> "numpy.ndarray":
+def _sanitised_cost(cost: torch.Tensor, where: str) -> np.ndarray:
     if not torch.isfinite(cost).all():
         n_bad = int((~torch.isfinite(cost)).sum())
         log.warning(

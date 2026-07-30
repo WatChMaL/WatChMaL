@@ -77,8 +77,14 @@ class DistributedSamplerWrapper(DistributedSampler):
         num_replicas: Optional[int] = None,
         rank: Optional[int] = None,
         shuffle: bool = False,
+        drop_last: bool = True,
         **kwargs
     ):
+        # drop_last controls the tail policy of the underlying DistributedSampler:
+        #   True  -> drop the tail so every rank gets exactly floor(N/world_size) items
+        #            (equal step counts, no duplication) - the right choice for TRAINING.
+        #   False -> pad the tail so no item is ever excluded - the right choice for
+        #            VALIDATION/inference, where dropping events would bias the metric.
         # Build the parent on the *list* of sampler indices
         super().__init__(
             list(sampler),
@@ -86,7 +92,7 @@ class DistributedSamplerWrapper(DistributedSampler):
             rank=rank,
             shuffle=shuffle,
             seed=seed,
-            drop_last=True,
+            drop_last=drop_last,
             **kwargs
         )
         self.sampler = sampler
