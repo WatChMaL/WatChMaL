@@ -187,25 +187,47 @@ class ReconstructionEngine(BaseEngine):
             self.loss = metrics['loss']
             self.backward()
 
-            # # Run scheduler # for now we decide to apply step after every epoch step (and not batch step)
-            # if self.scheduler is not None:
-            #     self.scheduler.step()
-            
+            # Scheduling during batch is the default
+            if self.scheduler is not None and not isinstance(self.scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
+                self.scheduler.step()
+
             # If not detaching now ( with .item() ) all the data of the epoch will be load into GPU memory
             # v.item() converts torch.tensors to python floats (and detachs + moves to cpu)
-            metrics = {k: v.item() for k, v in metrics.items()} 
+            metrics = {k: v.item() for k, v in metrics.items()}
             outputs = {k: v.item() for k, v in outputs.items()}
 
             # For now we only monitor rank 0
             if self.rank == 0:
 
-                # --- Logs in wandb --- #
                 if self.wandb_run is not None:
 
-                    self.wandb_run.log(
-                        {'train_batch_' + k: v for k, v in outputs.items()} | 
+                    log_dict = (
+                        {'train_batch_' + k: v for k, v in outputs.items()}
+                        |
                         {'train_batch_' + k: v for k, v in metrics.items()}
+                        |
+                        (
+                            {
+                                f'token_sim_{t}':
+                                self.module.token_sim[t].item()
+                                for t in range(self.module.token_sim.shape[0])
+                            }
+                            if hasattr(self.module, 'token_sim')
+                            else {}
+                        )
+                        |
+                        (
+                            {f'act_dead_frac/{n}': s['frac_dead']
+                            for n, s in self.module.relu_stats.items()}
+                            |
+                            {f'act_mean/{n}': s['mean']
+                            for n, s in self.module.relu_stats.items()}
+                            if hasattr(self.module, 'relu_stats')
+                            else {}
+                        )
                     )
+
+                    self.wandb_run.log(log_dict)
 
                 # --- Keep track of metrics --- #
                 self._accumulate_metrics(metrics_epoch_history, metrics)
@@ -365,14 +387,8 @@ class ReconstructionEngine(BaseEngine):
             log.info(f"train_loader: {train_loader}")
             metrics_epoch_history = self.sub_train(train_loader, val_interval) # one train epoch.
             
-            # Run scheduler
-            if ( self.scheduler is not None ) and not isinstance(self.scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
-                current_lr = self.scheduler.get_last_lr()
-                self.scheduler.step()
-                    
-                if ( self.scheduler.get_last_lr() != current_lr ):
-                    log.info("Applied scheduler")
-                    log.info(f"New learning rate is {self.scheduler.get_last_lr()}")
+            # Scheduler stepping moved to batch level (see sub_train), apart from
+            # ReduceLROnPlateau which stays epoch level (see below).
 
             epoch_end_time = datetime.now()
 
@@ -391,11 +407,7 @@ class ReconstructionEngine(BaseEngine):
                     )
 
                     if self.scheduler is not None:
-                        if isinstance(self.scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
-                            self.wandb_run.log({'learning_rate': self.optimizer.param_groups[0]['lr']}) # Changing the optimizer might lead to a change of this line too.    
-                        else :
-                            self.wandb_run.log({'learning_rate': self.scheduler.get_last_lr()[0]}) # Changing the optimizer might lead to a change of this line too.
-
+                        self.wandb_run.log({'learning_rate': self.optimizer.param_groups[0]['lr']}, commit=False) # Changing the optimizer might lead to a change of this line too.
                     if metrics_epoch_history['loss'] < self.best_training_loss:
                         self.best_training_loss = metrics_epoch_history['loss']
                         self.wandb_run.log({'best_train_epoch_loss': self.best_training_loss})
@@ -427,7 +439,7 @@ class ReconstructionEngine(BaseEngine):
 
                 if ( self.optimizer.param_groups[0]['lr'] != current_lr ):
                     log.info("Applied scheduler")
-                    log.info(f"New learning rate is {self.scheduler.get_last_lr()}")
+                    log.info(f"New learning rate is {self.optimizer.param_groups[0]['lr']}")
 
 
             epoch_end_time = datetime.now()
