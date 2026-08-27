@@ -5,7 +5,7 @@ from watchmal.engine.reconstruction import ReconstructionEngine
 
 class ClassifierEngine(ReconstructionEngine):
     """Engine for performing training or evaluation for a classification network."""
-    def __init__(self, target_key, model, rank, device, dump_path, label_set=None):
+    def __init__(self, target_key, model, rank, device, dump_path, wandb_run=None, dataset=None, label_set=None):
         """
         Parameters
         ==========
@@ -19,17 +19,19 @@ class ClassifierEngine(ReconstructionEngine):
             The gpu that this process is running on.
         dump_path : string
             The path to store outputs in.
+        wandb_run, dataset : optional
+            Uniform-constructor args forwarded to the base (see ReconstructionEngine).
         label_set : sequence
             The set of possible labels to classify (if None, which is the default, then class labels in the data must be
             0 to N).
         """
         # create the directory for saving the log and dump files
-        super().__init__(target_key, model, rank, device, dump_path)
+        super().__init__(target_key, model, rank, device, dump_path, wandb_run=wandb_run, dataset=dataset)
         self.softmax = torch.nn.Softmax(dim=1)
         self.label_set = label_set
         self.target = None
 
-    def configure_data_loaders(self, data_config, loaders_config, is_distributed, seed):
+    def setup_data_loaders(self, data_config, loaders_config, is_distributed, seed):
         """
         Set up data loaders from loaders hydra configs for the data config, and a list of data loader configs.
 
@@ -44,7 +46,7 @@ class ClassifierEngine(ReconstructionEngine):
         seed : int
             Random seed to use to initialize dataloaders.
         """
-        super().configure_data_loaders(data_config, loaders_config, is_distributed, seed)
+        super().setup_data_loaders(data_config, loaders_config, is_distributed, seed)
         if self.label_set is not None:
             for name in loaders_config.keys():
                 self.data_loaders[name].dataset.map_labels(self.label_set)

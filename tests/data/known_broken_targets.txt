@@ -1,0 +1,28 @@
+# Ledger of `_target_` entries that do NOT resolve today.
+#
+# This file is the debt list, and it is a RATCHET: `tests/tier0/test_targets_exist.py`
+# expects exactly these to be broken and every other `_target_` in the repo to resolve.
+#   * a NEW broken target fails the build - the list cannot grow by accident;
+#   * FIXING a listed target also fails the build (strict xfail turns into an unexpected
+#     pass), which forces the line below to be deleted in the same PR;
+#   * an entry no longer referenced by any config fails the build as stale.
+# When the file is empty the check silently graduates into a permanent guard.
+#
+# All three entries below are pre-existing stale references in the ex-watchmal config
+# tree, inherited from upstream - none of them was introduced by the merge. Each names
+# something that never existed under that name, so the config in question cannot ever
+# have run.
+#
+# format: one dotted target per line; comments and blank lines ignored.
+
+# tutorial/config/watchmal/data/dataset/hk_dit2tvit.yaml
+# -> the class in watchmal/dataset/dit2tvit/dit2tvit_dataset.py is DualImageDataset
+watchmal.dataset.dit2tvit.dit2tvit_dataset.DoubleImageDataset
+
+# tutorial/config/watchmal/engine/regression_DI.yaml
+# -> watchmal/engine/regression.py defines RegressionEngine only; no DI variant exists
+watchmal.engine.regression.RegressionDIEngine
+
+# tutorial/config/watchmal/model/transformer_dit2t.yaml
+# -> the module is watchmal/model/T2TViTransformerDI.py (it does define DualT2T_ViTRegressor)
+watchmal.model.T2TViTransformer2I.DualT2T_ViTRegressor

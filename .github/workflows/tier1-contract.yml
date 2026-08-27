@@ -1,0 +1,76 @@
+# TIER 1 - IMPORT & CONFIG CONTRACT
+#
+# Goal: would this revision get past start-up on a cluster? The single-core merge was only
+#   ever compileall-checked, so this is its first machine verification.
+# Covers: every module imports; the optional-dependency boundary (the `core` job installs
+#   requirements.txt and NOTHING else - it going red means wandb/PyG leaked into shared
+#   code, so fix the source, never this file); every engine answers to the API run.py
+#   calls on it; every caverns entry config composes, resolves its `_target_`s and carries
+#   the keys the entrypoints read; a config's tasks are callable on the engine it selects.
+#   Missing optional deps SKIP, never pass silently. Not covered: nccl/multi-GPU DDP,
+#   spconv, the compiled PyG extensions, real data, wandb network, any training run.
+# Local: pytest tests/tier1
+#        pytest -m transitional --collect-only -q   # what is left to unify
+
+name: Tier 1 - import & config contract
+
+on:
+  # PRs only. Adding `push` here as well made every push to a PR branch run each
+  # workflow twice: the push event builds the branch head, the pull_request event
+  # builds the merge commit. The merge commit is the one that matters, so keep that.
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: tier1-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    strategy:
+      # Both environments always report: one going red must not hide the other.
+      fail-fast: false
+      matrix:
+        include:
+          - id: core
+            name: core (requirements.txt only - proves the optional-dependency boundary)
+            extra_requirements: ""
+          - id: graph
+            name: graph (+ torch_geometric - resolves the graph configs' targets)
+            extra_requirements: "-r requirements-graph.txt"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      # The CPU index matters: the default one pulls ~2.5 GB of CUDA wheels, which
+      # is slow and can hit the runner disk limit. Nothing here needs a GPU.
+      - name: Install torch (CPU wheels)
+        run: pip install torch --index-url https://download.pytorch.org/whl/cpu
+
+      - name: Install framework requirements (${{ matrix.id }})
+        run: pip install -r requirements.txt ${{ matrix.extra_requirements }} pytest
+
+      - name: Record the installed dependency set
+        run: pip list
+
+      - name: Import & config contract
+        run: pytest tests/tier1
+        env:
+          PYTHONPATH: .
+
+      # Informational: prints the checks that only exist until a unification step
+      # lands, i.e. the live remaining-work list. Never fails the job.
+      - name: Remaining unification work (transitional checks)
+        if: always()
+        run: pytest -m transitional --collect-only -q || true
+        env:
+          PYTHONPATH: .

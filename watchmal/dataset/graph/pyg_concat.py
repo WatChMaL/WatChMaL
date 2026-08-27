@@ -39,14 +39,47 @@ class PyGConcatDataset(Dataset):
             # Handle negative indexing
             if index < 0:
                 index += len(self)
-            
+
             for start, stop, dataset_index in self._indexes:
                 if start <= index < stop:
-                    return self._datasets[dataset_index][index - start]
+                    item = self._datasets[dataset_index][index - start]
+                    return self._with_global_index(item, int(index))
             raise IndexError(f"Index {index} out of range")
         
         else:
             raise TypeError(f"Invalid index type {type(index)}")
+
+    @staticmethod
+    def _with_global_index(item, index: int):
+        """Stamp the concatenated index over the sub-dataset's local one.
+
+        Every sub-dataset numbers its events from 0, so `data.idx` (set in the
+        sub-dataset's `get()`) is only unique *within* that sub-dataset: concatenating
+        K datasets makes each index appear K times.
+
+        That index is the event's identity downstream. The engine gathers it across
+        ranks and deduplicates the evaluation outputs on it
+        (`np.unique(global_indices, return_index=True)`), so colliding indices make
+        events vanish from `outputs/{indices,preds,targets}.npy` - and *silently*,
+        because the metrics are accumulated before the dedup and stay correct. A
+        two-dataset concat (e-/mu- classification, say) can drop up to half the test
+        set that way, and the saved indices cannot be mapped back to the dataset the
+        split file refers to.
+
+        Concatenation is the only place that knows the global position, so the
+        stamping belongs here. For a single, non-concatenated dataset the value is
+        unchanged.
+        """
+        if isinstance(item, dict):
+            # post-ConvertAndToDict form: {'data': Data, 'target': ..., 'indice': idx}
+            if "indice" in item:
+                item["indice"] = index
+            data = item.get("data")
+            if data is not None and hasattr(data, "idx"):
+                data.idx = index
+        elif hasattr(item, "idx"):
+            item.idx = index
+        return item
 
     def __len__(self) -> int:
         return self._len

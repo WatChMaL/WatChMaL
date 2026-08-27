@@ -71,7 +71,7 @@ class DigiTruthMapping:
 
         #self.save_mappings()      
             
-    def save_mappings(slef):
+    def save_mappings(self):
         self.save_object( 'truth_for_data.pkl', self.truth_for_data )
         self.save_object( 'data_for_truth.pkl', self.data_for_truth )   
 

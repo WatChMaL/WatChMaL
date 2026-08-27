@@ -18,7 +18,7 @@ import torch
 from watchmal.dataset.samplers.samplers import SubsetSequentialSampler
 from watchmal.utils.logging_utils_caverns import setup_logging
 from watchmal.utils.early_stopping import EarlyStopping
-from watchmal.utils.banner import show_training_banner
+# banner moved to the entrypoint (watchmal/entrypoints/run.py)
 
 from watchmal.engine.base_engine import BaseEngine
 
@@ -204,30 +204,13 @@ class ReconstructionEngine(BaseEngine):
                     log_dict = (
                         {'train_batch_' + k: v for k, v in outputs.items()}
                         |
+                    self.wandb_run.log(
+                        {'train_batch_' + k: v for k, v in outputs.items()} |
                         {'train_batch_' + k: v for k, v in metrics.items()}
-                        |
-                        (
-                            {
-                                f'token_sim_{t}':
-                                self.module.token_sim[t].item()
-                                for t in range(self.module.token_sim.shape[0])
-                            }
-                            if hasattr(self.module, 'token_sim')
-                            else {}
-                        )
-                        |
-                        (
-                            {f'act_dead_frac/{n}': s['frac_dead']
-                            for n, s in self.module.relu_stats.items()}
-                            |
-                            {f'act_mean/{n}': s['mean']
-                            for n, s in self.module.relu_stats.items()}
-                            if hasattr(self.module, 'relu_stats')
-                            else {}
-                        )
                     )
 
-                    self.wandb_run.log(log_dict)
+                # --- Analysis-compatible CSV (one row per training step) --- #
+                self.tracker.train_step(self.iteration + step, self.epoch, metrics)
 
                 # --- Keep track of metrics --- #
                 self._accumulate_metrics(metrics_epoch_history, metrics)
@@ -342,15 +325,10 @@ class ReconstructionEngine(BaseEngine):
         
         start_run_time = datetime.now()
         #log.info(f"Engine : {self.rank} | Dataloaders : {self.data_loaders}")
-        if self.rank == 0:
-            n_params = sum(p.numel() for p in self.module.parameters() if p.requires_grad)
-            show_training_banner(
-                engine="graph/reconstruction",
-                device=self.device,
-                params=n_params,
-                epochs=epochs,
-            )
-        
+        # The banner now runs in watchmal/entrypoints/run.py, animating *during* engine
+        # construction and data-loader setup instead of after them - by the time train()
+        # starts there is nothing left to wait for.
+
 
         # initialize epoch and iteration counters
         #epoch               = 0 # (used by nick)  counter of epoch
@@ -460,11 +438,15 @@ class ReconstructionEngine(BaseEngine):
                 # --- Model Saving --- #
                 if checkpointing: # if checkpointing the model is saved at the end of each validation epoch
                     self.save_state()
-                            
-                if metrics_epoch_history["loss"] < self.best_validation_loss:
+
+                saved_best = metrics_epoch_history["loss"] < self.best_validation_loss
+                if saved_best:
                     log.info(" ... Best validation loss so far!")
                     self.best_validation_loss = metrics_epoch_history["loss"]
                     self.save_state(suffix="_BEST")
+
+                # --- Analysis-compatible CSV (one row per validation) --- #
+                self.tracker.validation(self.iteration, self.epoch, metrics_epoch_history, saved_best)
 
 
             # --- Early stopping --- #
@@ -472,7 +454,7 @@ class ReconstructionEngine(BaseEngine):
                 if stop_flag.item():
                     if self.rank == 0:
                         log.info("Early stopping triggered.")
-                        self.wandb_run.log({'early_stopped': True})
+                        self.tracker.wandb_log({'early_stopped': True})
                     if self.is_distributed: # Ensure we stop on all processes. Barrier has to be called from all of the network (processes)
                         torch.distributed.barrier()
                     break
