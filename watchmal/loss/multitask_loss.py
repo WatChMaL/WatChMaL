@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Tuple
 
 import torch
 import torch.nn.functional as F
@@ -7,62 +7,93 @@ from torch import Tensor
 from torch.nn.modules.loss import _WeightedLoss
 
 
-def _head_name(i: int) -> str:
-    """Semantic name for a head index, matching the per-index branching in the loss forward() methods."""
-    if i == 0:
-        return "energy"
-    if i == 1:
-        return "time"
-    if i == 2:
-        return "vertex"
-    if i == 3:
-        return "direction"
-    return f"head_{i}"
+def _huber_loss(y_pred: Tensor, y_true: Tensor, delta: float, reduction: str) -> Tensor:
+    """Elementwise Huber loss."""
+    return F.smooth_l1_loss(y_pred, y_true, beta=delta, reduction=reduction)
+
+
+def _percent_loss(y_pred: Tensor, y_true: Tensor, delta: float, reduction: str) -> Tensor:
+    """Huber loss on |pred - true| / ||true|| (relative-magnitude error)."""
+    norm_true = torch.norm(y_true, dim=-1, keepdim=True).clamp(min=1e-6)
+    rel_error = torch.abs(y_pred - y_true) / norm_true
+    return F.smooth_l1_loss(rel_error, torch.zeros_like(rel_error), beta=delta, reduction=reduction)
+
+
+def _euclidean_loss(y_pred: Tensor, y_true: Tensor, delta: float, reduction: str) -> Tensor:
+    """Huber loss on Euclidean distance between pred and true vectors (e.g. vertex position, momentum)."""
+    dist = torch.norm(y_pred - y_true, dim=1)
+    return F.smooth_l1_loss(dist, torch.zeros_like(dist), beta=delta, reduction=reduction)
+
+
+def _angular_loss(y_pred: Tensor, y_true: Tensor, delta: float, reduction: str) -> Tensor:
+    """Huber loss on arccos angular distance between pred and true unit vectors (e.g. direction)."""
+    dot = torch.sum(y_pred * y_true, dim=1).clamp(-1 + 1e-6, 1 - 1e-6)
+    dist = torch.arccos(dot)
+    return F.smooth_l1_loss(dist, torch.zeros_like(dist), beta=delta, reduction=reduction)
+
+
+_LOSS_REGISTRY: Dict[str, Callable[[Tensor, Tensor, float, str], Tensor]] = {
+    "huber": _huber_loss,
+    "percent": _percent_loss,
+    "euclidean": _euclidean_loss,
+    "angular": _angular_loss,
+}
 
 
 class MultiTaskLoss(_WeightedLoss):
     """
-    Multi-head Huber loss with learned uncertainty weighting (log_vars) for concatenated outputs.
+    Multi-head loss with learned uncertainty weighting (log_vars) for concatenated outputs.
 
-    Each active head contributes an unweighted Huber-style loss that is then scaled by learned
-    uncertainty: loss_i / sigma_i + log(sigma_i), where sigma_i = exp(log_var_i).
+    `head_names` and `loss_types` are independent, explicit per-head lists, indexed the same
+    way as `head_dims` — the label a head is given and the loss form it uses are both stated
+    directly in config rather than inferred from each other or from head position.
+
+    Each active head contributes an unweighted loss that is then scaled by learned
+    uncertainty: loss_i / sigma_i + log1p(sigma_i), where sigma_i = exp(log_var_i).
     The final loss is the mean over active heads.
 
-    Head types (by index):
-        percent_head_idx : percentage-based Huber loss.
-        logratio_head_idx: log-ratio Huber loss, log1p(pred / true), for strictly positive targets (energies)
-        1                : scalar Huber loss (vertex times)
-        2                : 3D vertex loss (Huber on Euclidean distance) (vertex positions)
-        3                : 3D direction loss (Huber on arccos angular distance) (directions)
-        default          : Huber loss
+    Loss types (see functions above for exact definitions):
+        huber     : elementwise Huber loss
+        percent   : Huber on relative-magnitude error, |pred-true| / ||true||
+        euclidean : Huber on Euclidean distance between pred/true vectors (e.g. vertex position, momentum)
+        angular   : Huber on arccos angular distance between pred/true unit vectors (e.g. direction)
 
     Args:
-        head_dims          : output dimensions per head, e.g. [1, 4, 3]. Use 0 to skip a head.
-        percent_head_idx   : index of the head to apply percentage-based Huber loss.
-        logratio_head_idx  : index of the head to apply log-ratio Huber loss.
-        delta              : Huber delta — float (shared) or list (per head).
-        static_head        : reserved for future use.
-        reduction          : 'mean', 'sum', or 'none'.
+        head_dims  : output dimensions per head, e.g. [1, 1, 3, 3]. Use 0 to skip a head.
+        head_names : label per head (any string), same length as head_dims. Used as the key
+                     in the returned per-head loss dict.
+        loss_types : loss type per head (one of _LOSS_REGISTRY's keys), same length as head_dims.
+        delta      : Huber delta — float (shared) or list (per head).
+        reduction  : 'mean', 'sum', or 'none'.
     """
 
     def __init__(
         self,
         head_dims: List[int],
-        percent_head_idx: Optional[int] = None,
-        logratio_head_idx: Optional[int] = None,
-        momentum_head_idx: Optional[int] = None,
+        head_names: List[str],
+        loss_types: List[str],
         delta: Any = 1.0,
-        static_head: Optional[int] = None,
         reduction: str = "mean",
     ) -> None:
         super().__init__(reduction=reduction)
 
+        if len(head_names) != len(head_dims):
+            raise ValueError(
+                f"Length of head_names ({len(head_names)}) must match number of heads ({len(head_dims)})"
+            )
+        if len(loss_types) != len(head_dims):
+            raise ValueError(
+                f"Length of loss_types ({len(loss_types)}) must match number of heads ({len(head_dims)})"
+            )
+        unknown = sorted(set(loss_types) - _LOSS_REGISTRY.keys())
+        if unknown:
+            raise ValueError(f"Unknown loss type(s) {unknown}; available: {sorted(_LOSS_REGISTRY)}")
+
         self.head_dims = head_dims
-        self.percent_head_idx = percent_head_idx
-        self.static_head = static_head
+        self.head_names = list(head_names)
+        self.loss_types = list(loss_types)
         self.reduction = reduction
-        self.logratio_head_idx = logratio_head_idx
-        self.momentum_head_idx = momentum_head_idx
+
         if isinstance(delta, (float, int)):
             self.delta = [float(delta)] * len(head_dims)
         elif isinstance(delta, (list, ListConfig)):
@@ -74,32 +105,10 @@ class MultiTaskLoss(_WeightedLoss):
         else:
             raise TypeError("delta must be a float or list of floats")
 
-    def _head_loss(self, i: int, y_pred: Tensor, y_true: Tensor, delta: float) -> Tensor:
-        """Compute unweighted loss for a single head."""
-        if i == self.percent_head_idx:
-            norm_true = torch.norm(y_true, dim=-1, keepdim=True).clamp(min=1e-6)
-            rel_error = torch.abs(y_pred - y_true) / norm_true
-            return F.smooth_l1_loss(rel_error, torch.zeros_like(rel_error), beta=delta, reduction="mean")
-        if i == self.logratio_head_idx:
-            log_ratio = torch.abs(torch.log((torch.abs(y_pred) / y_true.clamp(min=1e-6))))
-            return F.smooth_l1_loss(log_ratio, torch.zeros_like(log_ratio), beta=delta, reduction="mean")
-        if i == self.momentum_head_idx:
-            dist = torch.norm(y_pred - y_true, dim=1)
-            return F.smooth_l1_loss(dist, torch.zeros_like(dist), beta=delta, reduction="mean")
-            
-        if i == 1:  # scalar
-            return F.smooth_l1_loss(y_pred, y_true, beta=delta, reduction="mean")
-
-        if i == 2:  # 3D vertex — loss on Euclidean distance
-            dist = torch.norm(y_pred - y_true, dim=1)
-            return F.smooth_l1_loss(dist, torch.zeros_like(dist), beta=delta, reduction="mean")
-
-        if i == 3:  # 3D direction — loss on angular distance
-            dot = torch.sum(y_pred * y_true, dim=1).clamp(-1 + 1e-6, 1 - 1e-6)
-            dist = torch.arccos(dot)
-            return F.smooth_l1_loss(dist, torch.zeros_like(dist), beta=delta, reduction="mean")
-
-        return F.smooth_l1_loss(y_pred, y_true, beta=delta, reduction="mean")
+    def _head_loss(self, i: int, y_pred: Tensor, y_true: Tensor) -> Tensor:
+        """Compute unweighted loss for a single head, dispatched by its configured loss type."""
+        loss_fn = _LOSS_REGISTRY[self.loss_types[i]]
+        return loss_fn(y_pred, y_true, self.delta[i], self.reduction)
 
     def forward(self, preds: Tensor, targets: Tensor, log_vars: Tensor) -> Tuple[Tensor, Dict[str, Tensor]]:
         active_head_indices = [i for i, d in enumerate(self.head_dims) if d > 0]
@@ -119,16 +128,15 @@ class MultiTaskLoss(_WeightedLoss):
             y_pred = preds[:, start:end]
             y_true = targets[:, start:end]
 
-            unweighted = self._head_loss(i, y_pred, y_true, self.delta[i])
-            head_losses[_head_name(i)] = unweighted.detach()
+            unweighted = self._head_loss(i, y_pred, y_true)
+            head_losses[self.head_names[i]] = unweighted.detach()
 
             if single_head:
                 total_loss += unweighted
             else:
                 sigma_i = torch.exp(log_vars[head_to_logvar[i]])
-                total_loss += unweighted / sigma_i + torch.log1p((sigma_i))
+                total_loss += unweighted / sigma_i + torch.log1p(sigma_i)
 
             start = end
 
         return total_loss / n_active, head_losses
-

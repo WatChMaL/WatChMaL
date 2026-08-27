@@ -6,46 +6,27 @@ from torch_geometric.utils import softmax
 import logging
 '''
 CheRP: Cherenkov Ring Perceiver
-This model is a refinement of the CLSGAT architecture, that also closely resembles a Perceiver style architecture, for regression/classification of single ring events.
-It uses torch compilation in the sparse attention core to allow processing of many thousands of PMTs per event, this hopefully works for you!
+A refinement of CLSGAT with a Perceiver-style token bottleneck; the sparse attention
+core is torch-compiled to process many thousands of PMTs per event.
 '''
 log = logging.getLogger(__name__)
-def activation_stats(x):
-    return {
-        'frac_dead': (x.abs() < 1e-6).float().mean().item(),
-        'mean': x.abs().mean().item(),
-    }
 
 
-# ------------------------
-# Node encoder
-# ------------------------
 class NodeEncoder(nn.Module):
     def __init__(self, in_channels, hidden_channels, dropout=0.0):
         super().__init__()
         self.mlp = nn.Sequential(
             nn.Linear(in_channels, hidden_channels),
-            nn.ReLU(),
+            nn.GELU(),
             nn.Dropout(p=dropout),
             nn.LayerNorm(hidden_channels),
             nn.Linear(hidden_channels, hidden_channels),
         )
 
-    def forward(self, x, log_stats=False):
-        if not log_stats:
-            return self.mlp(x)
-        stats = {}
-        for name, layer in self.mlp.named_children():
-            x = layer(x)
-            if isinstance(layer, (nn.ReLU, nn.GELU)):
-                stats[f'encoder_{name}'] = activation_stats(x)
-        self.act_stats = stats
-        return x
+    def forward(self, x):
+        return self.mlp(x)
 
 
-# ------------------------
-# Token transformer block
-# ------------------------
 class TokenTransformerBlock(nn.Module):
     def __init__(self, hidden_channels, num_heads, dropout=0.0, pre_norm=False):
         super().__init__()
@@ -62,31 +43,19 @@ class TokenTransformerBlock(nn.Module):
         self.norm1 = nn.LayerNorm(hidden_channels)
         self.norm2 = nn.LayerNorm(hidden_channels)
 
-    def _mlp(self, h, log_stats):
-        if not log_stats:
-            return self.mlp(h)
-        stats = {}
-        for name, layer in self.mlp.named_children():
-            h = layer(h)
-            if isinstance(layer, (nn.ReLU, nn.GELU)):
-                stats[f'ffn_{name}'] = activation_stats(h)
-        self.act_stats = stats
-        return h
-
-    def forward(self, x, log_stats=False):
+    def forward(self, x):
         if self.pre_norm:
             h = self.norm1(x)
             attn_out, _ = self.attn(h, h, h)
             x = x + attn_out
-            return x + self._mlp(self.norm2(x), log_stats)
+            return x + self.mlp(self.norm2(x))
         attn_out, _ = self.attn(x, x, x)
         x = self.norm1(x + attn_out)
-        return self.norm2(x + self._mlp(x, log_stats))
+        return self.norm2(x + self.mlp(x))
 
 
-# ------------------------
+
 # Dense token-attention core (t2n direction only)
-# ------------------------
 class DenseTokenLayerCore(nn.Module):
     def __init__(self, hidden_channels, num_heads, scale, dropout, pre_norm=False):
         super().__init__()
@@ -99,17 +68,16 @@ class DenseTokenLayerCore(nn.Module):
     def forward(self, Q, K, V, query_x, mlp_query, batch,
                 mlp_weight1, mlp_bias1, mlp_weight2, mlp_bias2,
                 norm_weight, norm_bias):
-        # Q: (N, num_heads, head_dim); K, V: (batch_size, num_tokens, num_heads, head_dim)
-        K_n = K[batch]   # (N, num_tokens, num_heads, head_dim)
+        K_n = K[batch]
         V_n = V[batch]
 
-        attn_scores  = (Q.unsqueeze(1) * K_n).sum(dim=-1) / self.scale   # (N, num_tokens, num_heads)
+        attn_scores  = (Q.unsqueeze(1) * K_n).sum(dim=-1) / self.scale
         attn_weights = F.softmax(attn_scores, dim=1)
 
         if self.training and self.dropout > 0:
             attn_weights = F.dropout(attn_weights, p=self.dropout)
 
-        weighted_v = V_n * attn_weights.unsqueeze(-1)   # (N, num_tokens, num_heads, head_dim)
+        weighted_v = V_n * attn_weights.unsqueeze(-1)
         weighted_v = weighted_v.reshape(weighted_v.size(0), weighted_v.size(1), -1)
         agg = weighted_v.float().sum(dim=1)
         agg = agg.to(query_x.dtype)
@@ -119,11 +87,7 @@ class DenseTokenLayerCore(nn.Module):
         combined = torch.cat([mlp_query, agg], dim=-1)
         x_out     = F.linear(combined, mlp_weight1, mlp_bias1)
         x_out     = F.gelu(x_out)
-
-        gelu_frac_dead = (x_out.abs() < 1e-6).float().mean()
-        gelu_mean      = x_out.abs().mean()
-
-        x_out = F.linear(x_out, mlp_weight2, mlp_bias2)
+        x_out     = F.linear(x_out, mlp_weight2, mlp_bias2)
 
         if self.training and self.dropout > 0:
             x_out = F.dropout(x_out, p=self.dropout)
@@ -133,7 +97,7 @@ class DenseTokenLayerCore(nn.Module):
         else:
             normed = F.layer_norm(query_x + x_out, (query_x.size(-1),), norm_weight, norm_bias)
             out = torch.where(received, normed, query_x)
-        return out, gelu_frac_dead, gelu_mean
+        return out
 
 
 class DenseTokenAttentionLayer(nn.Module):
@@ -160,7 +124,7 @@ class DenseTokenAttentionLayer(nn.Module):
         else:
             self.norm = nn.LayerNorm(hidden_channels)
 
-    def forward(self, query_x, kv_tokens, batch, log_stats=False):
+    def forward(self, query_x, kv_tokens, batch):
         # query_x: (N, hidden) nodes; kv_tokens: (batch_size, num_tokens, hidden)
         num_query = query_x.size(0)
         batch_size, num_tokens, _ = kv_tokens.shape
@@ -178,25 +142,16 @@ class DenseTokenAttentionLayer(nn.Module):
         K = self.k_proj(kv_in).view(batch_size, num_tokens, self.num_heads, self.head_dim)
         V = self.v_proj(kv_in).view(batch_size, num_tokens, self.num_heads, self.head_dim)
 
-        out, gelu_frac_dead, gelu_mean = self.core(
+        out = self.core(
             Q, K, V, query_x, mlp_query, batch,
             self.mlp_l1.weight, self.mlp_l1.bias,
             self.mlp_l2.weight, self.mlp_l2.bias,
             norm_weight, norm_bias,
         )
 
-        if log_stats:
-            self.act_stats = {'gelu': {
-                'frac_dead': gelu_frac_dead.item(),
-                'mean': gelu_mean.item(),
-            }}
-
         return out
 
 
-# ------------------------
-# Compiled attention core
-# ------------------------
 class CompiledLayerCore(nn.Module):
     def __init__(self, hidden_channels, num_heads, scale, dropout, use_cosine=False, pre_norm=False):
         super().__init__()
@@ -235,11 +190,7 @@ class CompiledLayerCore(nn.Module):
         combined = torch.cat([mlp_query, agg], dim=-1)
         x_out     = F.linear(combined, mlp_weight1, mlp_bias1)
         x_out     = F.gelu(x_out)
-
-        gelu_frac_dead = (x_out.abs() < 1e-6).float().mean()
-        gelu_mean      = x_out.abs().mean()
-
-        x_out = F.linear(x_out, mlp_weight2, mlp_bias2)
+        x_out     = F.linear(x_out, mlp_weight2, mlp_bias2)
 
         if self.training and self.dropout > 0:
             x_out = F.dropout(x_out, p=self.dropout)
@@ -249,12 +200,8 @@ class CompiledLayerCore(nn.Module):
         else:
             normed = F.layer_norm(query_x + x_out, (query_x.size(-1),), norm_weight, norm_bias)
             out = torch.where(received, normed, query_x)
-        return out, gelu_frac_dead, gelu_mean
+        return out
 
-
-# ------------------------
-# Attention layer
-# ------------------------
 class AttentionLayer(nn.Module):
     def __init__(self, hidden_channels, num_heads=4, dropout=0.0, use_cosine=False, pre_norm=False):
         super().__init__()
@@ -280,7 +227,7 @@ class AttentionLayer(nn.Module):
         else:
             self.norm = nn.LayerNorm(hidden_channels)
 
-    def forward(self, query_x, kv_x, edge_index, log_stats=False):
+    def forward(self, query_x, kv_x, edge_index):
         row, col = edge_index
         num_query = query_x.size(0)
         num_kv    = kv_x.size(0)
@@ -298,25 +245,15 @@ class AttentionLayer(nn.Module):
         K = self.k_proj(kv_in).view(num_kv, self.num_heads, self.head_dim)
         V = self.v_proj(kv_in).view(num_kv, self.num_heads, self.head_dim)
 
-        out, gelu_frac_dead, gelu_mean = self.core(
+        out = self.core(
             Q, K, V, query_x, mlp_query, row, col, num_query,
             self.mlp_l1.weight, self.mlp_l1.bias,
             self.mlp_l2.weight, self.mlp_l2.bias,
             norm_weight, norm_bias,
         )
 
-        if log_stats:
-            self.act_stats = {'gelu': {
-                'frac_dead': gelu_frac_dead.item(),
-                'mean': gelu_mean.item(),
-            }}
-
         return out
 
-
-# ------------------------
-# CheRP
-# ------------------------
 class CheRP(nn.Module):
     def __init__(
         self,
@@ -346,11 +283,12 @@ class CheRP(nn.Module):
         self.use_nhits             = use_nhits
         self.use_event_total_charge = use_event_total_charge
         self.use_global_token      = use_nhits or use_event_total_charge
+        self.num_special_tokens    = 1   # CLS only
+        self.total_tokens          = num_tokens + self.num_special_tokens
         self.multitask             = False
         self.node_dropout          = node_dropout
         self.pre_norm              = pre_norm
         self.shared_token_transformer = shared_token_transformer
-        self.log_stats             = True  # set to True to enable activation/token-sim logging
 
         if isinstance(token_layers_per_step, int):
             self.token_layers_per_step = [token_layers_per_step] * num_layers
@@ -358,10 +296,12 @@ class CheRP(nn.Module):
             assert len(token_layers_per_step) == num_layers
             self.token_layers_per_step = list(token_layers_per_step)
 
-        num_frozen = num_tokens - 1 if self.use_global_token else num_tokens
-        token_init = torch.empty(num_frozen, hidden_channels)
+        token_init = torch.empty(num_tokens, hidden_channels)
         nn.init.orthogonal_(token_init)
-        self.token_embed = nn.Parameter(token_init)
+        self.register_buffer('token_embed', token_init)   # frozen: fixed orthogonal basis, never trained
+
+        self.cls_token = nn.Parameter(torch.zeros(1, hidden_channels))
+        nn.init.normal_(self.cls_token, std=0.02)
 
         if self.use_global_token:
             global_dim = int(use_nhits) + int(use_event_total_charge)
@@ -379,8 +319,8 @@ class CheRP(nn.Module):
 
         self.heads = nn.ModuleList([
             nn.Sequential(
-                nn.LayerNorm(hidden_channels * num_tokens),
-                nn.Linear(hidden_channels * num_tokens, hidden_channels),
+                nn.LayerNorm(hidden_channels),
+                nn.Linear(hidden_channels, hidden_channels),
                 nn.ReLU(),
                 nn.Linear(hidden_channels, out_dim, bias=True),
             )
@@ -400,9 +340,7 @@ class CheRP(nn.Module):
             for _ in range(num_layers - 1)
         ])
 
-        # per token-processing sub-step: either one shared (weight-tied) token
-        # transformer reused at every invocation, or one independent set of weights
-        # per invocation across the whole per-layer loop
+        # shared: one weight-tied transformer reused every invocation; else one per invocation
         if shared_token_transformer:
             self.token_transformer = TokenTransformerBlock(hidden_channels, num_heads, dropout, pre_norm=pre_norm)
         else:
@@ -417,39 +355,10 @@ class CheRP(nn.Module):
             for _ in range(num_end_layers)
         ])
 
-    # ------------------------
-    # Activation stats (only populated when self.log_stats=True)
-    # ------------------------
-    @property
-    def relu_stats(self):
-        if not self.log_stats:
-            return {}
-        stats = {}
-        stats.update(getattr(self.encoder, 'act_stats', {}))
-        for i, layer in enumerate(self.n2t_layers):
-            for k, v in getattr(layer, 'act_stats', {}).items():
-                stats[f'attention_{i}_n2t_{k}'] = v
-        for i, layer in enumerate(self.t2n_layers):
-            for k, v in getattr(layer, 'act_stats', {}).items():
-                stats[f'attention_{i}_t2n_{k}'] = v
-        if self.shared_token_transformer:
-            for k, v in getattr(self.token_transformer, 'act_stats', {}).items():
-                stats[f'token_transformer_{k}'] = v
-        else:
-            for j, tt in enumerate(self.token_transformers):
-                for k, v in getattr(tt, 'act_stats', {}).items():
-                    stats[f'token_transformer_{j}_{k}'] = v
-        for i, block in enumerate(self.transformerend_layers):
-            for k, v in getattr(block, 'act_stats', {}).items():
-                stats[f'transformerend_{i}_{k}'] = v
-        stats.update(getattr(self, '_head_act_stats', {}))
-        return stats
-
-    # ------------------------
-    # Token initialisation
-    # ------------------------
     def get_tokens(self, data, batch, batch_size):
-        base = self.token_embed.unsqueeze(0).expand(batch_size, -1, -1)
+        base_toks = self.token_embed.unsqueeze(0).expand(batch_size, -1, -1)
+
+        cls = self.cls_token.unsqueeze(0).expand(batch_size, -1, -1)
 
         if self.use_global_token:
             feats = []
@@ -457,24 +366,18 @@ class CheRP(nn.Module):
                 feats.append(data.n_hits.unsqueeze(1))
             if self.use_event_total_charge:
                 feats.append(data.event_total_charge.unsqueeze(1))
-            global_input = torch.cat(feats, dim=1).to(batch.device)
-            global_tok   = self.global_token_proj(global_input).unsqueeze(1)
-            all_tokens   = torch.cat([global_tok, base], dim=1)
-        else:
-            all_tokens = base
+            global_input = torch.cat(feats, dim=1).to(batch.device).float()
+            cls = cls + self.global_token_proj(global_input).unsqueeze(1)
 
-        return all_tokens.reshape(batch_size * self.num_tokens, -1)
+        all_tokens = torch.cat([cls, base_toks], dim=1)   # CLS (hint-initialised, if enabled) at slot 0
+        return all_tokens.reshape(batch_size * self.total_tokens, -1)
 
-    # ------------------------
-    # Forward
-    # ------------------------
     def forward(self, data):
         x, batch   = data.x, data.batch
         num_nodes  = x.size(0)
         batch_size = data.num_graphs
-        ls         = self.log_stats   # local alias avoids repeated attr lookup
 
-        nodes = self.encoder(x, log_stats=ls)
+        nodes = self.encoder(x)
 
         if self.training and self.node_dropout > 0.0:
             mask = torch.bernoulli(
@@ -484,67 +387,45 @@ class CheRP(nn.Module):
 
         tokens = self.get_tokens(data, batch, batch_size)
 
-        # nodes and tokens are kept as separate tensors throughout; the sparse
-        # n2t edge index pairs every node with all num_tokens of its own graph
         node_local  = torch.arange(num_nodes, device=nodes.device).repeat_interleave(self.num_tokens)
         token_local = (
-            batch.unsqueeze(1) * self.num_tokens
-            + torch.arange(self.num_tokens, device=nodes.device)
+            batch.unsqueeze(1) * self.total_tokens
+            + torch.arange(self.num_special_tokens, self.total_tokens, device=nodes.device)
         ).reshape(-1)
 
-        edge_index_node_token = torch.stack([token_local, node_local], dim=0)   # query=token, kv=node
+        edge_index_node_token  = torch.stack([token_local, node_local], dim=0)   # query=token, kv=node
 
         token_layer_idx = 0
         for i in range(self.num_layers):
-            tokens = self.n2t_layers[i](tokens, nodes, edge_index_node_token, log_stats=ls)
+            tokens = self.n2t_layers[i](tokens, nodes, edge_index_node_token)
 
-            tokens_seq = tokens.view(batch_size, self.num_tokens, -1)
+            tokens_seq = tokens.view(batch_size, self.total_tokens, -1)
             for _ in range(self.token_layers_per_step[i]):
                 if self.shared_token_transformer:
-                    tokens_seq = self.token_transformer(tokens_seq, log_stats=ls)
+                    tokens_seq = self.token_transformer(tokens_seq)
                 else:
-                    tokens_seq = self.token_transformers[token_layer_idx](tokens_seq, log_stats=ls)
+                    tokens_seq = self.token_transformers[token_layer_idx](tokens_seq)
                     token_layer_idx += 1
             tokens = tokens_seq.reshape(-1, self.hidden_channels)
 
             if i < self.num_layers - 1:
-                # every node attends over all num_tokens of its own graph's tokens,
-                # so this is a dense gather, not an edge list
-                nodes = self.t2n_layers[i](nodes, tokens_seq, batch, log_stats=ls)
+                # dense gather: every node attends all of its event's tokens (CLS excluded)
+                node_kv_toks = tokens_seq[:, self.num_special_tokens:, :]
+                nodes = self.t2n_layers[i](nodes, node_kv_toks, batch)
 
-        token_out = tokens.view(batch_size, self.num_tokens, -1)
-
-        # Token similarity — only computed when logging
-        if ls:
-            with torch.no_grad():
-                token_norm = F.normalize(token_out, p=2, dim=-1)
-                sim = torch.bmm(token_norm, token_norm.transpose(1, 2)).mean(dim=0)
-                sim.fill_diagonal_(0)
-                self.token_sim        = sim.sum(dim=-1) / (self.num_tokens - 1)
-                self.token_sim_matrix = sim
+        token_out = tokens.view(batch_size, self.total_tokens, -1)
 
         for layer in self.transformerend_layers:
-            token_out = layer(token_out, log_stats=ls)
+            token_out = layer(token_out)
 
-        token_out = token_out.reshape(batch_size, -1)
+        cls_out = token_out[:, 0, :]   # CLS token at slot 0
 
-        head_act_stats = {}
         outputs = []
         for i, head in enumerate(self.heads):
-            if not ls:
-                h = head(token_out)
-            else:
-                h = token_out
-                for name, layer in head.named_children():
-                    h = layer(h)
-                    if isinstance(layer, (nn.ReLU, nn.GELU)):
-                        head_act_stats[f'head_{i}_{name}'] = activation_stats(h)
+            h = head(cls_out)
             if self.normalize_heads[i]:
                 h = F.normalize(h, p=2, dim=1)
             outputs.append(h)
-
-        if ls:
-            self._head_act_stats = head_act_stats
 
         if self.multitask:
             return outputs, self.log_vars

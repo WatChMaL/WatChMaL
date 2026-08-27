@@ -200,10 +200,6 @@ class ReconstructionEngine(BaseEngine):
             if self.rank == 0:
 
                 if self.wandb_run is not None:
-
-                    log_dict = (
-                        {'train_batch_' + k: v for k, v in outputs.items()}
-                        |
                     self.wandb_run.log(
                         {'train_batch_' + k: v for k, v in outputs.items()} |
                         {'train_batch_' + k: v for k, v in metrics.items()}
