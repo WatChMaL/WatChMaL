@@ -133,3 +133,7 @@ __MACOSX/
 
 # demonstration plots (regenerate with setup/demo_determinism.py)
 /plots/
+
+# personal dataset-loading/transform code, kept local for testing only
+/watchmal/dataset/graph/h5_graph.py
+/watchmal/dataset/graph/other_transformations.py
