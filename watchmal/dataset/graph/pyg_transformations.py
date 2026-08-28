@@ -674,6 +674,31 @@ class RandomCylindricalTransform(torch.nn.Module):
             data.y   = y
 
         return data
+
+
+class CenterTimeByEvent(torch.nn.Module):
+    """
+    Centers the time feature on its own per-event mean, making it invariant to any
+    constant additive shift applied uniformly to all hit times in the event (e.g.
+    trigger jitter). Preserves within-event relative timing structure exactly, since
+    (t_i + delta) - mean(t + delta) = t_i - mean(t) for any delta.
+
+    Args:
+        time_col (int): index in data.x to center
+    """
+
+    def __init__(self, time_col=0):
+        super().__init__()
+        self.time_col = time_col
+
+    def forward(self, data):
+        if data.x.size(0) == 0:
+            return data
+        t = data.x[:, self.time_col]
+        data.x[:, self.time_col] = t - t.mean()
+        return data
+
+
 class FixVertexTime(torch.nn.Module):
     """
     Makes the vertex time component make sense with respect to the timings in a given event.

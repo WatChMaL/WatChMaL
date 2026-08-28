@@ -3,14 +3,11 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch_geometric.utils import softmax
-import logging
 '''
 CheRP: Cherenkov Ring Perceiver
 A refinement of CLSGAT with a Perceiver-style token bottleneck; the sparse attention
 core is torch-compiled to process many thousands of PMTs per event.
 '''
-log = logging.getLogger(__name__)
-
 
 class NodeEncoder(nn.Module):
     def __init__(self, in_channels, hidden_channels, dropout=0.0):
