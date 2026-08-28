@@ -164,9 +164,7 @@ class RegressionEngine(ReconstructionEngine):
             head_losses = {}
             if log_vars is not None:
                 loss, head_losses = self.criterion(model_out, self.target, log_vars)
-                # Anchor log_vars in the computation graph so DDP can all-reduce its
-                # gradient even when the criterion doesn't use it (e.g. GeometricMeanLoss
-                # without use_cauchy_percent_head). Adds exactly 0 to the loss value.
+                ## fix for issues with DDP, forces parameter updates even if unused
                 loss = loss + 0.0 * log_vars.sum()
             else:
                 loss = self.criterion(model_out, self.target)

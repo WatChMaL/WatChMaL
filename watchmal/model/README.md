@@ -15,6 +15,8 @@ engine are always picked as a pair in the main config.
 | `node_encoder.py` | `NodeEncoder` | shared node-embedding building block | — |
 | `mPMT_gat_pooling.py` | `HierarchicalGAT` | two-level PMT → mPMT GAT (WCTE) | `model/mpmt_gat_pooling.yaml` |
 | `mPMT_gat_augmem.py` | `HierarchicalGAT` | memory-augmented variant of the above | — |
+| `clsgat.py` | `GraphAttentionNetwork` | graph classification / multitask regression, prefit-token + CLS readout | — |
+| `cherp.py` | `CheRP` | Set Transformer/Perceiver-style refinement of `CLSGAT.py`: token-bottleneck cross-attention, CLS readout, classification and single/multitask regression. Does not use the graph edges (still works with graph engine) | — |
 
 Pair these with the graph engines: `engine/gnn_classifier.yaml`
 (→ `watchmal.engine.graph.classification.ClassifierEngine`) or `engine/gnn_regressor.yaml`
