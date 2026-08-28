@@ -23,7 +23,7 @@ Uniform engine contract served here:
 from hydra.utils import instantiate
 from hydra.core.utils import configure_log
 
-from omegaconf import open_dict
+from omegaconf import OmegaConf, open_dict
 
 # torch imports
 import torch
@@ -61,7 +61,7 @@ def _engine_label(hydra_config) -> str:
     return parts[-1] if parts else "engine"
 
 
-def run(rank, gpu_list, dataset, wandb_run, hydra_config, global_hydra_config):
+def run(rank, gpu_list, dataset, wandb_run, wandb_run_id, hydra_config, global_hydra_config):
 
     ngpus = len(gpu_list)
     is_distributed = ngpus > 1
@@ -99,6 +99,13 @@ def run(rank, gpu_list, dataset, wandb_run, hydra_config, global_hydra_config):
         master_port = int(hydra_config.get("MASTER_PORT", DEFAULT_MASTER_PORT)) + int(gpu_list[0])
         ddp_setup(rank, world_size=ngpus, master_port=master_port, device=device)
         configure_log(global_hydra_config.job_logging, global_hydra_config.verbose)
+
+    if rank == 0 and wandb_run is None and wandb_run_id is not None:
+        # Parent finished this run before spawning (see main.py) so its id could be
+        # pickled across; re-attach to the same run rather than starting a new one.
+        import wandb
+        wandb_conf = OmegaConf.to_container(hydra_config.wandb, resolve=True)
+        wandb_run = wandb.init(id=wandb_run_id, resume="must", **wandb_conf)
 
     wandb_run = wandb_run if rank == 0 else None
     log.info(f"Running worker {rank} on device : {device} with wandb_run : {wandb_run}")

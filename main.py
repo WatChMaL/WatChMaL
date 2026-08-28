@@ -8,10 +8,14 @@ prebuilds an in-memory dataset, then spawns the single worker
 graph and multi-ring runs all go through the same worker and the same engine base; a
 model family is selected purely by the hydra `engine`/`model`/`data` configs.
 
-The worker signature is `run(rank, gpu_list, dataset, wandb_run, hydra_config,
-global_hydra_config)`. `dataset` is non-None only for in-memory (pyg) datasets prebuilt
-here so each worker does not reload them; `wandb_run` is non-None only when wandb is
-enabled.
+The worker signature is `run(rank, gpu_list, dataset, wandb_run, wandb_run_id,
+hydra_config, global_hydra_config)`. `dataset` is non-None only for in-memory (pyg)
+datasets prebuilt here so each worker does not reload them. A live `wandb.Run` can't
+survive being pickled into mp.spawn's fresh interpreters (it owns a socket to wandb's
+background service process), so under DDP the parent finishes the run and passes only
+`wandb_run_id`; rank 0 re-attaches to the same run inside run() instead of receiving the
+object itself. In the single-process path there's no pickling boundary to cross, so
+`wandb_run` is passed directly and `wandb_run_id` is unused.
 """
 
 # hydra imports
@@ -90,12 +94,24 @@ def main(config):
         dataset = None
 
     if ngpus > 1:
+        wandb_run_id = None
+        if wandb_run is not None:
+            # A live wandb.Run holds a socket to wandb's background service process; it
+            # can't survive being pickled into mp.spawn's fresh interpreters. Finish it
+            # here and pass only the id — rank 0 re-attaches to the same run inside
+            # run() instead of receiving the object itself.
+            wandb_run_id = wandb_run.id
+            wandb_run.finish()
+            wandb_run = None
+            for k in ("WANDB_SERVICE", "WANDB_RUN_ID", "WANDB_RUN_GROUP"):
+                os.environ.pop(k, None)
+
         log.info(f"Using DistributedDataParallel on devices: {[f'cuda:{x}' for x in gpu_list]}")
         mp.spawn(run, nprocs=ngpus,
-                 args=(gpu_list, dataset, wandb_run, config, global_hydra_config))
+                 args=(gpu_list, dataset, wandb_run, wandb_run_id, config, global_hydra_config))
     else:
         log.info("Single device, not using multiprocessing")
-        run(0, gpu_list, dataset, wandb_run, config, global_hydra_config)
+        run(0, gpu_list, dataset, wandb_run, None, config, global_hydra_config)
 
 
 if __name__ == '__main__':
