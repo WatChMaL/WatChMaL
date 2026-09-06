@@ -137,3 +137,6 @@ __MACOSX/
 # personal dataset-loading/transform code, kept local for testing only
 /watchmal/dataset/graph/h5_graph.py
 /watchmal/dataset/graph/other_transformations.py
+
+# stray cluster-job output (nohup, slurm, etc.), never meant to be committed
+*.out

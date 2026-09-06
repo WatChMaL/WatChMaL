@@ -199,6 +199,7 @@ class ReconstructionEngine(BaseEngine):
             # For now we only monitor rank 0
             if self.rank == 0:
 
+                # --- Logs in wandb --- #
                 if self.wandb_run is not None:
                     self.wandb_run.log(
                         {'train_batch_' + k: v for k, v in outputs.items()} |
@@ -361,8 +362,6 @@ class ReconstructionEngine(BaseEngine):
             log.info(f"train_loader: {train_loader}")
             metrics_epoch_history = self.sub_train(train_loader, val_interval) # one train epoch.
             
-            # Scheduler stepping moved to batch level (see sub_train), apart from
-            # ReduceLROnPlateau which stays epoch level (see below).
 
             epoch_end_time = datetime.now()
 
@@ -406,6 +405,7 @@ class ReconstructionEngine(BaseEngine):
                         torch.distributed.broadcast(stop_flag, src=0) # rank 0 (src) pushes flag across the network of processes
                 
             # --- Scheduler --- #
+            # Handles the still on epoch ReduceLROnPlateau scheduler case.
             if ( self.scheduler is not None ) and isinstance(self.scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
 
                 current_lr = self.optimizer.param_groups[0]['lr']
