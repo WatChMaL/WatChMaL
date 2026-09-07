@@ -1,9 +1,11 @@
 
 import numpy as np
 import torch
+
 import omegaconf
 from omegaconf import OmegaConf
-from torch_geometric.data import Data
+
+# watchmal imports
 from watchmal.dataset.graph.data_utils import match_type
 from watchmal.utils.logging_utils_caverns import setup_logging
 
@@ -109,13 +111,8 @@ class MapLabels(torch.nn.Module):
         self.label_set = list(label_set)
 
     def forward(self, data):
-        y = data.y
-        if y.dim() == 0 or y.numel() == 1:
-            new_target = self.label_set.index(y.item())
-            data.y = torch.tensor([new_target])
-        else:
-            new_targets = [self.label_set.index(v.item()) for v in y]
-            data.y = torch.tensor(new_targets)
+        new_target = self.label_set.index(data.y)
+        data.y = torch.tensor([new_target])
 
         return data
 

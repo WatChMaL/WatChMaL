@@ -14,14 +14,13 @@ def safe_normalize(x, dim=1, eps=1e-8):
 class NodeEncoder(nn.Module):
     def __init__(self, in_channels, hidden_channels, max_position=10, dropout=0.1):
         super().__init__()
-        # Fully connected network applied to PMT features
         self.mlp = nn.Sequential(
             nn.Linear(in_channels, hidden_channels),
             nn.ReLU(),
-            nn.Dropout(p=dropout),  # Use dropout parameter here
+            nn.Dropout(p=dropout),  
             nn.LayerNorm(hidden_channels),
             nn.Linear(hidden_channels, hidden_channels),
-           ## nn.Dropout(p=dropout)   # And here
+          
         )
 
     def forward(self, x, pos_idx=None):
