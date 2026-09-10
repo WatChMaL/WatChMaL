@@ -110,7 +110,7 @@ class ReconstructionEngine(ABC):
         is_gpu = self.device != torch.device("cpu")
         for name, loader_config in loaders_config.items():
             self.data_loaders[name] = get_data_loader(**data_config, **loader_config, is_distributed=is_distributed,
-                                                      is_gpu=is_gpu, seed=seed)
+                                                      is_gpu=is_gpu, seed=seed, loader_name=name)
             self.data_loaders[name].dataset.set_target(self.target_key)
 
     def get_synchronized_outputs(self, output_dict):
