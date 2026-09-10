@@ -10,6 +10,7 @@ data_loaders:
     split_key: train_idxs
     batch_size: 32
     num_workers: 8
+    drop_last: true
   validation:
     split_key: val_idxs
     batch_size: 32
