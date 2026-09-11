@@ -22,7 +22,6 @@ used for creating graph datasets.
 # 30/01 :  - Ajouter une erreur si les tailles de feat/target_norm et du nombre de features dans data.x/y ne correspondent pas
 #          - Ajouter de la doc sur les appels [0] et [1]
 # 14/02 :  - Mettre à jour la doc de cette fonction
-
 class Normalize(torch.nn.Module):
     """Normalize a torch_geometric Data object with mean and standard deviation.
     Given mean: ``(mean[1],...,mean[n])`` and std: ``(std[1],..,std[n])`` for ``n``
@@ -84,7 +83,8 @@ class Normalize(torch.nn.Module):
 
             for ft_index in range(data.x.size(dim=1)):
                 if self.apply_log[ft_index]:
-                    data.x[:, ft_index] = (data.x[:, ft_index].log() - self.feat_norm[1, ft_index].log()) / (self.feat_norm[0, ft_index].log() - self.feat_norm[1, ft_index].log() + self.eps)
+                    ##log1p to handle zero charge
+                    data.x[:, ft_index] = (data.x[:, ft_index].log1p() - self.feat_norm[1, ft_index].log1p()) / (self.feat_norm[0, ft_index].log1p() - self.feat_norm[1, ft_index].log1p() + self.eps) 
                 else :
                     data.x[:, ft_index] = (data.x[:, ft_index] - self.feat_norm[1, ft_index]) / (self.feat_norm[0, ft_index] - self.feat_norm[1, ft_index] + self.eps)
 
