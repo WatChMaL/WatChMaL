@@ -6,11 +6,6 @@ from torch_geometric.utils import softmax
 from torch_geometric.nn import GraphNorm
 from torch_scatter import scatter, scatter_add, scatter_max
 
-
-def safe_normalize(x, dim=1, eps=1e-8):
-    norm = torch.norm(x, p=2, dim=dim, keepdim=True)
-    return x / (norm + eps)
-
 class NodeEncoder(nn.Module):
     def __init__(self, in_channels, hidden_channels, max_position=10, dropout=0.1):
         super().__init__()
@@ -93,17 +88,17 @@ class AttentionLayer(nn.Module):
 
 
 class GraphAttentionNetwork(nn.Module):
-    def __init__(self, in_channels, hidden_channels,
+    def __init__(self, in_channels, hidden_channels,out_dim,
                  num_layers=4, num_heads=4,
                  use_nhits=False, use_event_total_charge=False, use_vertex=False, use_direction = False,
-                 dropout=0.0,reg_dims=[1,4,3],normalize_heads=None):
+                 dropout=0.0):
         super().__init__()
         self.use_vertex = use_vertex
         self.use_direction = use_direction
         self.use_nhits = use_nhits
         self.use_event_total_charge = use_event_total_charge
         self.hidden_channels = hidden_channels
-        self.num_heads = num_heads
+
         self.blank_token = nn.Parameter(torch.randn(1, hidden_channels))
 
         # Compute prefit dimension for projection into token
@@ -130,29 +125,18 @@ class GraphAttentionNetwork(nn.Module):
         ])
         for _ in range(num_layers)
         ])
-        self.reg_dims = reg_dims
-        self.reg_heads = len(reg_dims)
-        if normalize_heads is None:
-            normalize_heads = [False] * self.reg_heads
-        assert len(normalize_heads) == self.reg_heads
-        self.normalize_heads = normalize_heads
+    
 
         
         # MLP for each head
         expanded_dim = hidden_channels
-        self.heads = nn.ModuleList([
-            nn.Sequential(
+        self.head = nn.Sequential(
 
                 nn.LayerNorm(expanded_dim),
                 nn.Linear(hidden_channels, expanded_dim),
                 nn.ReLU(inplace=True),
                 nn.Linear(expanded_dim, out_dim,bias=True)
             )
-            for out_dim in reg_dims
-        ])
-   
-      
-        self.log_vars  = nn.Parameter(torch.zeros(self.reg_heads))
 
     def init_token_from_prefit(self, data, batch, prefit=True):
         device = batch.device
@@ -186,9 +170,7 @@ class GraphAttentionNetwork(nn.Module):
         num_nodes = x.size(0)
         batch_size = int(batch.max().item()) + 1
         ##encode
-        x = self.encoder(
-                    x
-                )
+        x = self.encoder(x)
 
         ##add token
         blank_token = self.init_token_from_prefit(data, batch, prefit=True)
@@ -210,12 +192,6 @@ class GraphAttentionNetwork(nn.Module):
             # Token edges
             x, token_out = layer_2(x, edge_index_node_token, token_indices_blank)
             x, token_out = layer_3(x, edge_index_token_node, token_indices_blank)
-        outputs = []
-        for i, head in enumerate(self.heads):
-            out = head(token_out)
-            if self.normalize_heads[i]:
-                out = safe_normalize(out, dim=1)
-            outputs.append(out)
+        output = self.head(token_out)
         
-        # return all head outputs and the log_vars for uncertainty-weighted loss
-        return outputs, self.log_vars
+        return output

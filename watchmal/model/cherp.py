@@ -256,6 +256,7 @@ class CheRP(nn.Module):
         self,
         in_channels,
         hidden_channels,
+        out_dim,
         num_layers=4,
         num_heads=4,
         num_tokens=6,
@@ -265,8 +266,6 @@ class CheRP(nn.Module):
         use_event_total_charge=False,
         dropout=0.0,
         node_dropout=0.0,
-        reg_dims=[1, 4, 3],
-        normalize_heads=None,
         cosine_attention=False,
         pre_norm=False,
         shared_token_transformer=True,
@@ -282,7 +281,6 @@ class CheRP(nn.Module):
         self.use_global_token      = use_nhits or use_event_total_charge
         self.num_special_tokens    = 1   # CLS only
         self.total_tokens          = num_tokens + self.num_special_tokens
-        self.multitask             = False
         self.node_dropout          = node_dropout
         self.pre_norm              = pre_norm
         self.shared_token_transformer = shared_token_transformer
@@ -306,27 +304,11 @@ class CheRP(nn.Module):
 
         self.encoder = NodeEncoder(in_channels, hidden_channels)
 
-        self.reg_dims  = reg_dims
-        self.reg_heads = len(reg_dims)
-        if self.reg_heads > 1:
-            self.multitask = True
-        if normalize_heads is None:
-            normalize_heads = [False] * self.reg_heads
-        self.normalize_heads = normalize_heads
-
-        self.heads = nn.ModuleList([
-            nn.Sequential(
+        self.head = nn.Sequential(
                 nn.LayerNorm(hidden_channels),
                 nn.Linear(hidden_channels, hidden_channels),
                 nn.ReLU(),
-                nn.Linear(hidden_channels, out_dim, bias=True),
-            )
-            for out_dim in reg_dims
-        ])
-
-        # log_vars only kept when actually doing multitask uncertainty weighting
-        if self.multitask:
-            self.log_vars = nn.Parameter(torch.zeros(self.reg_heads))
+                nn.Linear(hidden_channels, out_dim, bias=True))       
 
         self.n2t_layers = nn.ModuleList([
             AttentionLayer(hidden_channels, num_heads, dropout, use_cosine=cosine_attention, pre_norm=pre_norm)
@@ -417,14 +399,6 @@ class CheRP(nn.Module):
 
         cls_out = token_out[:, 0, :]   # CLS token at slot 0
 
-        outputs = []
-        for i, head in enumerate(self.heads):
-            h = head(cls_out)
-            if self.normalize_heads[i]:
-                h = F.normalize(h, p=2, dim=1)
-            outputs.append(h)
-
-        if self.multitask:
-            return outputs, self.log_vars
-        else:
-            return outputs[0]
+        output = self.head(cls_out)
+       
+        return output
