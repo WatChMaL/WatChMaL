@@ -133,3 +133,11 @@ __MACOSX/
 
 # demonstration plots (regenerate with setup/demo_determinism.py)
 /plots/
+
+# personal dataset-loading/transform code, kept local for testing only (and dev work)
+/watchmal/dataset/graph/h5_graph.py
+/watchmal/dataset/graph/other_transformations.py
+/watchmal/dataset/graph/h5_datatools_graph.py
+/watchmal/dataset/graph/h5dg_transformations.py
+# stray cluster-job output (nohup, slurm, etc.), never meant to be committed
+*.out
