@@ -1,9 +1,5 @@
-# Optional dependencies for the transformer model family (Swin, T2T-ViT, ViT).
+# Superseded by pyproject.toml - timm is the `transformer` extra now.
 #
-# NOT required by the base framework: these models are reached only through their hydra
-# `_target_` (watchmal/model/SwinTransformer.py, T2TViTransformer*.py, vitransformer.py),
-# so a resnet, graph or multi-ring run never imports them.
+#   pip install -e .[transformer]
 #
-#   pip install -r requirements-transformer.txt
-
-timm
+# This file is kept as a no-op shim so old scripts that reference it keep working.

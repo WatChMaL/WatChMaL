@@ -19,6 +19,10 @@
 # The WCTE mPMT GAT config (tutorial/config/caverns/main/wcte_mpmt_gat_classification.yaml)
 # cannot run without them.
 #
+# These are deliberately NOT a pyproject.toml extra: the install must be pinned to the
+# installed torch build (the -f find-links URL above), which PEP 621 metadata cannot
+# express.
+#
 # Both have pure-torch equivalents in recent torch_geometric
 # (torch_geometric.utils.scatter, torch_geometric.nn.pool.knn_graph); moving to those
 # would remove the compiled dependency entirely and let CI cover these modules.

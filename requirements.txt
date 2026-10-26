@@ -1,11 +1,5 @@
-torch
-hydra-core>=1.1
-omegaconf
-h5py
-numpy
-uproot
-matplotlib
-# needed by analysis/ (classification.py: sklearn metrics; regression.py: tabulate),
-# alongside matplotlib and uproot above
-scikit-learn
-tabulate
+# Superseded by pyproject.toml - the dependencies live there now.
+#
+#   pip install -e .            # core framework
+#
+# This file is kept as a no-op shim so old scripts that reference it keep working.

@@ -1,7 +1,70 @@
-# Tool configuration only - WatChMaL is not (yet) a pip-installable package, so there is
-# deliberately no [project] or [build-system] table here. This file exists so that the
-# checks run identically in CI and on a laptop: `pytest` and `ruff check` pick their
-# settings up from here, with no flags to keep in sync with the workflow files.
+# WatChMaL project metadata + tool configuration.
+#
+# PEP 621 project: `pip install -e .` installs the `watchmal` and `analysis`
+# packages with their core dependencies. The optional model-family / feature
+# dependencies are extras (see [project.optional-dependencies] below):
+#
+#   pip install -e .              # core: torch, hydra, numpy, ... (old requirements.txt)
+#   pip install -e .[graph]       # + torch_geometric
+#   pip install -e .[dev]         # + pytest, ruff (CI check tools)
+#
+# The requirements-*.txt files at the repo root are shims that point back here;
+# this file is the single source of truth for dependencies. Two things are
+# deliberately NOT extras because they cannot be expressed in PEP 621 metadata:
+#   spconv (needs a CUDA-specific build, e.g. spconv-cu120)      -> requirements-multiring.txt
+#   torch_scatter / torch_cluster (compiled, on the PyG wheel
+#   index, must match the installed torch)                       -> requirements-graph-extensions.txt
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "watchmal"
+version = "0.1.0"
+description = "Unified framework for the training, testing and using Machine Learning models for Water Cherenkov Detectors"
+readme = "README.md"
+license = { text = "GPL-3.0" }
+requires-python = ">=3.11"
+urls = { Homepage = "https://github.com/WatChMaL/WatChMaL" }
+
+dependencies = [
+    "torch",
+    "hydra-core>=1.1",
+    "omegaconf",
+    "h5py",
+    "numpy",
+    "uproot",
+    "matplotlib",
+    # needed by analysis/ (classification.py: sklearn metrics; regression.py: tabulate),
+    # alongside matplotlib and uproot above
+    "scikit-learn",
+    "tabulate",
+]
+
+[project.optional-dependencies]
+# Optional dependencies, one extra per old requirements-<family>.txt file. The
+# families are NOT required by the base framework: their modules are reached only
+# through Hydra `_target_` (or lazy imports), so a plain resnet / multi-ring run
+# works with none of these installed.
+graph = ["torch_geometric"]            # GCN / GAT / mPMT hierarchical GAT family
+transformer = ["timm"]                 # Swin / T2T-ViT / ViT family
+tracking = ["wandb"]                   # Weights & Biases runs (launch_wandb: True)
+multiring = ["scipy"]                  # Hungarian matching in the MR set losses; spconv is separate (see header)
+dev = ["pytest", "ruff"]               # CI check tools: test suite + lint
+
+# Tool configuration - shared by CI and local runs so the checks run identically
+# in both places: `pytest` and `ruff check` pick their settings up from here,
+# with no flags to keep in sync with the workflow files.
+
+[tool.setuptools.packages.find]
+# Flat layout with two top-level packages: `watchmal` (a namespace package - it
+# has no __init__.py, PEP 420) and `analysis`. Auto-discovery refuses a flat
+# layout with more than one top-level package, so list them explicitly;
+# `namespaces = true` lets the namespace sub-packages of `watchmal` be found.
+# Everything else in the repo root (tests/, tutorial/, setup/, ...) is not shipped.
+include = ["watchmal*", "analysis*"]
+namespaces = true
 
 [tool.pytest.ini_options]
 minversion = "7.0"

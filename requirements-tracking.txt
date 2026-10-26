@@ -1,13 +1,5 @@
-# Optional dependency for experiment tracking with Weights & Biases.
+# Superseded by pyproject.toml - wandb is the `tracking` extra now.
 #
-# NOT required by the core framework. CSV logging (analysis-compatible) is always
-# available and needs nothing extra. Install this only if you want wandb tracking, which
-# is activated by `launch_wandb: True` (or a WANDB_SWEEP_ID in the environment) together
-# with a `wandb:` section in the config.
+#   pip install -e .[tracking]
 #
-#   pip install -r requirements-tracking.txt
-#
-# The code imports wandb lazily (only when a wandb run is active), so a plain CSV-only run
-# works without this package installed.
-
-wandb
+# This file is kept as a no-op shim so old scripts that reference it keep working.
