@@ -43,7 +43,7 @@ jobs:
       # torch_geometric is needed here: the concatenation and dataset-indexing checks
       # import watchmal.dataset.graph.*. No compiled PyG extension is required.
       - name: Install framework requirements
-        run: pip install -r requirements.txt -r requirements-graph.txt pytest
+        run: pip install -e .[graph] pytest
 
       - name: Merge-seam tests
         run: pytest tests/tier2

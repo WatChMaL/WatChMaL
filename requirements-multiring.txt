@@ -1,19 +1,16 @@
 # Optional dependencies for the multi-ring (MR) segmentation subsystem.
 #
-# NOT required by the base framework or by the watchmal / graph cores. Install these
-# only to run multi-ring configs (core: caverns, engine: multiring/segmentation) — a
-# plain `python main.py --config-name=resnet_train` does not need them, because the MR
-# modules are imported solely through their Hydra `_target_`.
+# scipy (Hungarian matching in the set losses) is the `multiring` extra:
 #
-#   pip install -r requirements-multiring.txt
+#   pip install -e .[multiring]
 #
-# spconv: sparse 3D convolutions + PointToVoxel (the encoder and voxelizer require it).
-#         Install the CUDA build matching your toolkit, e.g. `pip install spconv-cu120`
-#         (or spconv-cu118 / spconv-cu126 ...). There is no generic `spconv` wheel for GPU.
-# scipy:  Hungarian matching (scipy.optimize.linear_sum_assignment) in the set losses.
-#
-# spconv-cu120
-scipy
+# spconv is installed BY HAND, because it is not a single PyPI package: you must
+# pick the build matching your toolkit, e.g. `pip install spconv-cu120`
+# (or spconv-cu118 / spconv-cu126 ...). There is no generic `spconv` wheel for GPU,
+# so it cannot be an extra. It is NOT required by the base framework or by the
+# watchmal / graph cores - a plain `python main.py --config-name=resnet_train`
+# does not need it, because the MR modules that use it are imported solely through
+# their Hydra `_target_` (the sparse-3D-conv encoder and the PointToVoxel voxelizer).
 
 # Optional extra: the `diagnostic_multiring` submodule adds training diagnostic plots.
 # It is lazy-imported and OFF by default (tasks.train.diagnostic.enabled: []), so it is

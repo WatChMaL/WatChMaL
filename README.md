@@ -17,14 +17,32 @@ Unified framework for the training, testing and using Machine Learning models fo
 
 # Installation
 
-Requirements can be found in requirements.txt.
+The framework is a PEP 621 project: the dependencies live in `pyproject.toml`.
 The main requirements are [pytorch](pytorch.org), [numpy](numpy.org) and [hydra](hydra.cc).
 
-To download the repository use :
+To download the repository and install it use :
 
 ```
 git clone https://github.com/WatChMaL/WatChMaL.git
+cd WatChMaL
+pip install -e .
 ```
+
+Optional model families and features are extras — install only what you run:
+
+| Extra         | Packages          | Needed for                                                  |
+| ------------- | ----------------- | ----------------------------------------------------------- |
+| `graph`       | torch_geometric   | GCN / GAT / mPMT GNN model family                           |
+| `transformer` | timm              | Swin / T2T-ViT / ViT model family                           |
+| `tracking`    | wandb             | Weights & Biases runs (`launch_wandb: True`)                |
+| `multiring`   | scipy             | multi-ring set losses (spconv is installed separately, see below) |
+| `dev`         | pytest, ruff      | the test suite and lint checks                              |
+
+For example, to add the graph family: `pip install -e .[graph]`.
+
+Two dependencies cannot be extras and are documented in their own files:
+* `spconv` — pick the CUDA build matching your toolkit (e.g. `pip install spconv-cu120`); see `requirements-multiring.txt`.
+* `torch_scatter` / `torch_cluster` — compiled PyG extensions installed from the PyG wheel index matched to your torch build; see `requirements-graph-extensions.txt`.
 
 # Usage
 ## Basic Usage

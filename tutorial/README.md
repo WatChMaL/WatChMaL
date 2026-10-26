@@ -48,7 +48,7 @@ Depending onw which cluster you are working you might need to contact :
 
 ```bash
 git clone <this repo> && cd WatChMaL
-pip install -r setup/requirements.txt  
+pip install -e .
 ```
 
 Depending on what you run:

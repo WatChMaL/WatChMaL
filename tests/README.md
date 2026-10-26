@@ -13,7 +13,7 @@ deliberately does not cover. Read those first.
 
 ```bash
 pytest tests/tier0                        # no framework needed
-pytest tests/tier1                        # needs requirements.txt installed
+pytest tests/tier1                        # needs `pip install -e .` (plus -e .[graph] for the graph job)
 ruff check watchmal analysis main.py      # same ruleset CI uses (pyproject.toml)
 pytest -m transitional --collect-only -q  # what is left to unify
 ```

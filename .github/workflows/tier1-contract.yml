@@ -3,8 +3,8 @@
 # Goal: would this revision get past start-up on a cluster? The single-core merge was only
 #   ever compileall-checked, so this is its first machine verification.
 # Covers: every module imports; the optional-dependency boundary (the `core` job installs
-#   requirements.txt and NOTHING else - it going red means wandb/PyG leaked into shared
-#   code, so fix the source, never this file); every engine answers to the API run.py
+#   the core pyproject dependencies and NOTHING else - it going red means wandb/PyG
+#   leaked into shared code, so fix the source, never this file); every engine answers to the API run.py
 #   calls on it; every caverns entry config composes, resolves its `_target_`s and carries
 #   the keys the entrypoints read; a config's tasks are callable on the engine it selects.
 #   Missing optional deps SKIP, never pass silently. Not covered: nccl/multi-GPU DDP,
@@ -37,11 +37,11 @@ jobs:
       matrix:
         include:
           - id: core
-            name: core (requirements.txt only - proves the optional-dependency boundary)
-            extra_requirements: ""
+            name: core (pyproject core dependencies only - proves the optional-dependency boundary)
+            extras: ""
           - id: graph
             name: graph (+ torch_geometric - resolves the graph configs' targets)
-            extra_requirements: "-r requirements-graph.txt"
+            extras: "[graph]"
 
     steps:
       - uses: actions/checkout@v4
@@ -57,7 +57,7 @@ jobs:
         run: pip install torch --index-url https://download.pytorch.org/whl/cpu
 
       - name: Install framework requirements (${{ matrix.id }})
-        run: pip install -r requirements.txt ${{ matrix.extra_requirements }} pytest
+        run: pip install -e .${{ matrix.extras }} pytest
 
       - name: Record the installed dependency set
         run: pip list
