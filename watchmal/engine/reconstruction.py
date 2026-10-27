@@ -105,11 +105,15 @@ class ReconstructionEngine(ABC):
         if self.device.type == "cuda":
             if amp_dtype == "bf16" or amp_dtype == True:
                 self.amp_dtype = torch.bfloat16
+                log.info(f"AMP enabled: bf16")
             elif amp_dtype == "fp16":
                 self.amp_dtype = torch.float16
                 self.scaler = GradScaler("cuda")
-        if self.rank == 0:
-            log.info(f"AMP enabled: {amp_dtype}")
+                log.info(f"AMP enabled: fp16")
+            else:
+                log.info(f"AMP disabled: choose fp16 or bf16 to enable")
+        else:
+            log.info(f"Using CPU, AMP not enabled")
 
     def configure_data_loaders(self, data_config, loaders_config, is_distributed, seed):
         is_gpu = self.device != torch.device("cpu")
