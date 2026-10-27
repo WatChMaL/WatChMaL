@@ -102,7 +102,7 @@ def main_worker_function(rank, config, hydra_config=None):
     if is_distributed:
         # Convert model batch norms to synchbatchnorm
         model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
-        model = DDP(model, device_ids=[device])
+        model = DDP(model, device_ids=[device], gradient_as_bucket_view=True)
 
     # Instantiate the engine
     engine = instantiate(config.engine, model=model, rank=rank, device=device, dump_path=config.dump_path)
@@ -114,15 +114,15 @@ def main_worker_function(rank, config, hydra_config=None):
             # Configure data loaders
             if 'data_loaders' in task_config:
                 engine.configure_data_loaders(config.data, task_config.pop("data_loaders"), is_distributed, config.seed)
+            # Configure loss
+            if 'loss' in task_config:
+                engine.configure_loss(task_config.pop("loss"))
             # Configure optimizers
             if 'optimizers' in task_config:
                 engine.configure_optimizers(task_config.pop("optimizers"))
             # Configure scheduler
             if 'scheduler' in task_config:
                 engine.configure_scheduler(task_config.pop("scheduler"))
-            # Configure loss
-            if 'loss' in task_config:
-                engine.configure_loss(task_config.pop("loss"))
 
     # Perform tasks
     for task, task_config in config.tasks.items():
