@@ -102,7 +102,7 @@ def main_worker_function(rank, config, hydra_config=None):
     if is_distributed:
         # Convert model batch norms to synchbatchnorm
         model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
-        model = DDP(model, device_ids=[device])
+        model = DDP(model, device_ids=[device], gradient_as_bucket_view=True)
 
     # Instantiate the engine
     engine = instantiate(config.engine, model=model, rank=rank, device=device, dump_path=config.dump_path)

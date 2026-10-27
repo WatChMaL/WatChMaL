@@ -1,6 +1,7 @@
 import torch.nn as nn
 import torch
 import torch.nn.functional as F
+import torch.utils.checkpoint
 
 
 class ShiftInvariantConv2d(nn.Conv2d):
@@ -114,7 +115,7 @@ class ResNet(nn.Module):
 
     def __init__(self, block, layers, num_input_channels, num_output_channels, zero_init_residual=False,
                  first_kernel_size=1, first_stride=1, shift_inv_channels=None, conv_pad_mode='zeros',
-                 group_norm=False, n_groups=32):
+                 group_norm=False, n_groups=32, gradient_checkpointing=False):
         if group_norm:
             class GroupNorm(nn.GroupNorm):
                 def __init__(self, num_channels):
@@ -157,6 +158,8 @@ class ResNet(nn.Module):
         self.avgpool = nn.AdaptiveAvgPool2d((1,1))
         self.fc = nn.Linear(512 * block.expansion, num_output_channels)
 
+        self.use_grad_checkpointing = gradient_checkpointing
+
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
                 nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
@@ -190,16 +193,25 @@ class ResNet(nn.Module):
 
         return nn.Sequential(*layers)
 
+
+    def _run_layer(self, layer, x):
+        """Run a residual layer group, with optional gradient checkpointing."""
+        if self.use_grad_checkpointing and self.training:
+            return torch.utils.checkpoint.checkpoint_sequential(
+                layer, len(layer), x, use_reentrant=False
+            )
+        return layer(x)
+
     def forward(self, x):
         x = self.pad1(x)
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
 
-        x = self.layer1(x)
-        x = self.layer2(x)
-        x = self.layer3(x)
-        x = self.layer4(x)
+        x = self._run_layer(self.layer1, x)
+        x = self._run_layer(self.layer2, x)
+        x = self._run_layer(self.layer3, x)
+        x = self._run_layer(self.layer4, x)
 
         x = self.avgpool(x)
         x = torch.flatten(x, 1)
