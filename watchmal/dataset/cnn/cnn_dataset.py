@@ -123,7 +123,7 @@ class CNNDataset(H5Dataset):
         # make some index expressions for different parts of the image, to use in transformations etc
         rows, row_counts = np.unique(self.pmt_positions[:, 0], return_counts=True)
         cols, col_counts = np.unique(self.pmt_positions[:, 1], return_counts=True)
-        # barrel rows are those where the row appears in mpmt_positions as many times as the image width
+        # barrel rows are those where the row appears in pmt_positions for most columns of the image (heuristic)
         barrel_rows = rows[row_counts > 0.7 * self.image_width]
         # endcap_size is the number of rows before the first barrel row
         self.endcap_size = np.min(barrel_rows)
