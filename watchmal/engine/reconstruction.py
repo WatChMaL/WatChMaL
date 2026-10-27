@@ -142,11 +142,13 @@ class ReconstructionEngine(ABC):
                 if self.rank == 0:
                     tensor_list = [torch.zeros_like(tensor, device=self.device) for _ in range(self.n_gpus)]
                     torch.distributed.gather(tensor, tensor_list)
-                    global_output_dict[name] = torch.cat(tensor_list).detach().cpu().float().numpy()
+                    global_output_dict[name] = torch.cat(tensor_list).detach().cpu()
                 else:
                     torch.distributed.gather(tensor, dst=0)
+                    continue
             else:
-                global_output_dict[name] = tensor.detach().cpu().float().numpy()
+                global_output_dict[name] = tensor.detach().cpu()
+            global_output_dict[name] = global_output_dict[name].float().numpy() if tensor.dtype == torch.bfloat16 else global_output_dict[name].numpy()
         return global_output_dict
 
     def get_synchronized_metrics(self, metric_dict):
