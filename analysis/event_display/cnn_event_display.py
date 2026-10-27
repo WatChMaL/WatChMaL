@@ -40,7 +40,7 @@ class CNNEventDisplay(CNNDataset):
         Parameters
         ----------
         data : array_like
-            Array of PMT data formatted for use in CNN, i.e. with dimensions of (x, y)
+            Array of PMT data formatted for use in CNN, i.e. with dimensions of (channel, row, column)
         transforms : function or str or sequence of function or str, optional
             Transformation function, or the name of a method of the dataset, or a sequence of functions or method names
             to apply to the data, such as those used for augmentation.
