@@ -10,6 +10,7 @@ import torch
 from torch.utils.data import DataLoader
 
 # generic imports
+import logging
 import numpy as np
 import random
 
@@ -19,9 +20,12 @@ from watchmal.dataset.samplers import DistributedSamplerWrapper
 # pyg imports
 from torch_geometric.loader import DataLoader as PyGDataLoader
 
+log = logging.getLogger(__name__)
+
 
 def get_data_loader(dataset, batch_size, sampler, num_workers, is_distributed, is_gpu, seed, is_graph=False,
-                    split_path=None, split_key=None, pre_transforms=None, post_transforms=None, drop_last=False):
+                    split_path=None, split_key=None, pre_transforms=None, post_transforms=None, drop_last=False,
+                    loader_name=None):
     """
     Creates a dataloader given the dataset and sampler configs. The dataset and sampler are instantiated using their
     corresponding configs. If using DistributedDataParallel, the sampler is wrapped using DistributedSamplerWrapper.
@@ -52,7 +56,13 @@ def get_data_loader(dataset, batch_size, sampler, num_workers, is_distributed, i
         List of transforms to apply to the dataset before any transforms specified by the dataset config.
     pre_transforms : list of string
         List of transforms to apply to the dataset after any transforms specified by the dataset config.
-    
+    drop_last : bool
+        Whether to drop the last incomplete batch of each epoch. False by default, but forced to True for the
+        training loader when the last batch would hold a single event (see below).
+    loader_name : string
+        Name of the loader in the task config (e.g. "train", "validation", "test"). Used to identify the training
+        loader, which is the only one that needs the single-item batch guard below.
+
     Returns
     -------
     torch.utils.data.DataLoader
@@ -76,8 +86,32 @@ def get_data_loader(dataset, batch_size, sampler, num_workers, is_distributed, i
         
         sampler = DistributedSamplerWrapper(sampler=sampler, seed=seed)
 
+    # A final batch holding exactly one event breaks BatchNorm in training mode, which raises
+    # "Expected more than 1 value per channel when training", and its SyncBatchNorm conversion likewise.
+    # Whether that happens depends on the per-rank sample count and the per-rank batch size, and neither of
+    # those is a number written in a config file: both are derived here, after the sampler has been wrapped
+    # for DistributedDataParallel and the batch size divided by the world size. Setting drop_last in the
+    # config therefore cannot express the condition, so it is checked here, where both numbers are known.
+    # The training loader is the only one that needs it: validate() and evaluate() run under model.eval(),
+    # where BatchNorm reads its running statistics instead of the batch, and dropping an event there would
+    # silently shorten the evaluation output.
+    if loader_name == "train":
+        try:
+            per_rank_count = len(sampler)
+        except TypeError:  # a sampler that does not report a length
+            per_rank_count = None
+        if batch_size == 1:
+            log.warning(f"Data loader '{loader_name}': batch_size is 1 per rank, so every batch holds a single "
+                        f"event and BatchNorm layers will fail in training mode; drop_last cannot help here.")
+        elif per_rank_count is not None and not drop_last and per_rank_count % batch_size == 1:
+            log.warning(f"Data loader '{loader_name}': per_rank_count ({per_rank_count}) % batch_size "
+                        f"({batch_size}) == 1, and that trailing single-event batch would break SyncBatchNorm; "
+                        f"forcing drop_last=True on this loader, dropping 1 event per rank per epoch.")
+            drop_last = True
+
     if is_graph:
-        return PyGDataLoader(dataset, sampler=sampler, batch_size=batch_size, num_workers=num_workers)
+        return PyGDataLoader(dataset, sampler=sampler, batch_size=batch_size, num_workers=num_workers,
+                             drop_last=drop_last)
     else:
         return DataLoader(dataset, sampler=sampler, batch_size=batch_size, num_workers=num_workers, drop_last=drop_last,
                           persistent_workers=(num_workers > 0), pin_memory=is_gpu, multiprocessing_context='fork')
