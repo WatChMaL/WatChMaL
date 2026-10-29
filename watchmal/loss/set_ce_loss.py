@@ -78,7 +78,12 @@ def loss_set_ce_dice(lambda_dice: float = 2.0,
                      eps: float = 1e-10,
                      poisson: bool = False,
                      matching: str = "none",
-                     symmetric: bool = False):
+                     symmetric: bool = False,
+                     pe_weight_physical: bool = False,
+                     pe_mean: float = None,
+                     pe_std: float = None):
+    if pe_weight_physical and (pe_mean is None or pe_std is None):
+        raise ValueError("pe_weight_physical needs pe_mean and pe_std: mean[0] and std[0] of the training set's feature-stats npz")
 
     def _loss(batch: Dict[str, Any], out: Dict[str, Any]) -> Dict[str, torch.Tensor]:
         Pi_list: List[torch.Tensor] = out["Pi_list"]
@@ -160,7 +165,8 @@ def loss_set_ce_dice(lambda_dice: float = 2.0,
             if poisson:
                 mask_b = (coords_all[:, 0] == b)
 
-                w_v = feats_all[mask_b, 0].float().clamp(0.0, 10.0)
+                w_v = feats_all[mask_b, 0].float()
+                w_v = (w_v * pe_std + pe_mean).clamp_min(0.0) if pe_weight_physical else w_v.clamp(0.0, 10.0)
                 valid = w_v > 0.0
 
                 if valid.any():

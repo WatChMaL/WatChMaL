@@ -136,6 +136,7 @@ def build_model_from_train_output(
     train_output_dir: str,
     device: Optional[str] = None,
     ckpt_name: str = "MultiRingSegEngine_MultiRingModel_BEST.pth",
+    strict: bool = False,
 ) -> torch.nn.Module:
     train_cfg = load_train_cfg(train_output_dir)
     model: torch.nn.Module = instantiate(train_cfg.model)
@@ -147,7 +148,7 @@ def build_model_from_train_output(
         raise FileNotFoundError(f"Checkpoint not found: {ckpt}")
     state = torch.load(str(ckpt), map_location="cpu")
     state_dict = state["state_dict"] if isinstance(state, dict) and "state_dict" in state else state
-    missing, unexpected = model.load_state_dict(state_dict, strict=False)
+    missing, unexpected = model.load_state_dict(state_dict, strict=strict)
     if missing or unexpected:
         logging.getLogger(__name__).info(
             f"load_state_dict non-strict: missing={list(missing)}, unexpected={list(unexpected)}"

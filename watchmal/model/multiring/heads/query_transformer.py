@@ -62,6 +62,8 @@ class QueryPerVoxelSoftmaxHead(nn.Module):
         n_iter: int = 50,
         ensure_sum_one: bool = True,
         count_mode: bool = False,
+        fast_head: bool = False,   # decode all events in a few padded batched calls instead of one call per event
+        ctx_memory: bool = False,  # queries attend to the encoder's GlobalContext tokens instead of the voxels
     ):
         super().__init__()
         self.pe = SinPE(pe_bands, d_out=d_model)
@@ -83,6 +85,22 @@ class QueryPerVoxelSoftmaxHead(nn.Module):
         self.n_iter = n_iter
         self.ensure_sum_one = ensure_sum_one
         self.count_mode = bool(count_mode)
+        self.fast_head, self.ctx_memory = bool(fast_head), bool(ctx_memory)
+
+    def _decode_batched(self, srcs: List[torch.Tensor], chunks: int = 8) -> List[torch.Tensor]:
+        """Query decoder outputs of the non-empty events, in padded calls over length-sorted groups."""
+        H = [None] * len(srcs)
+        order = sorted((i for i in range(len(srcs)) if srcs[i].shape[0] > 0), key=lambda i: srcs[i].shape[0])
+        per = max(1, math.ceil(len(order) / chunks))
+        for g in range(0, len(order), per):
+            grp = order[g:g + per]
+            lens = torch.tensor([srcs[i].shape[0] for i in grp], device=srcs[grp[0]].device)
+            km = torch.arange(int(lens.max()), device=lens.device)[None, :] >= lens[:, None]
+            src = nn.utils.rnn.pad_sequence([srcs[i] for i in grp], batch_first=True)
+            out = self.dec.dec(self.dec.query.expand(len(grp), -1, -1), src, memory_key_padding_mask=km)
+            for r, i in enumerate(grp):
+                H[i] = out[r]
+        return H
 
     def _empty_event(self, vox_f: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Zero placeholders (Z, Pi, H) for an event with no voxels/memory."""
@@ -102,6 +120,12 @@ class QueryPerVoxelSoftmaxHead(nn.Module):
         voxel_idx_list = enc.get("voxel_idx_list", None)
         bottleneck_feat_list = enc.get("bottleneck_feat_list", None)
         bottleneck_coord_list = enc.get("bottleneck_coord_list", None)
+        H_all = None
+        if self.ctx_memory:
+            H_all = self._decode_batched([f + self.pe(c, grid) for f, c in zip(enc["ctx_feat_list"], enc["ctx_coord_list"])])
+        elif self.fast_head and self.voxel_attention:
+            H_all = self._decode_batched([self.vox_to_dec(f) + self.pe(i.float(), grid)
+                                          for f, i in zip(enc["voxel_feat_list"], voxel_idx_list)])
 
         for idx, vox_f in enumerate(enc["voxel_feat_list"]):
 
@@ -137,7 +161,7 @@ class QueryPerVoxelSoftmaxHead(nn.Module):
                 dec_src = bn_f
                 pe_for_dec = self.pe(bn_c.float(), grid)       # [U,D]
 
-            H = self.dec(dec_src, pe_for_dec)                 # [N+1,D]
+            H = H_all[idx] if H_all is not None else self.dec(dec_src, pe_for_dec)  # [N+1,D]
 
             E = self.vox_to_mask(vox_f)                       # [V,Cm]
             P = self.q_to_mask(H)                             # [N+1,Cm]

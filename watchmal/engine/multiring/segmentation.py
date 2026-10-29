@@ -72,6 +72,18 @@ def _load_run_diagnostics():
     return run_diagnostics
 
 
+class _NoAugSubset(Subset):
+    """Validation subset read with the dataset augmentation off."""
+    __getitems__ = None
+
+    def __getitem__(self, idx):
+        aug, self.dataset.augmentation = self.dataset.augmentation, False
+        try:
+            return super().__getitem__(idx)
+        finally:
+            self.dataset.augmentation = aug
+
+
 class MultiRingSegEngine(BaseEngine):
     CKPT_NAME = "MultiRingSegEngine_MultiRingModel_BEST.pth"
 
@@ -190,7 +202,7 @@ class MultiRingSegEngine(BaseEngine):
         train_idx, val_idx = (idx[:k], idx[k:]) if k < n else (idx, idx[:0])
 
         d_train = Subset(full_ds, train_idx)
-        d_val = Subset(full_ds, val_idx)
+        d_val = _NoAugSubset(full_ds, val_idx)
         self.val_subset = d_val
 
         if self.is_distributed:
@@ -363,11 +375,17 @@ class MultiRingSegEngine(BaseEngine):
         outputs = {}
         return outputs, loss_dict
 
+    def configure_loss(self, loss_config):
+        """pe_weight_physical: pe_mean/pe_std not in the config are feature 0 of the dataset's feature stats."""
+        ds = self.val_subset.dataset
+        super().configure_loss({"pe_mean": float(ds._mean[0]), "pe_std": float(ds._std[0]), **loss_config}
+                               if loss_config.get("pe_weight_physical") else loss_config)
+
     def backward(self):
         self.optimizer.zero_grad(set_to_none=True)
         self.loss.backward()
-        nn_utils.clip_grad_norm_(self.module.parameters(), max_norm=1.0)
-        self.optimizer.step()
+        if torch.isfinite(nn_utils.clip_grad_norm_(self.module.parameters(), max_norm=1.0)):
+            self.optimizer.step()
 
     # ------------------------------------------------------------------ #
     # Diagnostics plotting helpers
@@ -520,7 +538,8 @@ class MultiRingSegEngine(BaseEngine):
 
         return metrics_epoch_history
 
-    def train(self, epochs=0, val_interval=20, checkpointing=False, save_interval=None, diagnostic=None, **kwargs):
+    def train(self, epochs=0, val_interval=20, checkpointing=False, save_interval=None, diagnostic=None,
+              resume_epochs=False, **kwargs):
 
         start_run_time = datetime.now()
         log.info(f"Engine : {self.rank} | Dataloaders : {self.data_loaders}")
@@ -542,7 +561,7 @@ class MultiRingSegEngine(BaseEngine):
         if self.wandb_run is not None and self.rank == 0:
             self.wandb_run.watch(self.module, log="all", log_freq=val_interval * 2, log_graph=False)
 
-        for epoch in range(epochs):
+        for epoch in range(self.epoch if resume_epochs else 0, epochs):
             self.epoch = epoch
             if cache_refresh_epochs and (epoch % cache_refresh_epochs == 0):
                 ds = train_loader.dataset
@@ -740,7 +759,7 @@ class MultiRingSegmenter:
         self.device = torch.device(device or ("cuda" if torch.cuda.is_available() else "cpu"))
         self.min_charge = float(cfg.get("min_charge", 0.01))
 
-        model = build_model_from_train_output(train_output_dir, device=str(self.device))
+        model = build_model_from_train_output(train_output_dir, device=str(self.device), strict=True)
         voxelizer = Voxelizer.from_train_output(train_output_dir, cfg.get("stats_cache_path"))
         digitizer = build_digitizer(
             str(cfg["digitizer_mapping_path"]),
@@ -763,3 +782,7 @@ class MultiRingSegmenter:
     def segment(self, xyz, q, t, tube_ids):
         """Hits arrays -> list of Ring."""
         return self.segmentor.rings(xyz, q, t, tube_ids, min_charge=self.min_charge)
+
+    def count_rings(self, xyz, q, t, tube_ids):
+        """Hits arrays -> number of rings segment() admits."""
+        return self.segmentor.count(xyz, q, t, tube_ids, min_charge=self.min_charge)

@@ -64,6 +64,8 @@ class _BaseSparseDataset(Dataset):
         max_open_files_per_worker: int = 8,
         file_name_pattern: Optional[str] = "wcsim_output_multihit_with_digi_hit.h5",
         dedup_mode: str = "first",
+        soft_parent_frac: bool = False,  # also emit voxel_parent_frac: each voxel's charge share per true ring (soft targets)
+        max_true_rings: Optional[int] = None,  # keep only events with at most this many true rings (None = all)
         **_: Any,
     ) -> None:
         super().__init__()
@@ -94,6 +96,7 @@ class _BaseSparseDataset(Dataset):
             raise ValueError(f"dedup_mode must be 'first' or 'merge', got {dedup_mode!r}")
         self.dedup_mode = dedup_mode
         log.info(f"dedup_mode = {self.dedup_mode}")
+        self.soft_parent_frac = bool(soft_parent_frac)
 
         files = sorted(
             glob.glob(
@@ -142,6 +145,16 @@ class _BaseSparseDataset(Dataset):
             if not self._try_load_feature_stats():
                 self._init_feature_stats(self.stats_max_events)
                 self._try_save_feature_stats()
+
+        if max_true_rings:
+            keep = []
+            for fidx, path in enumerate(self.files):
+                with h5py.File(path, "r") as f:
+                    didx = f["/events"]["digi_hit_index"][:].astype(np.int64)
+                    root = f["/events"]["digi_hits"]["primary_track_id"][:].astype(np.int64)
+                keep += [(fidx, e) for e in range(self._events_per_file[path])
+                         if np.unique((r := root[didx[e]:didx[e + 1]])[r > 0]).size <= max_true_rings]
+            self._index = keep
 
         log.info(
             f"Loaded {self.__class__.__name__} with {len(self)} events from {len(self.files)} files. "
@@ -306,11 +319,10 @@ class _BaseSparseDataset(Dataset):
         else:
             topk = max(0, int(topk))
 
-        _, tid2prim = self._compute_primary_groups(parts)
-
         if _has_field(hits, "primary_track_id"):
             hit_primary_tid = hits["primary_track_id"].astype(int)
         else:
+            _, tid2prim = self._compute_primary_groups(parts)
             hit_tid = hits["track_id"].astype(int) if _has_field(hits, "track_id") else np.full((hits.shape[0],), -1, dtype=int)
             hit_primary_tid = np.array([tid2prim.get(int(t), -1) for t in hit_tid], dtype=int)
 
@@ -330,8 +342,9 @@ class _BaseSparseDataset(Dataset):
 
         order = np.argsort(-sums_valid)
         top = u_valid[order][:topk]
-        primary_slots = {int(tid): (i + 1) for i, tid in enumerate(list(top))}
-        pid_hits = np.array([primary_slots.get(int(tp), 0) for tp in hit_primary_tid], dtype=np.int64)
+        slot_of_u = np.zeros(u.shape[0], dtype=np.int64)
+        slot_of_u[np.searchsorted(u, top)] = np.arange(1, len(top) + 1)
+        pid_hits = slot_of_u[inv.reshape(-1)]
 
         if not return_info:
             return pid_hits, [], [0] * topk, []
@@ -395,24 +408,14 @@ class _BaseSparseDataset(Dataset):
         n_hits   = int(hit_primary_slots.shape[0])
         n_slots  = int(hit_primary_slots.max()) + 1 if hit_primary_slots.size > 0 else 1
         frac_digi = np.zeros((n_digi, n_slots), dtype=np.float32)
-
-        for di in range(n_digi):
-            p0, p1 = int(photon_ptr[di]), int(photon_ptr[di + 1])
-            if p1 <= p0:
-                frac_digi[di, 0] = 1.0   # no photon info → background
-                continue
-            pids = photon_ids_flat[p0:p1]
-            good = (pids >= 0) & (pids < n_hits)
-            if not np.any(good):
-                frac_digi[di, 0] = 1.0
-                continue
-            slots = hit_primary_slots[pids[good]]
-            if slots.size == 0:
-                frac_digi[di, 0] = 1.0
-                continue
-            bc = np.bincount(slots.astype(np.int64), minlength=n_slots).astype(np.float32)
-            pid_digi[di]  = int(np.argmax(bc))
-            frac_digi[di] = bc / bc.sum()
+        digi = np.repeat(np.arange(n_digi), np.diff(photon_ptr))
+        good = (photon_ids_flat >= 0) & (photon_ids_flat < n_hits)
+        bc = np.bincount(digi[good] * n_slots + hit_primary_slots[photon_ids_flat[good]],
+                         minlength=n_digi * n_slots).reshape(n_digi, n_slots)
+        has = bc.sum(axis=1) > 0
+        frac_digi[~has, 0] = 1.0
+        frac_digi[has] = bc[has] / bc[has].sum(axis=1, keepdims=True)
+        pid_digi[has] = np.argmax(bc[has], axis=1)
 
         return pid_digi, frac_digi
 
@@ -570,12 +573,10 @@ class HyperKSparseCNN3D(_BaseSparseDataset):
                 first = np.r_[True, key[order][1:] != key[order][:-1]]
                 keep_idx = np.sort(order[first]).astype(np.int64, copy=False)
                 digi_hits = digi_hits_raw[keep_idx]
-                chunks = [
-                    photon_ids_flat_raw[int(photon_ptr_raw[j]):int(photon_ptr_raw[j + 1])]
-                    for j in keep_idx
-                ]
-                photon_ids_flat = np.concatenate(chunks).astype(np.int64, copy=False) if chunks else np.zeros((0,), dtype=np.int64)
-                photon_ptr = np.r_[0, np.cumsum([len(c) for c in chunks])].astype(np.int64)
+                lens = (photon_ptr_raw[keep_idx + 1] - photon_ptr_raw[keep_idx]).astype(np.int64)
+                photon_ptr = np.r_[0, np.cumsum(lens)].astype(np.int64)
+                photon_ids_flat = photon_ids_flat_raw[np.repeat(photon_ptr_raw[keep_idx].astype(np.int64) - photon_ptr[:-1], lens)
+                                                      + np.arange(photon_ptr[-1])].astype(np.int64, copy=False)
             else:
                 order = np.lexsort((time, key))
                 sorted_hits = digi_hits_raw[order]
@@ -632,25 +633,18 @@ class HyperKSparseCNN3D(_BaseSparseDataset):
         )
         pid_digi, frac_digi = self._assign_primary_digis(q, photon_ids_flat, photon_ptr, pid_hits)
 
-        tube_ids = tubes if self.add_meta else None
+        tube_ids = tubes if (self.add_meta or self.soft_parent_frac) else None
         pe_counts = digi_n_photons if self.emit_npe else None
         feats3, extra3 = self._voxelize_spconv_3d(xyz, q, t, parent_ids=pid_digi, tube_ids=tube_ids, pe_counts=pe_counts)
 
         if frac_digi is not None and "voxel_best_tube" in extra3 and tubes is not None:
-            tube_best_q    = {}
-            tube_best_frac = {}
-            for di in range(len(q)):
-                tid = int(tubes[di])
-                qi  = float(q[di])
-                if tid not in tube_best_q or qi > tube_best_q[tid]:
-                    tube_best_q[tid]    = qi
-                    tube_best_frac[tid] = frac_digi[di]
+            order = np.lexsort((-q, tubes))
+            first = np.r_[True, tubes[order][1:] != tubes[order][:-1]]
+            ut, best = tubes[order][first], order[first]
             vt      = extra3["voxel_best_tube"]
-            n_slots = frac_digi.shape[1]
-            vpf     = np.zeros((len(vt), n_slots), dtype=np.float32)
-            for vi, tid in enumerate(vt):
-                if int(tid) in tube_best_frac:
-                    vpf[vi] = tube_best_frac[int(tid)]
+            pos = np.minimum(np.searchsorted(ut, vt), ut.size - 1)
+            vpf     = np.zeros((len(vt), frac_digi.shape[1]), dtype=np.float32)
+            vpf[ut[pos] == vt] = frac_digi[best[pos[ut[pos] == vt]]]
             extra3["voxel_parent_frac"] = vpf
 
         coords_zyx = extra3["coords_zyx"]

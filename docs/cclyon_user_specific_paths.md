@@ -61,6 +61,7 @@ group-readable. Change them only when you switch to your own data.
 | `tutorial/config/caverns/data/dataset/wcte_mpmt_classification.yaml`          | `pyg_data_folder_path`         | `/sps/hyperk/mferey/Data/WCTE_v2/Graphs/...`                            | WCTE reference graph pairs (PMT + mPMT)                                                                    |
 | `tutorial/launch/caverns/container/submit_multiring_smoke_cclyon.sh`           | `IMAGE` / `HOST_DATA` defaults | `/sps/t2k/melbaz/env/ml_image.sif`, `/sps/t2k/melbaz/Simulation/output` | smoke-test image + multi-ring data — overridable without editing via `SMOKE_IMAGE` / `SMOKE_DATA`          |
 | `tutorial/launch/caverns/container/run_in_container.sh`                        | `IMAGE`, `BIND_DATA`           | same image + data as above                                              | container image (see [available containers](cclyon_available_containers.md)) and multi-ring reference data |
+| `tutorial/multiring_ring_segmentation_api_cclyon.ipynb`                        | `C`, `MODEL`, event file       | `/sps/hyperk/melbaz/Reconstruction/const/...`, `/sps/hyperk/melbaz/Simulation/output/...` | trained segmentation model, digitizer mapping and one test event (`hyperk` group) |
 
 
 Note: `tutorial/config/caverns/data/dataset/multiring_sparse3d.yaml` contains only
