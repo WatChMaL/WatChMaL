@@ -759,7 +759,7 @@ class MultiRingSegmenter:
         self.device = torch.device(device or ("cuda" if torch.cuda.is_available() else "cpu"))
         self.min_charge = float(cfg.get("min_charge", 0.01))
 
-        model = build_model_from_train_output(train_output_dir, device=str(self.device))
+        model = build_model_from_train_output(train_output_dir, device=str(self.device), strict=True)
         voxelizer = Voxelizer.from_train_output(train_output_dir, cfg.get("stats_cache_path"))
         digitizer = build_digitizer(
             str(cfg["digitizer_mapping_path"]),
@@ -782,3 +782,7 @@ class MultiRingSegmenter:
     def segment(self, xyz, q, t, tube_ids):
         """Hits arrays -> list of Ring."""
         return self.segmentor.rings(xyz, q, t, tube_ids, min_charge=self.min_charge)
+
+    def count_rings(self, xyz, q, t, tube_ids):
+        """Hits arrays -> number of rings segment() admits."""
+        return self.segmentor.count(xyz, q, t, tube_ids, min_charge=self.min_charge)

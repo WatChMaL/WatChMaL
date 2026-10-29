@@ -17,8 +17,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
+import re
+
 import numpy as np
 import torch
+from scipy.optimize import linear_sum_assignment
 
 
 @dataclass
@@ -39,6 +42,9 @@ class RingConfig:
     """Everything that changes the rings, in one place."""
     split_method: str = "map"            # map | bayes | count
     ring_pe_threshold: float = 80.0      # a ring exists iff it carries this much charge
+    ring_mass_threshold: float = 0.0
+    temperature: float = 1.0
+    tta_views: str = ""
     dominant_frac_threshold: float = 0.99
     min_charge_pe: float = 1e-4
     max_rings: int = 4
@@ -168,7 +174,30 @@ class RingSegmentor:
 
     # ------------------------------------------------------------ inference
     @torch.no_grad()
-    def _forward(self, coords: np.ndarray, feats: np.ndarray, grid) -> Dict[str, Any]:
+    def _forward(self, coords: np.ndarray, feats: np.ndarray, grid, views=None) -> Dict[str, Any]:
+        """Network output; with cfg.tta_views (e.g. "r0, r1z"), the slot-matched mean of Pi over symmetry views."""
+        views = re.findall(r"r([0-3])(x?)(z?)", self.cfg.tta_views) if views is None else views
+        if views:
+            vox, last, mean = self.voxelizer, grid.grid_size - 1, None
+            q = feats[:, 0] * np.clip(vox._std[0], 1e-6, None) + vox._mean[0]
+            for k, mx, mz in views:
+                c, f = coords, feats
+                if (k, mx, mz) != ("0", "", ""):
+                    z, y, x = coords[:, 1].copy(), coords[:, 2].copy(), coords[:, 3].copy()
+                    for _ in range(int(k)):
+                        x, y = last - y, x
+                    x, z = (last - x if mx else x), (last - z if mz else z)
+                    c = np.stack([coords[:, 0], z, y, x], axis=1).astype(coords.dtype)
+                    f = feats.copy()
+                    f[:, 1:4] = (vox.voxel_centers(c[:, 1:]) - vox._mean[1:4]) / np.clip(vox._std[1:4], 1e-6, None)
+                p = self._normalise(self._forward(c, f, grid, [])["Pi_list"][0])
+                if mean is None:
+                    first, mean = p, p.astype(np.float64)
+                    continue
+                rows, cols = linear_sum_assignment(-((q[:, None] * first[:, 1:]).T @ p[:, 1:]))
+                p[:, 1 + rows] = p[:, 1 + cols].copy()
+                mean += p
+            return {"Pi_list": [torch.from_numpy((mean / len(views)).astype(np.float32))]}
         c = coords.copy()
         c[:, 0] = 0
         batch = {"coords": torch.from_numpy(c).to(self.device),
@@ -212,6 +241,16 @@ class RingSegmentor:
             return self.rings_from_bayes(out["Pi_list"][0], q, t, tubes)
         raise ValueError(f"unknown split_method: {self.cfg.split_method!r}")
 
+    def count(self, xyz, charge_pe, time_ns, tube_ids, min_charge: float = 0.01) -> int:
+        """Number of rings admitted by rings() (map/bayes), without splitting the charge."""
+        coords, feats, extra = self.voxelizer.build_model_input(
+            np.asarray(xyz, np.float32), np.asarray(charge_pe, np.float32),
+            np.asarray(time_ns, np.float32), np.asarray(tube_ids, np.int64), min_charge=min_charge)
+        if coords.shape[0] == 0:
+            return 0
+        P = self._normalise(self._forward(coords, feats, self.voxelizer.grid)["Pi_list"][0])
+        return len(self._present_rings(P[:, 1:], P[:, 0], extra["voxel_q"]))
+
     def _fracs(self, Pi: torch.Tensor):
         """Normalised ring fractions, background, and the bg-folded split weights."""
         P = self._normalise(Pi)
@@ -235,6 +274,13 @@ class RingSegmentor:
         present = self._present_rings(raw, bg, q)
         if not present:
             return []
+        if self.cfg.temperature != 1.0:
+            w = np.clip(raw[:, present].astype(np.float64), 1e-12, None) ** (1.0 / self.cfg.temperature)
+            raw = raw.copy()
+            raw[:, present] = (raw[:, present].sum(axis=1, keepdims=True) * w / w.sum(axis=1, keepdims=True)).astype(np.float32)
+            frac = (raw / np.clip(raw.sum(axis=1), 1e-6, None)[:, None]).astype(np.float32)
+            split = (fold_background(raw, bg, self.cfg.background_charge_scale, self.cfg.noise_fraction, self.rng)
+                     if self.cfg.fold_background else raw)
 
         n_photons = self.digitizer.map_n_from_q_array(q).astype(np.float32)
         dominated, owner = self._dominant(frac, present)
@@ -298,8 +344,10 @@ class RingSegmentor:
     # ------------------------------------------------------------- helpers
     def _present_rings(self, raw: np.ndarray, bg: np.ndarray, q: np.ndarray) -> List[int]:
         owner = np.concatenate([bg[:, None], raw], axis=1).argmax(axis=1)
+        mass = (q[:, None] * raw).sum(axis=0)
         return [k for k in range(min(self.cfg.max_rings, raw.shape[1]))
-                if float(q[owner == k + 1].sum()) >= self.cfg.ring_pe_threshold]
+                if float(q[owner == k + 1].sum()) >= self.cfg.ring_pe_threshold
+                or 0 < self.cfg.ring_mass_threshold <= float(mass[k])]
 
     def _make_ring(self, k: int, qk, q, t, tubes) -> Optional[Ring]:
         keep = (tubes > 0) & (qk >= self.cfg.min_charge_pe)
