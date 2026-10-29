@@ -46,6 +46,7 @@ assignment with a sparse 3D U-Net encoder and a query-transformer head.
 | ---------------------------- | ------------------------------------------- | ------------------------------ | ----------------------------------- |
 | Ring segmentation (train)    | `SparseUNet3D` + `QueryPerVoxelSoftmaxHead` | `multiring_segmentation_train` | `/sps/t2k/melbaz/Simulation/output` |
 | Ring segmentation (evaluate) | idem, restored from a finished run          | `multiring_segmentation_test`  | `/sps/t2k/melbaz/Simulation/output` |
+| Ring segmentation (inference API) | trained model directory         | `tutorial/multiring_ring_segmentation_api_cclyon.ipynb` | model `/sps/hyperk/melbaz/Reconstruction/const/watchmal/V3.0` |
 
 
 - Dataset class: `watchmal.dataset.multiring.sparse_cnn.HyperKSparseCNN3D`

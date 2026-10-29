@@ -24,6 +24,7 @@ More focused docs:
 - `tutorial/launch/caverns/container/README.md` — container-based launching (smoke test, multi-ring)
 - `watchmal/model/README.md` — the available models and how to add your own
 - `tutorial/config/caverns/data/dataset/README.md` — the dataset classes: what each is for and why
+- `tutorial/multiring_ring_segmentation_api_cclyon.ipynb` — minimal example of the multi-ring segmentation and ring-count API (CC-Lyon paths)
 - `docs/cclyon_available_containers.md` — ready-to-use apptainer images on CC-Lyon
 - `docs/cclyon_available_detectors.md` — detectors, models and reference datasets on CC-Lyon
 - `docs/cclyon_user_specific_paths.md` — every user-specific path in the tutorials: change it or keep it?
