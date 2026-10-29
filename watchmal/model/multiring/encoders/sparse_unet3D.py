@@ -7,6 +7,7 @@ This script defines:
 - Down: A downsampling block with a strided sparse convolution.
 - Up: An upsampling block with a sparse inverse convolution and skip connection.
 - SparseUNet3D: The main UNet architecture that processes sparse voxel data and produces multi-level features at bottleneck and voxel levels.
+- GlobalContext: optional transformer over coarse tokens of the deepest level, so that every voxel sees the whole event (ctx_layers > 0).
 The SparseUNet3D takes as input a batch of sparse voxel data (coordinates and features) and produces:
 - full: The final sparse tensor after the UNet.
 - full_feat_all: The features of the final sparse tensor.
@@ -19,6 +20,7 @@ The SparseUNet3D takes as input a batch of sparse voxel data (coordinates and fe
 
 from __future__ import annotations
 from typing import Dict, Any, List, Tuple
+import math
 import torch
 import torch.nn as nn
 import os
@@ -134,8 +136,14 @@ class SparseUNet3D(nn.Module):
         d_bottleneck=None,  # deprecated/ignored; bottleneck width is channels[-1]
         mem_level=None,     # deprecated/ignored (kept so old configs still instantiate)
         d_mem=None,         # deprecated/ignored
+        out_proj_context: bool = False,  # extra 3x3x3 output projection (zero-initialised) added to the 1x1 one
+        ctx_layers: int = 0,             # GlobalContext transformer layers on the deepest level (0 = off)
+        ctx_dim: int = 256,              # GlobalContext token width
+        ctx_heads: int = 8,              # GlobalContext attention heads
+        ctx_pool: int = 2,               # deepest-level voxels pooled into one token, per axis
     ):
         super().__init__()
+        self.out_proj_context = bool(out_proj_context)
         self.channels = tuple(channels)
         self.c_bottleneck = self.channels[-1]  # deepest down-conv width
 
@@ -160,6 +168,10 @@ class SparseUNet3D(nn.Module):
             c_in_up = c_out
 
         self.out_proj = SubMConv3d(c_in_up, c_stem, 1, bias=False, indice_key="subm1")
+        if self.out_proj_context:
+            self.out_proj_ctx = SubMConv3d(c_in_up, c_stem, 3, bias=False, indice_key="subm_outctx3", algo=ConvAlgo.Native)
+            nn.init.zeros_(self.out_proj_ctx.weight)
+        self.ctx = GlobalContext(self.channels[-1], ctx_dim, ctx_layers, ctx_heads, ctx_pool, 2 ** len(self.channels)) if ctx_layers else None
 
     @staticmethod
     def _build_sparse(feats: torch.Tensor,
@@ -198,6 +210,9 @@ class SparseUNet3D(nn.Module):
             cur = blk(d(cur))
             levels.append(cur)
 
+        if self.ctx is not None:
+            f, ctx_tok, ctx_zyx = self.ctx(levels[-1], coords4, feats)
+            levels[-1] = levels[-1].replace_feature(f)
         bottleneck = levels[-1]
         bn_feat_all = bottleneck.features          # raw deepest-conv features [.,c_bottleneck]
         bn_idx_all = bottleneck.indices
@@ -207,13 +222,15 @@ class SparseUNet3D(nn.Module):
             cur = self.upblocks[k](self.ups[k](cur, levels[d]))
 
         full = self.out_proj(cur)
+        if self.out_proj_context:
+            full = full.replace_feature(full.features + self.out_proj_ctx(cur).features)
         full_idx_all = full.indices
         full_feat_all = full.features
 
         comp_vox = full_idx_all[:, 0]
         comp_bn = bn_idx_all[:, 0]
 
-        return {
+        out = {
             "full": full,
             "full_feat": full_feat_all,
             "full_idx": full_idx_all[:, 1:],
@@ -222,3 +239,65 @@ class SparseUNet3D(nn.Module):
             "voxel_feat_list": self._regroup_by_batch(full_feat_all, comp_vox, batch_size),
             "voxel_idx_list": self._regroup_by_batch(full_idx_all[:, 1:], comp_vox, batch_size),
         }
+        if self.ctx is not None:
+            out.update(ctx_feat_list=ctx_tok, ctx_coord_list=ctx_zyx)
+        return out
+
+
+def _mean(x, idx, n):
+    s = x.new_zeros((n,) + tuple(x.shape[1:])).index_add_(0, idx, x)
+    c = x.new_zeros(n).index_add_(0, idx, x.new_ones(x.shape[0])).clamp_min_(1.0)
+    return s / c[:, None]
+
+
+class GlobalContext(nn.Module):
+    """Self-attention over the deepest level, pooled into coarse tokens.
+
+    A token is a ctx_pool^3 cell of the deepest level: its mean feature plus an embedding of the mean input features,
+    the mean position and the count of the input voxels it covers. The transformer output (per event, centred) is
+    added back to every deepest voxel of the cell; the tokens and their positions are also returned, for the query
+    decoder to attend to (QueryPerVoxelSoftmaxHead ctx_memory).
+    """
+    def __init__(self, c, d=256, layers=4, heads=8, pool=2, stride=4, bands=6):
+        super().__init__()
+        self.pool, self.stride = int(pool), int(stride)
+        self.register_buffer("omega", (math.pi / 4) * 2.0 ** torch.arange(bands), persistent=False)
+        self.inp = nn.Linear(c, d)
+        self.pos = nn.Linear(8 * bands + 6, d)
+        layer = nn.TransformerEncoderLayer(d, heads, 4 * d, dropout=0.0, activation="gelu", batch_first=True, norm_first=True)
+        self.enc = nn.TransformerEncoder(layer, layers, enable_nested_tensor=False)
+        self.norm = nn.LayerNorm(d)
+        self.out = nn.Linear(d, c)
+
+    def _fourier(self, x):
+        p = x[:, :, None] * self.omega
+        return torch.cat([p.sin(), p.cos()], 2).flatten(1)
+
+    def forward(self, x, coords, feats):
+        """(features + context, per-event tokens, per-event token positions)."""
+        idx, B = x.indices.long(), x.batch_size
+        G = -(-int(x.spatial_shape[0]) // self.pool)
+
+        def key(c, s):
+            z = c[:, 1:] // s
+            return ((c[:, 0] * G + z[:, 0]) * G + z[:, 1]) * G + z[:, 2]
+
+        uniq, inv = torch.unique(key(idx, self.pool), return_inverse=True)
+        T = uniq.numel()
+        tb = uniq // G ** 3
+        c0 = coords.long().to(feats.device)
+        i0 = torch.searchsorted(uniq, key(c0, self.pool * self.stride))
+        g = _mean(torch.cat([feats, c0[:, 1:].to(feats.dtype)], 1), i0, T)
+        cnt = torch.bincount(i0, minlength=T).to(feats.dtype)
+        geo = [self._fourier(g[:, 1:5]), g[:, :5], cnt.log()[:, None]]
+        h = _mean(self.inp(x.features), inv, T) + self.pos(torch.cat(geo, 1))
+        h = h - _mean(h, tb, B)[tb]
+        n = torch.bincount(tb, minlength=B)
+        col = torch.arange(T, device=h.device) - (torch.cumsum(n, 0) - n)[tb]
+        pad = h.new_zeros(B, int(n.max()), h.shape[1])
+        pad[tb, col] = h
+        mask = torch.arange(pad.shape[1], device=h.device)[None] >= n[:, None]
+        mask[:, 0] = False
+        y = self.enc(pad, src_key_padding_mask=mask)[tb, col]
+        y = self.norm(y - _mean(y, tb, B)[tb])
+        return x.features + self.out(y)[inv], list(torch.split(y, n.tolist())), list(torch.split(g[:, 5:8], n.tolist()))
