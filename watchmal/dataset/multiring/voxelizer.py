@@ -165,19 +165,18 @@ class Voxelizer:
             q_np = q_vals.cpu().numpy()
             mask_np = mask.cpu().numpy()
             pe_pts_np = voxels[..., idx_pe].cpu().numpy() if want_npe else None
-            for vi in range(M):
-                m_vi = mask_np[vi]
-                p = pid_np[vi][m_vi]
-                qv = q_np[vi][m_vi]
-                tot = float(qv.sum())
-                if tot > 0.0:
-                    bc = np.bincount(p, weights=qv, minlength=n_groups)
-                    frac[vi, :] = (bc / tot).astype(np.float32)
-                    voxel_pid[vi] = int(np.argmax(bc))
-                if want_npe and p.size > 0:
-                    npe[vi, :] = np.bincount(
-                        p, weights=pe_pts_np[vi][m_vi], minlength=n_groups
-                    ).astype(np.float32)
+            r, c = np.nonzero(mask_np)
+            key = r * n_groups + pid_np[r, c]
+            bc = np.bincount(key, weights=q_np[r, c], minlength=M * n_groups).reshape(M, n_groups)
+            npts = mask_np.sum(axis=1)
+            tot = np.zeros((M,), dtype=np.float32)
+            for k in np.unique(npts[npts > 0]):
+                tot[npts == k] = np.ascontiguousarray(q_np[npts == k, :k]).sum(axis=1)
+            pos = tot > 0.0
+            frac[pos] = (bc[pos] / tot[pos].astype(np.float64)[:, None]).astype(np.float32)
+            voxel_pid[pos] = np.argmax(bc[pos], axis=1)
+            if want_npe:
+                npe[:] = np.bincount(key, weights=pe_pts_np[r, c], minlength=M * n_groups).reshape(M, n_groups)
 
         extra: Dict[str, np.ndarray] = {
             "coords_zyx": coords_zyx,
